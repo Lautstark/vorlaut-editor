@@ -182,12 +182,24 @@ test("tabs and cells answer the keyboard", async ({ page }) => {
 test("sets move and keys swap without a mouse", async ({ page }) => {
   await openBoard(page);
 
-  // A second set, so there is somewhere to move to. It arrives current and
-  // named "Set 2", which is what the order is read off below.
+  /* A second set, so there is somewhere to move to, and a name on it, which
+   * is what the order is read off below.
+   *
+   * Named here rather than taken as it comes. A new set used to arrive
+   * carrying "Set 2" - minted into the layout by the press that made it, in
+   * the one English string left on that screen - and this test read the order
+   * off it. It arrives nameless now, so the strip falls back to
+   * `ui.set_n` and draws its *position*: an unnamed set is "Seite 2" because
+   * it is second, and moving it to the front makes it "Seite 1". That is right
+   * for a set nobody has named - there is nothing else to call it - and it
+   * means the fallback cannot be what an order is read off. So the set gets
+   * the identity the test needs, the way somebody would give it one.
+   */
   await page.locator("#tabs .tab.add").focus();
   await page.keyboard.press("Enter");
   const tabs = page.locator("#tabs .tab:not(.add)");
   await expect(tabs).toHaveCount(2);
+  await nameSet(page, "Zwei");
 
   // Alt+Arrow moves the focused tab, and focus travels with it. On this device
   // the order of the sets *is* the navigation - the firmware advances with
@@ -195,10 +207,10 @@ test("sets move and keys swap without a mouse", async ({ page }) => {
   // presentation the way the tablet's page strip is.
   await tabs.nth(1).focus();
   await page.keyboard.press("Alt+ArrowLeft");
-  await expect(tabs.first()).toHaveText(/Set 2/);
+  await expect(tabs.first()).toHaveText(/Zwei/);
   await expect(tabs.first()).toBeFocused();
   await page.keyboard.press("Alt+ArrowRight");
-  await expect(tabs.nth(1)).toHaveText(/Set 2/);
+  await expect(tabs.nth(1)).toHaveText(/Zwei/);
   await expect(tabs.nth(1)).toBeFocused();
 
   /* Four keys with distinguishable sentences, to see a move by its work.

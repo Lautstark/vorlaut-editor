@@ -149,9 +149,33 @@ function swapSlots(a: number, b: number): void {
     ?.querySelector(".cell__open") as HTMLElement)?.focus();
 }
 
-function emptySet(index: number): BoardSet {
+/* A new set, made by the press on "+ Neue Seite".
+ *
+ * Nameless, and that is the change: it minted "Set 3" into the data, in a
+ * product whose every word for the thing is Seite. It was the one English
+ * string left on this screen and the only one a language switch could never
+ * reach, because it was not a text key at all - it had been written into the
+ * layout at the moment of the press and was still there in English after the
+ * switch, on a tab beside four that had followed it.
+ *
+ * Every reader of a set's name already has the fallback: the tab, the set key
+ * and the delete question all say `entry.name || t("ui.set_n", ...)`. So an
+ * empty name is not a set without a name, it is a set that has not been
+ * renamed - which is what it is - and it is drawn "Seite 3" in whichever
+ * language the page is in. blank() at the foot of this file has made its one
+ * set this way since it was written; this is the same set, made by a different
+ * press, and the two agreeing is the point.
+ *
+ * What it costs is that an unnamed set is told apart by its position alone, so
+ * reordering two of them changes nothing in the strip. That is honest rather
+ * than regrettable - there is nothing else to call a set nobody has named -
+ * and it is why e2e/happy.spec.ts names one before it moves it.
+ *
+ * The index went with the name. Nothing else in here numbered anything.
+ */
+function emptySet(): BoardSet {
   return {
-    name: "Set " + (index + 1),
+    name: "",
     symbol: "",
     slots: [0, 1, 2, 3].map(() => ({ text: "", symbol: "" })),
   };
@@ -484,7 +508,7 @@ function drawTabs(): void {
     add.type = "button";
     add.textContent = t("ui.add_set");
     add.onclick = () => {
-      board().sets.push(emptySet(board().sets.length));
+      board().sets.push(emptySet());
       current = board().sets.length - 1;
       commit();
     };
