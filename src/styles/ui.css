@@ -1461,14 +1461,16 @@ a.factlinks__line:hover { text-decoration: underline; }
    the size question, its choices and its own note have to go on reading as one
    group and not as three more items in the stack. */
 dialog.sheet--target > .body,
-/* And the sheet that asks where a finished Sammlung goes, which has the same
-   need arrived at from the other end: three cards this time, and `p + p`
-   reaches none of them either. A second name rather than a rename, because
-   `sheet--target` is written out in docs/packages.md as the fix it was. */
+/* And the sheet a finished Sammlung is exported from, which has the same need
+   arrived at from the other end: a card, a fold and the cards inside it this
+   time, and `p + p` reaches none of them either. A second name rather than a
+   rename, because `sheet--target` is written out in docs/packages.md as the
+   fix it was. */
 dialog.sheet--choices > .body { display: grid; gap: 14px; }
 
-/* The cards a choice is made from - two for what a new Sammlung is, three for
-   what a finished one is exported as. Stacked and full width, because each is
+/* The cards a choice is made from - two for what a new Sammlung is, and for a
+   finished one the export it is for with whatever else it can honestly be
+   written as folded under it. Stacked and full width, because each is
    a heading and a sentence rather than a word - the sentence is what makes the
    choice, and it is the half somebody would otherwise have to guess at from
    labels four words long. */
@@ -1493,6 +1495,48 @@ dialog.sheet--choices > .body { display: grid; gap: 14px; }
   border-color: var(--accent); background: var(--accent-soft);
 }
 .btn.choice[aria-pressed="true"]:hover { background: var(--accent-soft); }
+
+/* The card the Sammlung is actually for, which is the one thing this sheet
+   leads with. It used to open by asking what the file was for, over three
+   equal cards, and every Sammlung had already answered that when it was made -
+   collections.ts's exportsFor() reads the answer.
+
+   Marked the way the card in force is marked next door, and deliberately not
+   by the same selector. §4.3's accent tint means "this one", which is exactly
+   what is being said - but aria-pressed says "held down", and these cards
+   fire. A button claiming a state it never keeps reads worse aloud than one
+   claiming nothing, which is the rule the export cards already followed by
+   carrying no aria-pressed at all. So the tint is a class and the semantics
+   stay empty.
+
+   Border and tint rather than the filled .btn.primary: the sentence under the
+   heading is var(--text-dim), which is measured against this surface and
+   against --accent-soft (the pressed card next door already sets it on that
+   tint) and not against --accent. A filled lead card would take the half that
+   makes the choice down to whatever --text-dim happens to be over the accent,
+   which is the shape 2.48:1 arrived in. */
+.btn.choice--lead {
+  border-color: var(--accent); background: var(--accent-soft);
+}
+.btn.choice--lead:hover:not(:disabled) { background: var(--accent-soft); }
+
+/* And what is left, folded. design's own .panel, so the fold costs no
+   JavaScript of ours - see components.css, which owns the hairline, the
+   heading and the chevron.
+
+   Two rules here and both are about this dialog rather than about that
+   component: the cards inside need the sheet's own 14px rhythm, which the
+   grid on `> .body` above reaches only as far as the panel itself, and the
+   panel's body indents its contents by 16px for a settings sheet whose
+   headings sit at that inset. There are no headings beside these, so the
+   indent would read as a margin nobody asked for - the cards line up under
+   the lead card instead, which is what makes them read as the rest of one
+   list rather than as a list of their own. Padding is set on this panel's
+   body slot, not on `.panel`: naming the component itself here is how
+   `.dropdown` came to outrank .btn from underneath. */
+dialog.sheet--choices .panel > .body {
+  display: grid; gap: 14px; padding: 0 0 16px;
+}
 
 /* ============================================================ the two sheets
 

@@ -44,8 +44,7 @@ import { dropdown, formRow, hint, missing, openSheet, textField }
   from "../shell/sheet.js";
 import type { Choice, Left } from "../shell/sheet.js";
 import {
-  collectionMenuExtras, collectionPages, exportApp, paintOpenCollection,
-  paintPages, sizeChoices,
+  collectionPages, paintOpenCollection, paintPages, sizeChoices,
 } from "../shell/collections.js";
 /* Which house a start key opens with, and which collection it comes out of.
  * The shell's, not this file's: exchange/SPEC.md §5.1 allows one symbol source
@@ -1827,17 +1826,23 @@ export function wireEditor(): () => void {
    * list of pages when this editor leaves the page. */
   collectionPages(drawPageList);
 
-  /* The package, as an entry in the ⋯ beside the Sammlung's name. It was a
-   * filled button in the work head - see templates/board.ts for what that
-   * symmetry was and why it is given up.
+  /* The package used to be added here, as an entry in the ⋯ beside the
+   * Sammlung's name - before that it was a filled button in the work head, and
+   * templates/board.ts has why that symmetry was given up.
    *
-   * Under the same label the shell's own export entry carries, and out of the
-   * same key: a tablet Sammlung has one place to go and is not asked, a talker
-   * Sammlung has three and is - but the act is one act either way, and two
-   * words for it would be two words to keep in step. */
-  collectionMenuExtras((add) => {
-    add(t("ui.collection_export"), () => { void exportApp(); });
-  });
+   * It is the shell's own export entry now, under the same label and out of
+   * the same key it always used. What this editor was adding was never a
+   * second act, only the same one reached from the other side of the seam:
+   * the shell's entry opened a sheet asking what the file was for, and a
+   * tablet Sammlung has one honest answer, so it was given the door directly
+   * instead. That sheet leads with the Sammlung's own target now and asks
+   * nothing where there is nothing to ask - collections.ts's exportsFor() is
+   * where which doors a target has is decided - so the entry is one entry
+   * again and this editor has nothing to add to that menu.
+   *
+   * Nothing crossed the seam to make that true. The shell already knew the
+   * Target, which is what core/editor.ts's registry is keyed by, and
+   * tests/unit/layers.test.ts still holds the arrow pointing one way. */
 
   /* The grid is a panel in the sheet behind that same ⋯, and unchanged by any
    * of this. Taken back with the rest when this editor leaves the page: the
@@ -1846,7 +1851,6 @@ export function wireEditor(): () => void {
   collectionSheetPanel(gridPanel);
   return () => {
     collectionPages(null);
-    collectionMenuExtras(null);
     collectionSheetPanel(null);
   };
 }

@@ -50,9 +50,21 @@ export async function pickFromMenu(page: Page, key: string): Promise<void> {
 /** One export of a talker Sammlung, from that entry and then from its card.
  *
  * Two presses rather than one since the three entries became one: the menu
- * says the act, and the sheet behind it asks what the file is for. `which` is
- * the card - "talker", "app" or "other" - and the three behind them are still
- * three functions, which is exchange/SPEC.md §5.2 and not this file's problem.
+ * says the act, and the sheet behind it leads with what this Sammlung is for.
+ * `which` is the card - "talker", "app" or "other" - and the three behind them
+ * are still three functions, which is exchange/SPEC.md §5.2 and not this
+ * file's problem.
+ *
+ * A talker Sammlung leads with "talker" and folds the other two away, so this
+ * opens the fold before looking for a card. Unconditionally, and by the fold
+ * rather than by which card was asked for: a helper that knew which of the
+ * three is the lead would be a second copy of collections.ts's exportsFor(),
+ * kept in step by hand, and the one thing these tests must not do is agree
+ * with the page about something neither of them checked.
+ *
+ * A tablet Sammlung has no sheet here at all - it has one honest export and is
+ * taken straight to it - so this is the talker's helper. editor_app.spec.ts
+ * presses that entry directly.
  *
  * Nothing is written by getting here. Two of the three cards open a sheet that
  * asks again, and the third writes a file that costs no synthesis; a caller
@@ -60,12 +72,17 @@ export async function pickFromMenu(page: Page, key: string): Promise<void> {
  */
 export async function pickExport(page: Page, which: string): Promise<void> {
   await pickFromMenu(page, "ui.collection_export");
+  const choice = page.locator("dialog.sheet--choices");
+  const fold = choice.locator("details.panel");
+  if (await fold.count() && (await fold.getAttribute("open")) === null) {
+    await fold.locator("summary").click();
+  }
   /* By the heading rather than by the card, and the click lands on the heading
    * and bubbles. label() is anchored, and a card's own text is its heading and
    * its sentence run together - so a card matches nothing and the press times
    * out waiting for a download that was never asked for. */
-  await page.locator("dialog.sheet--choices button.choice strong",
-                     { hasText: label(`ui.collection_export_for_${which}`) }).click();
+  await choice.locator("button.choice strong",
+                       { hasText: label(`ui.collection_export_for_${which}`) }).click();
 }
 
 /** The Sammlung's own sheet, from that menu. */

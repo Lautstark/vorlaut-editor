@@ -71,10 +71,20 @@ const goHome = (page: Page) =>
 /** Which page the editor is standing on. The name over the board is the field
  *  that renames it, so what it says is its value rather than its text. */
 const standingOn = (page: Page) => page.locator("#appPageName");
-/** The whole-Sammlung act, which is an entry in the ⋯ beside its name now. */
+/** The whole-Sammlung act, which is an entry in the ⋯ beside its name now.
+ *
+ * The shell's entry, under the shell's own label - this editor stopped adding
+ * one of its own when the export sheet learned to lead with what a Sammlung is
+ * for. A tablet Sammlung has exactly one honest export, so there is nothing to
+ * lead and nothing to fold: no card sheet comes up and the press goes straight
+ * to the package. Asserted here rather than assumed, because "one press does
+ * the expected thing" is the whole of what that change was for, and a choice
+ * sheet appearing in front of it would be the regression nobody would notice
+ * from the bytes alone. */
 async function exportPackage(page: Page): Promise<void> {
   await page.locator("#collectionMenu").click();
   await page.getByRole("menuitem", { name: label("ui.collection_export") }).click();
+  await expect(page.locator("dialog.sheet--choices")).toHaveCount(0);
 }
 
 const VOICES_LIST = /tts\.speech\.microsoft\.com\/cognitiveservices\/voices\/list/;
