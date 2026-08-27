@@ -42,6 +42,11 @@ import { confirmDialog } from "@lautstark/design/dialog";
  * genuinely shared between the two belongs in the shell. */
 import { dropdown, formRow, hint, missing, openSheet, textField }
   from "../shell/sheet.js";
+/* What part of speech a word is, as far as the lexicon behind the symbol
+ * search can say. In data/ rather than here because it is knowledge about a
+ * language, not about a tablet - the talker has no word class at all, and the
+ * next thing that wants to read a word will want it from there too. */
+import { guessWordClass } from "../data/wordclass.js";
 import type { Choice, Left } from "../shell/sheet.js";
 import {
   collectionPages, paintOpenCollection, paintPages, sizeChoices,
@@ -1348,9 +1353,58 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
     [{ value: "", label: t("ui.wordclass_none") },
      ...WORD_CLASSES.map((one) =>
        ({ value: one.key, label: t(`ui.wordclass_${one.key}`) }))],
-    draft.wordClass, (value) => { draft.wordClass = value; });
+    draft.wordClass, (value) => {
+      draft.wordClass = value;
+      /* Somebody has answered, so nothing may answer for them again. Set from
+       * the control rather than from the value: choosing "Keine Wortart"
+       * deliberately is an answer, and a guess arriving afterwards to fill the
+       * field back in would be the page overruling a press. */
+      classChosen = true;
+    });
   classes.button.id = "appClass";
   rows.push(formRow(t("ui.app_button_class"), classes.anchor, "", classes.button));
+
+  /* --- Guessing the word class from the word --------------------------------
+   *
+   * The class is a second question about a word that has already been typed,
+   * and most of the time the word contains the answer: "Apfel" is a Nomen.
+   * data/wordclass.ts is what knows, and what it will not say - it answers for
+   * Nomen, Verb and Pronomen and returns "" for everything else, including
+   * every word it is not certain about.
+   *
+   * **Only into a field nobody has touched.** `classChosen` starts true for a
+   * button that already carries a class, so opening an old button never
+   * re-guesses it, and it is set by the dropdown above the moment somebody
+   * chooses anything at all. That is the same rule the Aufschrift keeps for
+   * the collection's caption, one row up, and it matters more here: a wrong
+   * class is a wrong colour on a board somebody else reads, and a field that
+   * is already filled in is a field nobody looks at twice.
+   *
+   * Hung off the Aufschrift rather than off the search, although the ask was
+   * "either". They are the same event by the time it matters: typing in the
+   * search finds a picture, taking the picture writes the word into an empty
+   * Aufschrift, and that write comes through here. Typing in the search with a
+   * name already on the button is not an event about the name.
+   *
+   * The answer arrives late - the tables are fetched on the first word - so
+   * the guard is re-read on the way back, and a newer word invalidates an
+   * older question the way the search's own token does.
+   */
+  let classChosen = Boolean(draft.wordClass);
+  let asking = 0;
+  const guessClass = (): void => {
+    if (classChosen) return;
+    const word = draft.label;
+    const mine = ++asking;
+    void guessWordClass(word, LANG).then((key) => {
+      if (mine !== asking || classChosen) return;
+      draft.wordClass = key;
+      // Assigning redraws the trigger and calls nobody back - see dropdown() -
+      // so this cannot be mistaken for somebody having chosen.
+      classes.value = key;
+    }, () => { /* the tables never arrived; the field keeps saying nothing */ });
+  };
+  labelInput.addEventListener("input", guessClass);
 
   /** The rows that depend on the answer above them, and the note under it.
    *
@@ -1455,6 +1509,9 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
           labelInput.value = word;
           // Or the field below goes on offering to say the empty label.
           echoLabel();
+          // The same word the search was run on is a word to guess a class
+          // from, and this is the write the listener above cannot see.
+          guessClass();
         }
       },
       onNegate: (negated) => { draft.negated = negated; },
