@@ -52,10 +52,11 @@ import * as symbols from "../data/symbols.js";
 import { load, saveNow } from "../core/save.js";
 import { t } from "../core/texts.js";
 // A pure rule about names, not a way out of the page - which is why it comes
-// from the module that owns it rather than through backend/index.ts. It owns it
-// because the first thing it makes safe is an object-store key; a download's
-// file name is the same question asked about a different destination.
-import { safeName } from "../data/store.js";
+// from the module that owns it rather than through backend/index.ts. It used to
+// be data/store.ts's safeName(), on the reading that a download's file name is
+// an object-store key's question asked about a different destination. It is
+// not: a key is read back and a file name is only ever read. See filename.ts.
+import { downloadSlug } from "./filename.js";
 import { GRID, LANG, LANGUAGE_NAMES, LANGUAGES } from "../core/boot.js";
 import { isApp } from "../core/types.js";
 import type { CollectionList, GridSize, Layout, Target } from "../core/types.js";
@@ -724,10 +725,18 @@ const currentName = (): string => {
   return at < 0 ? "" : nameOf(held.collections[at]!.name);
 };
 
-/** The name of the Sammlung, as something a file system will take. safeName()
- *  is the store's, so a downloaded file and a file written into a folder are
- *  named by the same rule. */
-const fileStem = (): string => safeName(currentName());
+/** The name of the Sammlung, as something a file system will take.
+ *
+ *  One rule for all three exports, which is the only thing this line is for:
+ *  the package, the talker's .obz and the single board are three writers by
+ *  design (exchange/SPEC.md 5.2), and what they are called is not one of the
+ *  things they are allowed to differ about. Somebody who exports the same
+ *  Sammlung twice should get two files with one name and two extensions.
+ *
+ *  filename.ts rather than the store's safeName(), and the difference is a
+ *  Sammlung with an umlaut in it: this one spells the letter out where that
+ *  one punched a `_` through it. */
+const fileStem = (): string => downloadSlug(currentName());
 
 /** One card of the export sheet: which of the three it names, and its door.
  *

@@ -17,10 +17,13 @@
  * and does not earn a package of its own; a file is what makes the day it does
  * earn one a move rather than an excavation.
  *
- * The other half of §5 #3 - `slug`/`safeName` - is not here. mitreden's and
- * bildhaft's are download-filename sanitisers; vorlaut's one true equivalent
- * lives beside the store keys it makes, which is data/store.ts. See safeName()
- * there.
+ * The other half of §5 #3 - `slug`/`safeName` - is not here, and it is two
+ * files rather than one. mitreden's and bildhaft's are download-filename
+ * sanitisers; vorlaut had one function answering that and the store-key
+ * question together, which is one question too many for a name with an umlaut
+ * in it. safeName() in data/store.ts is the key's, beside the keys it makes;
+ * downloadSlug() in shell/filename.ts is the download's, and that is the one
+ * their `slug` converges with.
  */
 
 const watchers = new Set<() => void>();
