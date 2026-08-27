@@ -606,12 +606,19 @@ function openKeySheet(index: number): Promise<Left> {
       /* Only fill a field that is still empty, never write over one somebody
        * typed: the symbol is called "zustimmen", but your key should say
        * "Ja!". The same rule editor-app keeps, and it has been this editor's
-       * since the picker had it. */
-      onPick: (symbol, caption) => {
+       * since the picker had it.
+       *
+       * The typed word before the collection's caption, which is the other
+       * half of the same complaint: a search for "trinken" answered by a
+       * pictogram filed under "Getraenk" wrote "Getraenk" onto the key. The
+       * caption is still what fills it for a picture that was not searched
+       * for - an upload has no word at all, and takes none. */
+      onPick: (symbol, caption, typed) => {
         draft.symbol = symbol;
-        if (caption && !draft.text.trim()) {
-          draft.text = caption;
-          spoken.value = caption;
+        const word = typed || caption;
+        if (word && !draft.text.trim()) {
+          draft.text = word;
+          spoken.value = word;
         }
       },
       onNegate: (negated) => { draft.negated = negated; },
@@ -646,7 +653,9 @@ function openKeySheet(index: number): Promise<Left> {
      * walking off the end back to the first is a surprise. */
     ...(index < 3 ? { next: { label: t("ui.diy_key_next"), onPress: keep } } : {}),
     done: { label: t("ui.done"), onPress: keep },
-    focus: spoken,
+    /* No `focus`: the sheet opens in the picture column's search field. See
+     * SheetSpec.focus - the word is typed once, and the picture it finds
+     * writes it into the empty field behind. */
   });
 }
 
@@ -694,11 +703,14 @@ function openSetSheet(): Promise<void> {
     pick: {
       symbol: draft.symbol,
       seed: draft.name,
-      onPick: (symbol, caption) => {
+      // What was typed before what the collection calls it - see the key
+      // sheet above, which has the argument.
+      onPick: (symbol, caption, typed) => {
         draft.symbol = symbol;
-        if (caption && !draft.name.trim()) {
-          draft.name = caption;
-          name.value = caption;
+        const word = typed || caption;
+        if (word && !draft.name.trim()) {
+          draft.name = word;
+          name.value = word;
         }
       },
     },
@@ -722,7 +734,7 @@ function openSetSheet(): Promise<void> {
         commit();
       },
     },
-    focus: name,
+    // No `focus`: the search field, as on every sheet with a picture column.
   }).then(() => undefined);
 }
 

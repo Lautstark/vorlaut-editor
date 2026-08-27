@@ -417,6 +417,23 @@ async function open(id: string): Promise<void> {
  * The note under the two says it does not change later. That is the one thing
  * somebody could reasonably expect to be able to undo, and the moment to say
  * so is while they are choosing rather than when they go looking for a switch.
+ *
+ * ## The tablet leads, and it is already chosen
+ *
+ * The talker was first and nothing was chosen, so every new Sammlung cost a
+ * press on the rarer of the two before the primary button would even light.
+ * That order is this repository's history rather than anybody's use of it: the
+ * tablet app is what most people are building for, and the five-key talker is
+ * the one you go out of your way to make.
+ *
+ * So the tablet card is first and opens pressed. The dialog still asks - both
+ * cards are there, either can be pressed, and the note underneath still says
+ * the answer is final - but it asks the way a form with a sensible default
+ * asks, which is by being right most of the time and correctable always. What
+ * it costs is that somebody who wanted the talker must notice a choice already
+ * made rather than make one; the pressed card carries aria-pressed and the
+ * grid question under it is open, so what has been chosen is on the screen
+ * rather than implied by an enabled button.
  */
 function askTarget(): Promise<Made | null> {
   return new Promise((resolve) => {
@@ -465,7 +482,10 @@ function askTarget(): Promise<Made | null> {
 
     const body: HTMLElement[] = [];
     const choices = new Map<Target, HTMLButtonElement>();
-    for (const one of ["diy", "app"] as const) {
+    /* The tablet first. See the head of this function: this order is the answer
+     * to "what is somebody most likely making", not the order the two editors
+     * were written in. */
+    for (const one of ["app", "diy"] as const) {
       const choice = document.createElement("button");
       choice.className = "btn choice";
       choice.type = "button";
@@ -573,6 +593,15 @@ function askTarget(): Promise<Made | null> {
       langAsk.hidden = one !== "diy";
       make.disabled = false;
     }
+
+    /* Standing on the tablet before anybody presses anything, which is the
+     * whole of what "default" means here: the card is pressed, its grid
+     * question is open under it, and Erstellen is live. Through pick() rather
+     * than by setting the three of them here, so that the opening state and
+     * every state after a press are made by one piece of code - the version
+     * that set them separately is how a dialog comes to open showing a
+     * question belonging to the other choice. */
+    pick("app");
 
     const sheet: ReturnType<typeof openDialog> | undefined = openDialog({
       title: t("ui.collection_target"),

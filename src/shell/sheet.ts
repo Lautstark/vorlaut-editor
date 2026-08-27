@@ -353,11 +353,23 @@ export interface PickColumn {
   /** What to put in the search field: usually the word already on the thing,
    *  which is what somebody is most likely looking for a picture of. */
   seed: string;
-  /** A picture was chosen, however it was chosen. `caption` is the
-   *  collection's own word for it and "" when it has none; what the caller
-   *  does with either is the caller's - see the note at takeSymbol's callers,
-   *  and both of them only ever fill a field that is still empty. */
-  onPick(symbol: string, caption: string): void;
+  /** A picture was chosen, however it was chosen.
+   *
+   * `caption` is the collection's own word for the picture and "" when it has
+   * none. `typed` is the word the search that found it was run on, and "" when
+   * no search was involved - an upload, or the prescribed start-key tile.
+   *
+   * Both are offered because they are different answers and the callers want
+   * the second one. A search for "trinken" that lands on a pictogram filed
+   * under "Getraenk" used to name the key "Getraenk": the collection's word,
+   * for a key whose owner had just written theirs. `typed` is what somebody
+   * meant; `caption` is what the collection calls what they got, and it is
+   * still there for the picks that were not searched for at all.
+   *
+   * What a caller does with either is the caller's - see the note at
+   * takeSymbol's callers, and all of them only ever fill a field that is still
+   * empty. */
+  onPick(symbol: string, caption: string, typed: string): void;
   /** Whether the picture opens crossed out - Slot.negated. Absent, together
    *  with onNegate below, for a picture that cannot be: a set key is
    *  navigation rather than a word, and there is nothing on it to negate. */
@@ -366,13 +378,19 @@ export interface PickColumn {
   onNegate?(negated: boolean): void;
 }
 
-/** The left column, and the one thing the foot has to be able to ask it. */
+/** The left column, and the two things the sheet around it has to be able to
+ *  ask it. */
 interface Picked {
   node: HTMLElement;
   /** Anything the column has started and not finished, finished - see settle()
    *  where it is built. Resolves immediately when there is nothing pending,
    *  which is almost always. */
   settle(): Promise<void>;
+  /** The search field, because that is where a sheet with a picture column
+   *  opens - see openSheet's focus. Handed out rather than found by selector
+   *  from outside: the column owns its markup and this is the one part of it
+   *  anything else has a use for. */
+  query: HTMLInputElement;
 }
 
 /** Builds the left column. Private: the only way to one is through openSheet,
@@ -463,9 +481,12 @@ function drawPick(spec: PickColumn): Picked {
   results.className = "pick__results";
   pick.appendChild(results);
 
-  const took = (chosen: string, caption: string) => {
+  /* `typed` defaults to nothing, because most ways to a picture are not a
+   * search: an upload, the prescribed start-key tile, and taking the picture
+   * off again. The one that is passes what it was searched for. */
+  const took = (chosen: string, caption: string, typed = "") => {
     symbol = chosen;
-    spec.onPick(chosen, caption);
+    spec.onPick(chosen, caption, typed);
     drawPreview();
     drawResults();
     off.hidden = !symbol;
@@ -542,7 +563,94 @@ function drawPick(spec: PickColumn): Picked {
     return box;
   };
 
+  /* --- Walking the tiles ---------------------------------------------------
+   *
+   * The results are the one thing in this sheet that is looked at rather than
+   * read, and Tab pressed twenty times to reach the twenty-first picture is
+   * not looking. So the box is one stop in the tab order and the arrows move
+   * inside it, which is what a grid of controls is for.
+   *
+   * Delegated to the box rather than bound to each tile: the tiles are thrown
+   * away and rebuilt by every search and by every pick, and a handler per tile
+   * would be rebuilt with them.
+   */
+
+  /** The tiles, in the order they are drawn in. */
+  const tiles = (): HTMLElement[] =>
+    [...results.querySelectorAll<HTMLElement>("button.pick__hit")];
+
+  /** Focus one, and make it the box's one tab stop. Roving rather than a fixed
+   *  stop at the first tile, so that Tab out and back in comes back to the
+   *  picture somebody was looking at. */
+  const focusTile = (all: HTMLElement[], at: number): void => {
+    all.forEach((one, index) => { one.tabIndex = index === at ? 0 : -1; });
+    all[at]?.focus();
+  };
+
+  /**
+   * Where an arrow lands, as an index into the tiles.
+   *
+   * Stopping at the edge rather than wrapping - the same choice the board's
+   * Alt+Arrow and the sheet's own "next" already make, and for the same
+   * reason: walking off the end back to the beginning is a surprise.
+   *
+   * Up and down are read off the layout rather than counted in fours. ui.css
+   * lays the box out in four columns, but the prescribed start-key tile is a
+   * little column with a word under it and stands taller than the hits beside
+   * it, so a row is not reliably four tiles at the same height. Grouping by
+   * offsetTop makes that tile a member of its row instead of an exception to
+   * an arithmetic, and it will go on being right if the column count ever
+   * becomes a media query.
+   */
+  const stepTo = (all: HTMLElement[], from: number, key: string): number => {
+    if (key === "ArrowLeft") return Math.max(0, from - 1);
+    if (key === "ArrowRight") return Math.min(all.length - 1, from + 1);
+    const here = all[from]!;
+    const rows = [...new Set(all.map((one) => one.offsetTop))].sort((a, b) => a - b);
+    const want = rows[rows.indexOf(here.offsetTop) + (key === "ArrowDown" ? 1 : -1)];
+    if (want === undefined) return from;
+    // The nearest tile on that row by where it starts, so a run of presses
+    // holds a column rather than drifting to the left edge.
+    let best = from;
+    let nearest = Infinity;
+    all.forEach((one, at) => {
+      if (one.offsetTop !== want) return;
+      const gap = Math.abs(one.offsetLeft - here.offsetLeft);
+      if (gap < nearest) { nearest = gap; best = at; }
+    });
+    return best;
+  };
+
+  results.addEventListener("keydown", (event) => {
+    const arrow = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]
+      .includes(event.key);
+    if (!arrow) return;
+    const all = tiles();
+    const from = all.indexOf(document.activeElement as HTMLElement);
+    // Something else in the box has focus - the button offered beside a
+    // sentence about an empty answer - and the arrows are not this box's.
+    if (from < 0) return;
+    // Claimed whether or not there is anywhere to go: the box scrolls at
+    // 150px, and an arrow that moved nothing would scroll the pictures away
+    // from under the one that is focused.
+    event.preventDefault();
+    const to = stepTo(all, from, event.key);
+    /* Off the top row is back to the field above, which is where somebody who
+     * has changed their mind about the word is going. Off the other three
+     * edges is nowhere: left and right have the rest of the grid behind them
+     * and down has the credits, which is not a place to arrow into. */
+    if (to === from && event.key === "ArrowUp") query.focus();
+    else focusTile(all, to);
+  });
+
   const drawResults = () => {
+    /* Which tile the keyboard was standing on, so that a pick made with Enter
+     * does not drop it: taking a picture redraws this box to move the frame
+     * onto what was taken, and the element focus was on goes with it. Focus
+     * landing on <body> mid-run is the fault menu.ts's own note describes -
+     * a keyboard user sent back to the top of the sheet by a press that
+     * worked. */
+    const was = tiles().indexOf(document.activeElement as HTMLElement);
     results.innerHTML = "";
     if (home) results.appendChild(homeTile(home));
     for (const hit of hits) {
@@ -561,7 +669,7 @@ function drawPick(spec: PickColumn): Picked {
       one.onclick = () => {
         status(t(hit.source === "metacom" ? "ui.taking_symbol" : "ui.loading_symbol"));
         void takeSymbol(hit).then(
-          (taken) => { took(taken.symbol, taken.label); status(""); },
+          (taken) => { took(taken.symbol, taken.label, searched); status(""); },
           (error: unknown) => status(t("ui.symbol_failed", { error: reason(error) })));
       };
       results.appendChild(one);
@@ -594,6 +702,15 @@ function drawPick(spec: PickColumn): Picked {
         results.appendChild(doIt);
       }
     }
+
+    /* One tab stop for the whole box. Written here rather than by each tile as
+     * it is built, because the prescribed start-key tile is built by
+     * homeTile() above and would otherwise have to know about this. */
+    const all = tiles();
+    all.forEach((one, at) => { one.tabIndex = at === 0 ? 0 : -1; });
+    // And the keyboard put back where it was, where it was in here at all.
+    // Clamped, because the box it was standing in may be shorter now.
+    if (was >= 0 && all.length) focusTile(all, Math.min(was, all.length - 1));
   };
 
   /** Puts the line above the results there, or takes it away. Hidden rather
@@ -607,14 +724,30 @@ function drawPick(spec: PickColumn): Picked {
   // So a slow answer cannot overtake a newer one. The sheet's own, because the
   // sheet is its own search - there is no dialog behind it to hold one.
   let token = 0;
+  /* The word the tiles on screen are the answer to, which is not the same as
+   * the word in the field: somebody who has typed three more letters and not
+   * yet been answered is looking at the old ones. onPick is handed this rather
+   * than query.value so that the name a pick fills in is the word that found
+   * the picture being picked. Set inside the guard below for that reason. */
+  let searched = "";
   const search = () => {
     const word = query.value.trim();
     if (!word) return;
     const mine = ++token;
-    say(results, t("ui.searching"));
+    /* "sucht ..." replaces the box, so it is only written into an empty one.
+     *
+     * That was unconditional while Enter was the only way to run a search: a
+     * press meant a wait, and the box had nothing in it worth keeping. Typing
+     * runs one every few letters, and a box that blanked itself on each of
+     * them would flicker under the hand that is typing - and would take away
+     * the hits from two letters ago, which are the best answer anybody has
+     * until the next ones arrive. So results stand until they are replaced.
+     */
+    if (!results.firstChild) say(results, t("ui.searching"));
     tell("");
     void findSymbols(word).then((answer) => {
       if (mine !== token) return;
+      searched = word;
       hits = answer.hits;
       home = answer.home;
       // Both silences - a word the collection does not have, and a browser that
@@ -628,11 +761,57 @@ function drawPick(spec: PickColumn): Picked {
       tell(answer.near);
     });
   };
+  /* --- Searching as it is typed --------------------------------------------
+   *
+   * Enter was the only way to run a search, and there is no button beside the
+   * field, so the field asked to be typed into and then said nothing about
+   * what to do next. Everything else in this product that searches - the voice
+   * list, the collection filter - answers as you type, and this is the one
+   * place that made somebody ask for the answer.
+   *
+   * Three letters, because of what is on the other end. ARASAAC is a network
+   * call and METACOM is an index over somebody's folder; one or two letters
+   * match a large part of either and answer with the first four of a thousand
+   * pictures, which is a slower way of showing nothing. Three is also where
+   * German stops being prefixes - "es", "im", "am" are whole words and none of
+   * them is a picture anybody wants.
+   *
+   * Enter still works and is not the same act: it runs the word as it stands,
+   * now, at any length. That is what somebody typing "Ei" needs, and it is the
+   * way to ask again after a search that failed on a dropped network.
+   *
+   * The stale-answer guard above is what makes this safe rather than anything
+   * here: a fast typist has several searches in flight and they may land in
+   * any order, and only the newest one is allowed to draw.
+   */
+  const ENOUGH = 3;
+  /* Long enough that a word typed at speed is one search rather than six,
+   * short enough that stopping to look at the screen is answered before
+   * anybody wonders whether it will be. */
+  const SETTLES = 300;
+  let typing: ReturnType<typeof setTimeout> | undefined;
+  query.oninput = () => {
+    clearTimeout(typing);
+    if (query.value.trim().length < ENOUGH) return;
+    typing = setTimeout(search, SETTLES);
+  };
   query.onkeydown = (event) => {
+    /* Down into the pictures, which is the whole point of having typed. The
+     * grid keeps its own arrows from here on - see the box's own handler - and
+     * ArrowUp out of the top row comes back to this field. */
+    if (event.key === "ArrowDown") {
+      const all = tiles();
+      if (!all.length) return;
+      event.preventDefault();
+      focusTile(all, 0);
+      return;
+    }
     if (event.key !== "Enter") return;
     // The sheet is not a form, but Enter in a search field inside a dialog is
     // otherwise the browser's own way to close it.
     event.preventDefault();
+    // Now, rather than in 300ms and again after that.
+    clearTimeout(typing);
     search();
   };
 
@@ -862,7 +1041,7 @@ function drawPick(spec: PickColumn): Picked {
     return pending ? pending() : Promise.resolve();
   };
 
-  return { node: pick, settle };
+  return { node: pick, settle, query };
 }
 
 /* --- The sheet ----------------------------------------------------------- */
@@ -907,9 +1086,19 @@ export interface SheetSpec {
    *  would be slower than the property row it replaced. */
   next?: FootButton;
   done: FootButton;
-  /** The control focus lands on when the sheet opens. showModal() would
-   *  otherwise land it on the corner ✕, which is not what somebody who has
-   *  just opened a thing is about to do to it. */
+  /**
+   * The control focus lands on when the sheet opens, for a sheet with no
+   * picture column. showModal() would otherwise land it on the corner ✕, which
+   * is not what somebody who has just opened a thing is about to do to it.
+   *
+   * Every sheet that *has* a picture column opens in its search field instead,
+   * and does not answer this. That was the label - "a button somebody has just
+   * opened is a button they are about to name" - and it stopped being true
+   * when the picture column learned to fill the name in. The word is now typed
+   * once, into the search: it finds the picture, and picking one writes the
+   * same word into the empty name behind it. Landing on the name meant typing
+   * it, tabbing across and typing it again.
+   */
   focus?: HTMLElement;
 }
 
@@ -979,6 +1168,31 @@ export function openSheet(spec: SheetSpec): Promise<Left> {
     right.appendChild(done);
     foot.push(right);
 
+    /* Enter in a text field is Fertig.
+     *
+     * A sheet is not a <form> - see the search field's own note - so nothing
+     * gave Enter a meaning here, and a sheet whose one remaining act is the
+     * primary button had to be finished with the mouse or with four Tabs.
+     *
+     * On the rows and not on the sheet, which is what keeps this from
+     * colliding with the two places Enter already means something: the search
+     * field is in the other column, where Enter runs the search, and a tile in
+     * the grid is a button, where Enter takes the picture.
+     *
+     * Text inputs only, and never Weiter. A dropdown's trigger is a button and
+     * Enter opens its menu; and Fertig rather than Weiter because Weiter is
+     * the one that does not close - a key finished with Enter should be
+     * finished, and somebody working through a run has Weiter under the
+     * pointer and under Tab.
+     */
+    form.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      const on = event.target;
+      if (!(on instanceof HTMLInputElement) || on.type !== "text") return;
+      event.preventDefault();
+      done.click();
+    });
+
     const sheet: ReturnType<typeof openDialog> | undefined = openDialog({
       title: spec.title,
       closeLabel: t("ui.close"),
@@ -993,6 +1207,35 @@ export function openSheet(spec: SheetSpec): Promise<Left> {
     sheet.dialog.classList.add("sheet--button");
     if (!spec.pick) sheet.dialog.classList.add("sheet--page");
 
-    spec.focus?.focus();
+    /* Escape out of the search field, which the browser would otherwise keep.
+     *
+     * `<input type="search">` has a behaviour of its own: Escape in one clears
+     * the word being searched for, and the key never reaches the dialog. That
+     * cost nothing while the sheet opened on a text field - Escape closed it,
+     * as it does everywhere in this product - and it costs the whole gesture
+     * now that the sheet opens *in* the search. What somebody got was a sheet
+     * that ignored the first Escape and shut on the second, which reads as a
+     * dialog that has hung.
+     *
+     * So the sheet takes it back: prevented, so the field is not cleared on
+     * the way past, and settled as null, because Escape is one of the ways out
+     * that mean nothing happened.
+     *
+     * Not a reason to give up the search type. The ✕ that type draws inside
+     * the field is the one control that clears the word - see the note at
+     * `off`, which is a labelled button precisely so that the two ✕ do not
+     * stand a few pixels apart meaning different things.
+     */
+    sheet.dialog.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      const on = event.target;
+      if (!(on instanceof HTMLInputElement) || on.type !== "search") return;
+      event.preventDefault();
+      finish(null);
+    });
+
+    /* The search field where there is one, and only failing that whatever the
+     * caller named. See SheetSpec.focus for why round this way. */
+    (picked ? picked.query : spec.focus)?.focus();
   });
 }

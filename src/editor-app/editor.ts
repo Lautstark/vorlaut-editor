@@ -1289,6 +1289,25 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
     draft.vocalization = value;
   });
   spoken.id = "appSpoken";
+  /* What this field would say if nothing were typed into it, shown in it while
+   * nothing is - which is the Aufschrift, by exchange/SPEC.md §7.2's rule.
+   *
+   * A placeholder that is a value rather than a placeholder that is a
+   * sentence, which is the distinction that makes this safe to add after the
+   * sentence was deliberately taken out of here. That one said what an empty
+   * field means and vanished the moment somebody typed - so it disappeared
+   * exactly when it might have been wanted - and it now lives on the caption's
+   * line where it stays put. This says something else: not the rule, but what
+   * the rule currently comes to. It is right to vanish when there is a
+   * vocalization, because then it is no longer true.
+   *
+   * Kept in step with the field above by listening rather than by replacing
+   * its handler: textField() has already put the draft write on `oninput`, and
+   * a second listener is the way to have both.
+   */
+  const echoLabel = () => { spoken.placeholder = draft.label.trim(); };
+  echoLabel();
+  labelInput.addEventListener("input", echoLabel);
   const play = document.createElement("button");
   play.type = "button";
   play.className = "btn";
@@ -1417,15 +1436,25 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
       // most likely looking for a picture of.
       seed: draft.label,
       negated: draft.negated,
-      /* Fills an empty label from the collection's own word for the symbol but
-       * never writes over one somebody typed - the same rule both editors have
-       * always kept, and for the same reason: the symbol may be called
-       * "zustimmen" while the button should say "Ja!". */
-      onPick: (symbol, caption) => {
+      /* Fills an empty label, and never writes over one somebody typed - the
+       * same rule both editors have always kept, and for the same reason: the
+       * symbol may be called "zustimmen" while the button should say "Ja!".
+       *
+       * What is new is which word fills it. The collection's caption was the
+       * only thing on offer, so a search for "trinken" that landed on a
+       * pictogram filed under "Getraenk" named the button "Getraenk" - the
+       * collection's word, over the top of the one its owner had just written
+       * three inches to the left. The typed word leads now and the caption is
+       * what is left for the picks that were not searched for: an upload has
+       * neither, and the prescribed start-key tile has only its own name. */
+      onPick: (symbol, caption, typed) => {
         draft.symbol = symbol;
-        if (caption && !draft.label.trim()) {
-          draft.label = caption;
-          labelInput.value = caption;
+        const word = typed || caption;
+        if (word && !draft.label.trim()) {
+          draft.label = word;
+          labelInput.value = word;
+          // Or the field below goes on offering to say the empty label.
+          echoLabel();
         }
       },
       onNegate: (negated) => { draft.negated = negated; },
@@ -1459,9 +1488,10 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
     } : {}),
     next: { label: t("ui.app_button_next"), onPress: keep },
     done: { label: t("ui.done"), onPress: keep },
-    // Into the label, because a button somebody has just opened is a button
-    // they are about to name.
-    focus: labelInput,
+    /* No `focus`: the sheet opens in the picture column's search field, which
+     * is where a button is now begun. See SheetSpec.focus, which carries the
+     * argument - the word is typed once, into the search, and picking what it
+     * finds writes it into the empty Aufschrift behind. */
   });
 }
 
