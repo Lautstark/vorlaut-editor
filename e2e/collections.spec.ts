@@ -304,46 +304,71 @@ test("the ⋯ holds this Sammlung's acts, then its settings, then the delete",
     await expect(page.locator("#collectionName")).toBeFocused();
 
     await page.locator("#collectionMenu").click();
-    // The same label, out of the same key: a tablet Sammlung has one place to
-    // go and is not asked, but the act is the act either way.
+    // The same label, out of the same key, and now out of the same entry: the
+    // shell adds it for both targets and the sheet behind it decides whether
+    // there is anything to ask. A tablet Sammlung has one place to go and is
+    // not asked; the act is the act either way.
     await expect(entries).toHaveText([
       label("ui.collection_export"), label("ui.collection_settings"),
       label("ui.collection_delete"),
     ]);
   });
 
-/* One entry, three cards, and a dismissal that costs nothing.
+/* One entry, the Sammlung's own export in front of it, and a dismissal that
+ * costs nothing.
  *
- * The second half is the one worth a test. A dialog that has already done
- * something by the time somebody declines it is the defect this product got
- * wrong twice in one day, and the fix is never to take the dialog away - so
- * what is asserted is that the ✕ leaves no file, no sheet and nothing in the
- * status line. What the three cards actually write is asserted where the bytes
- * are: app_package.spec.ts opens two of them and compares what comes out.
+ * **The lead is the half that changed.** This sheet used to open by asking
+ * what the file was for, over three equal cards - a question every Sammlung
+ * had already answered when it was made, so somebody with a five-key Sammlung
+ * was asked every time whether the file was for a tablet. What is asserted is
+ * that
+ * the talker's export is the one card standing on its own, and that the other
+ * two are behind a fold that starts closed: reachable, and not in the way.
+ *
+ * The dismissal is the half that must not change. A dialog that has already
+ * done something by the time somebody declines it is the defect this product
+ * got wrong twice in one day, and the fix is never to take the dialog away -
+ * so what is asserted is that the ✕ leaves no file, no sheet and nothing in
+ * the status line. What the three cards actually write is asserted where the
+ * bytes are: app_package.spec.ts opens two of them and compares what comes
+ * out.
  */
-test("the export entry asks what the file is for, and takes no for an answer",
+test("the export entry leads with the talker, and takes no for an answer",
   async ({ page }) => {
     await openCollection(page);
     await pickFromMenu(page, "ui.collection_export");
 
     const choice = page.locator("dialog.sheet--choices");
     await expect(choice).toBeVisible();
-    await expect(choice.locator("button.choice strong")).toHaveText([
+    const fold = choice.locator("details.panel");
+
+    // One card outside the fold, and it is the one this Sammlung is for.
+    await expect(choice.locator("> .body > button.choice strong")).toHaveText([
       label("ui.collection_export_for_talker"),
+    ]);
+    /* And the sentence under it, which is asserted rather than left to the
+     * eye: a heading four words long is a guess, and the sentence is the half
+     * that says what the file is actually for. */
+    await expect(choice.locator("> .body > button.choice span")).toHaveText([
+      label("ui.collection_export_for_talker_note"),
+    ]);
+
+    // The other two, still here and still both of them, but folded - and the
+    // fold is shut until somebody opens it, or leading with an answer would
+    // only have added a heading above the same three cards.
+    expect(await fold.getAttribute("open")).toBeNull();
+    await fold.locator("summary").click();
+    await expect(fold.locator("button.choice strong")).toHaveText([
       label("ui.collection_export_for_app"),
       label("ui.collection_export_for_other"),
     ]);
-    /* And the sentence under each heading, which is asserted rather than left
-     * to the eye: three headings four words long are three guesses, and the
-     * sentence is the half that says what the file is actually for. */
-    await expect(choice.locator("button.choice span")).toHaveText([
-      label("ui.collection_export_for_talker_note"),
+    await expect(fold.locator("button.choice span")).toHaveText([
       label("ui.collection_export_for_app_note"),
       label("ui.collection_export_for_other_note"),
     ]);
 
     // Nothing has been written and nothing said: the presses are the cards,
-    // and this is only the question.
+    // and opening the fold is not one of them.
     await expect(page.locator("#status")).not.toContainText(within("ui.collection_exported"));
 
     let downloaded = false;
