@@ -1,15 +1,20 @@
 # Working in this repository
 
-Several agents work here at once, in parallel worktrees. Three rules keep them
-from colliding. They exist because on 2026-08-24 three agents independently
-committed the same repository rename, none of them wrong to do it.
+This is the editor half of `Lautstark/vorlaut-diy-talker`, split out on
+2026-08-27. The conventions below came across with it. **They were written for
+a repository with four agents in it at once, and this one has had one so far** —
+which is a reason to keep them rather than to drop them: the rules cost a
+command each when nobody else is here, and the day a second session starts is
+never the day anybody remembers to introduce them. All four exist because on
+2026-08-24 three agents independently committed the same repository rename,
+none of them wrong to do it.
 
 ## 1. The branch name is the only name
 
 A worktree lives at `.claude/worktrees/<branch without the `claude/` prefix>`.
 No generated names. A worktree named after one task while holding another
-task's branch is how four parallel agents become untrackable, so
-`git worktree list` is meant to be the whole dashboard:
+task's branch is how parallel agents become untrackable, so `git worktree list`
+is meant to be the whole dashboard:
 
 ```bash
 git worktree list
@@ -21,7 +26,7 @@ Before anything else — before reading the task, before the first edit — an
 agent records what it is working on:
 
 ```bash
-git config branch.$(git branch --show-current).description "Agent A - multi-board + shell extraction"
+git config branch.$(git branch --show-current).description "Agent A - what this branch is for"
 ```
 
 At spawn time, never retroactively: a description written afterwards is a
@@ -50,8 +55,7 @@ ask for it on `main` and wait, rather than doing it yourself.
 
 **Ask about decisions, not about permission to merge.** A design fork, a
 tradeoff, something the task did not settle — those are worth stopping for.
-Work that is finished and green is not; leaving it on a branch waiting to be
-noticed is how a repository ends up with twenty-one of them.
+Work that is finished and green is not.
 
 From the worktree:
 
@@ -59,42 +63,61 @@ From the worktree:
 git push -u origin "$(git branch --show-current)"
 ```
 
-GitHub answers that with an offer to open a pull request. Ignore it — that
-hint comes from GitHub and applies to every repository, and this one has never
+GitHub answers that with an offer to open a pull request. Ignore it — that hint
+comes from GitHub and applies to every repository, and this family has never
 merged through a pull request. What the push is actually for is CI.
 
 **Know what that push proves, and what it does not.** Only
-`commit-messages.yml` runs on a `claude/**` branch. Tests, Pages and the
-firmware build trigger on `main` and on pull requests, so a green branch push
-means the commit subjects are well formed and nothing else. Run the rest
-yourself, and run it **after `git add`** — `test_links.py` and
-`test_language.py` take their file list from `git ls-files`, so an untracked
-file is invisible to them and the suite comes up green until you commit:
+`commit-messages.yml` runs on a `claude/**` branch. The tests and Pages trigger
+on `main` and on pull requests, so a green branch push means the commit
+subjects are well formed and nothing else. Run the rest yourself, and run it
+**after `git add`** — `test_links.py` and `test_language.py` take their file
+list from `git ls-files`, so an untracked file is invisible to them and the
+suite comes up green until you commit:
 
 ```bash
 git add -A
 npm run typecheck && npm test && npm run test:e2e && python3 tests/run.py
 ```
 
-Then land it. `main` is checked out at `~/Code/vorlaut`, shared with every
-other agent, so look before touching it — and use `git -C`, never `cd`, or
-every command after it runs in the wrong tree:
+Then land it:
 
 ```bash
-git -C ~/Code/vorlaut status -sb          # must say main, and be clean
-git -C ~/Code/vorlaut merge --no-ff "$(git branch --show-current)"
-git -C ~/Code/vorlaut push origin main
+git -C <the main checkout> status -sb          # must say main, and be clean
+git -C <the main checkout> merge --no-ff "$(git branch --show-current)"
+git -C <the main checkout> push origin main
 ```
 
 `--no-ff` always, even where the branch would fast-forward. A branch stays
-visible as a unit that way, which is worth more than a linear history when
-several of them land in an afternoon.
+visible as a unit that way, which is worth more than a linear history.
 
-If `main` has moved underneath you between two commands — it does, several
-times a day — merge again rather than forcing anything. If it is dirty with
-another agent's uncommitted work, wait. It is usually clean again within the
-hour, and the alternative is stashing somebody else's work, which has gone
-wrong here before.
+Delete the branch and its worktree afterwards, so `git worktree list` stays the
+dashboard rule 1 says it is.
 
-Delete the branch and its worktree afterwards, so `git worktree list` stays
-the dashboard rule 1 says it is.
+## 5. What is not here, and must not arrive
+
+Three things this repository is deliberately not a party to. Each has a test,
+and each is the kind of thing that comes back one plausible line at a time.
+
+**The device format.** The editor writes a file and stops; the page that
+compiles that file and sends it down a cable is in `vorlaut-diy-talker`, beside
+the firmware that reads it — [ADR 0011][adr11] and [ADR 0012][adr12]. `src/`
+holds seven numbers and one rounding rule about the device, in `src/device/`,
+each of them held against a pinned fixture or a frozen table. Adding an eighth
+costs an edit to `tests/unit/device_facts.test.ts` and an argument.
+
+**Code out of `third_party/`.** That directory is a whole checkout of
+`vorlaut-diy-talker`, pinned for `device/fixtures/`. It is data. A build, a
+test or a tool that reaches into its `loader/` would undo the boundary above in
+one line with a plausible reason; `tests/unit/layers.test.ts` is the check and
+`third_party/README.md` is the argument.
+
+**A regenerated lock.** `tests/reference/` is governed by
+[`docs/frozen-references.md`][frozen] in the other repository, and its rule is
+that a lock is never rewritten from the module under test — that leaves the
+module compared against itself. A red lock is a finding. The oracles that could
+answer for the layout and the tiles went on 2026-08-22.
+
+[adr11]: https://github.com/Lautstark/vorlaut-diy-talker/blob/main/adr/0011-editor-exports-the-talker-repository-sends.md
+[adr12]: https://github.com/Lautstark/vorlaut-diy-talker/blob/main/adr/0012-the-repository-splits-editor-leaves.md
+[frozen]: https://github.com/Lautstark/vorlaut-diy-talker/blob/main/docs/frozen-references.md

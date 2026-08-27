@@ -6,7 +6,7 @@
 // over data. That line is what lets the mapping and its validator be checked
 // under node, which is where most of the rules worth checking live.
 
-import { thumbnailSize } from "../../loader/src/tiles.js";
+import { thumbnailSize } from "../device/thumbnail.js";
 import { digest, IMAGE_SIZE, type BakedImage, type BakedSound } from "./app_package.js";
 import { encodeOpus, ENCODER_RATE } from "./opus.js";
 
@@ -45,9 +45,10 @@ export async function bakeImage(
     ? (source.naturalHeight || (source as HTMLImageElement).height)
     : Number((source as { height: number }).height);
 
-  // thumbnailSize() is tiles.ts's fit, which follows Pillow step for step.
-  // Borrowed rather than re-derived so that a symbol lands in the same
-  // proportions on the tablet as on the device.
+  // thumbnailSize() is the device tile renderer's fit, which follows Pillow
+  // step for step. Copied rather than re-derived so that a symbol lands in the
+  // same proportions on the tablet as on the device - see device/thumbnail.ts
+  // for why it is a copy and what holds it to the original.
   const [drawWidth, drawHeight] = width <= IMAGE_SIZE && height <= IMAGE_SIZE
     ? [width, height]
     : thumbnailSize(width, height, IMAGE_SIZE);

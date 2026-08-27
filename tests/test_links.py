@@ -19,16 +19,28 @@ punctuation dropped, spaces turned into hyphens, and a repeated heading
 counted up - because that is what decides whether the link works when somebody
 reads the file on the web rather than in an editor.
 
-The second half of this checks the mentions that are not links at all. Half
-the references into the documentation live in C headers and Python comments,
-where there is no link syntax and a file name is simply written out:
+**This is a copy, and it is half the file it is in Lautstark/vorlaut-diy-talker.**
+Both halves of the split need this check - the finding is in that repository's
+docs/split-rehearsal.md section 5 - but they do not need the same halves of it.
+Two things are missing here on purpose, and neither is an omission to be
+tidied back in:
 
-    // ... - see docs/software.md. layout.bin is the exception: it
+  * **The written-out `docs/*.md` mentions.** That check exists because half
+    the references into the documentation live in comments, where there is no
+    link syntax and a file name is simply written out - and nothing about one
+    looks broken after a rename. 187 of them at the last count, and `adr/` and
+    `docs/` both went with the talker, so the files they name are not in this
+    repository and cannot be checked from it. Every such path in this
+    repository's comments is a cross-repository citation now; the check that
+    they lead somewhere is the one running next door, over the files they
+    actually name.
 
-Those are how somebody reading the firmware finds the format it implements,
-and nothing about them looks broken once the file has been renamed. Every
-`docs/*.md` written out in a tracked file therefore has to name a file that is
-there.
+  * **The named sketches.** It read .github/workflows/ci-firmware.yml and
+    firmware/, and this repository has neither.
+
+What is left is the half this repository does need: the relative links and
+anchors in its own prose, which is README.md, CLAUDE.md and the two files under
+exchange/. Those go somewhere or they do not, exactly as before.
 """
 
 from __future__ import annotations
@@ -40,8 +52,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-SKIP_SUFFIX = {".png", ".svg", ".bin", ".stl", ".ico", ".jpg", ".jpeg"}
-
 # Fenced blocks are examples, not prose: a link inside one is being shown, not
 # followed, and a line starting with # in a shell block is a comment and not a
 # heading.
@@ -51,9 +61,6 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 LINK = re.compile(r"!?\[[^\]]*\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
 
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
-
-# A path written out in prose or in a comment, rather than linked.
-MENTION = re.compile(r"(?<![\w/.-])docs/[\w.-]*\.md")
 
 # Links that are somebody else's problem.
 EXTERNAL = re.compile(r"^(https?:|mailto:|tel:|ftp:|//|/)")
@@ -150,65 +157,8 @@ def check_markdown_links() -> None:
             print(f"          {problem}")
 
 
-def check_written_out_paths() -> None:
-    """Documentation named in a comment rather than linked to."""
-    broken: list[str] = []
-    mentions = 0
-    for name in tracked():
-        if Path(name).suffix in SKIP_SUFFIX:
-            continue
-        try:
-            text = (ROOT / name).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for number, line in enumerate(text.split("\n"), start=1):
-            for mentioned in MENTION.findall(line):
-                mentions += 1
-                if not (ROOT / mentioned).exists():
-                    broken.append(f"{name}:{number}: {mentioned}")
-
-    check(f"{mentions} path(s) written out in prose and comments", not broken)
-    for problem in broken:
-        print(f"          {problem}")
-
-
-def check_named_sketches() -> None:
-    """Sketches the firmware workflow compiles, one folder per line.
-
-    That list is written by hand, and a sketch it names which is not there
-    fails on a runner rather than here - a minute of installing the ESP32 core
-    and then `Can't open sketch`. It happened the day the Wi-Fi path was
-    deleted: `test6_wlan` and `test7_sync` went with the radio and the matrix
-    still named both, so the first push after that went red for a reason that
-    has nothing to do with the firmware.
-
-    The other direction is checked too, and is the one worth having. A sketch
-    that exists and is compiled by nobody is how a broken pins.h reaches
-    somebody with a soldering iron - which is the reason the test sketches are
-    in that list at all, stated in the workflow itself.
-    """
-    workflow = ROOT / ".github" / "workflows" / "ci-firmware.yml"
-    named = set(re.findall(r"^\s+(firmware/\S+)\s*$",
-                           workflow.read_text(encoding="utf-8"), re.M))
-    check(f"{len(named)} sketch(es) named in ci-firmware.yml", bool(named),
-          "" if named else "none found - has the list moved?")
-
-    missing = sorted(name for name in named if not (ROOT / name).is_dir())
-    check("every sketch the firmware workflow names is there", not missing,
-          ", ".join(missing))
-
-    # Everything under firmware/ holding an .ino, which is what a sketch is.
-    present = {str(path.parent.relative_to(ROOT))
-               for path in (ROOT / "firmware").rglob("*.ino")}
-    uncompiled = sorted(present - named)
-    check("every sketch in the tree is one the workflow compiles", not uncompiled,
-          ", ".join(uncompiled))
-
-
 def main() -> int:
     check_markdown_links()
-    check_written_out_paths()
-    check_named_sketches()
 
     if failures:
         print(f"\n  {len(failures)} problem(s)")

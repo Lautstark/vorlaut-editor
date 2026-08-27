@@ -27,7 +27,7 @@ import { ENCODER_RATE } from "../data/opus.js";
 import { DEVICE_SAMPLE_RATE } from "../data/audio_format.js";
 import * as store from "../data/store.js";
 import * as symbols from "../data/symbols.js";
-/* Two names out of loader/, and both are facts about the format.
+/* Two facts about the device's format, out of device/layout_facts.ts.
  *
  * HASH_BYTES is how long the hash in a WAV's name has to be for layout.bin to
  * carry it, and DEFAULT_LANGUAGE is what the device labels itself in when it
@@ -43,10 +43,10 @@ import * as symbols from "../data/symbols.js";
  *
  * What left with the device path (adr/0011) is renderLayoutBin() and every
  * *use* of a tile as a file: nothing here writes a t<hash>.bin, and nothing
- * here can reach a talker. tests/unit/layers.test.ts holds this list to
- * exactly these two. */
-import { DEFAULT_LANGUAGE, HASH_BYTES }
-  from "../../loader/src/layout_format.js";
+ * here can reach a talker. They were imported out of loader/ until the split;
+ * tests/unit/device_facts.test.ts is what holds the copy to the fixtures
+ * now. */
+import { DEFAULT_LANGUAGE, HASH_BYTES } from "../device/layout_facts.js";
 import { reason } from "../core/errors.js";
 import {
   speak, asBlob, shippable, displayName, parseVoiceId, usePiperRuntime,
@@ -104,7 +104,7 @@ const VORLAUT = { rate: DEVICE_SAMPLE_RATE, fadeSec: 0.012, padSec: 0.06 };
 // local alias, and vite only substitutes that name written out in full, so the
 // expression survives into the bundle and finds no env at run time. It falls
 // back to "/", which is right in dev and wrong on Pages: the phonemizer would
-// be fetched from /vendor/ on a site served at /vorlaut-diy-talker/, and the first
+// be fetched from /vendor/ on a site served at /vorlaut-editor/, and the first
 // sentence would fail on a 404 that no test sees, because e2e stands the
 // phonemizer chunk in and never loads the real files. Written out here, vite
 // substitutes it at build time. mitreden hit the same edge and passes it too;

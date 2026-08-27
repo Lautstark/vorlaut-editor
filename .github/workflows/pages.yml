@@ -1,10 +1,10 @@
-name: Deploy the board designer to GitHub Pages
+name: Deploy the board editor to GitHub Pages
 
 # The shape is bildhaft's deploy.yml, which solved the same problem first: test,
 # then build, then deploy, with pull requests tested and never published. The
-# toolchain is now the same shape too - Vite and TypeScript - though without
-# React, because vorlaut's interface is plain DOM and there is nothing here
-# asking to be a component tree.
+# toolchain is the same shape too - Vite and TypeScript - though without React,
+# because this interface is plain DOM and there is nothing here asking to be a
+# component tree.
 
 on:
   push:
@@ -25,14 +25,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Nothing reaches Pages unless this passes. Three toolchains, because the
-  # checks genuinely need three: vitest imports src/ directly, Playwright opens
-  # the built page in a browser, and tests/run.py compiles the firmware's own
-  # C++ readers to replay the browser's bytes into them.
+  # Nothing reaches Pages unless this passes. Two toolchains: vitest and
+  # Playwright on the JavaScript side, and Python for the prose checks and the
+  # frozen references whose oracles were Python programs. The C++ third one
+  # went with the firmware - adr/0012.
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # device/fixtures/, pinned. tests/unit/device_facts.test.ts and
+          # tests/unit/device_package_writer.test.ts read it, and they say so
+          # rather than failing on a missing file if it is not here.
+          submodules: true
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -77,16 +82,10 @@ jobs:
       - name: The page, built and opened
         run: npm run test:e2e
 
-      - name: What needs a C++ compiler
-        # g++ comes with the runner image, so nothing is installed for it.
+      - name: The prose, and the frozen references
+        # tests/run.py, which needs no compiler here. Python is standard
+        # library only.
         run: python tests/run.py
-
-      - name: g++ really was there
-        # tests/run.py skips rather than fails where g++ is missing, so a runner
-        # image that quietly dropped it would leave this gate green with the
-        # firmware's own readers never compiled - which is the whole of what
-        # that file is for now.
-        run: g++ --version | head -1
 
   build:
     needs: test
@@ -108,8 +107,11 @@ jobs:
         run: npm run preflight
 
       - name: Build
-        # A project site is served from /<repo>/, so the bundle needs that base.
-        # For a user site (<user>.github.io) set BASE_PATH to "/" instead.
+        # A project site is served from /<repo>/, so the bundle needs that
+        # base. Derived from the repository name, so it follows a rename for
+        # free - which package.json's build:pages and playwright.config.ts's
+        # BASE do not, and both of those fail silently. A build with no base at
+        # all renders an empty body with no error anywhere.
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build

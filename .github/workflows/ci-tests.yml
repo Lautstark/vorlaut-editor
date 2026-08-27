@@ -2,68 +2,44 @@ name: Tests
 
 # Runs only when this job actually has something to check.
 #
-# firmware/vorlaut/ is deliberately in the list although no sketch is compiled
-# here: tests/layout_dump.cpp, tests/cable_dump.cpp, tests/texts_dump.cpp and
-# tests/device_host.cpp include headers from the sketch and hold what the
-# device reads against what the browser writes. If a format changes in the
-# firmware, these have to run - otherwise nobody notices until the device
-# stays silent.
+# docs/ and README.md were in this list for a reason that decides the whole
+# prose half of it: tests/test_links.py follows every relative link and anchor
+# in tracked Markdown, and a link broken by a renamed file or a moved heading
+# is only ever broken by a change to those files. docs/ and adr/ went with the
+# talker under adr/0012, and what is left here is README.md, CLAUDE.md and the
+# two files under exchange/.
 #
-# device/ is here for the other half of the same argument. It holds the
-# conformance fixtures both ends are checked against, and both checks run in
-# this job: the builder's in `npm test`, the firmware's in `tests/run.py`. A
-# fixture that moved without either being re-run would be a specification
-# nothing was held to.
+# That argument reaches further than any one directory. test_links.py and
+# test_language.py take their file list from `git ls-files`, so they check
+# EVERY tracked file, wherever it sits. A directory holding tracked prose and
+# missing from this list is a directory where a broken link cannot be caught -
+# the job simply does not run. The rule for anything added later is: if it
+# holds a tracked .md, it belongs in this list.
 #
-# docs/ and README.md are in the list for the same kind of reason:
-# tests/test_links.py follows every relative link and anchor in them, and a
-# link broken by a renamed file or a moved heading is only ever broken by a
-# change to those files.
+# The configuration files at the bottom are the exception to that rule and are
+# listed for a weaker reason: no test reads them today. They are here so that a
+# change to how this repository builds or updates itself is not the one kind of
+# change that skips its own test suite.
 #
-# That argument decides the whole prose half of this list, and it reaches
-# further than docs/: test_links.py and test_language.py take their file list
-# from `git ls-files`, so they check EVERY tracked file, wherever it sits. A
-# directory holding tracked prose and missing from this list is a directory
-# where a broken link cannot be caught - the job simply does not run. So adr/,
-# dns/, case/, voices/ and CLAUDE.md are here too, and the rule for anything
-# added later is: if it holds a tracked .md, it belongs in this list.
-#
-# dns/ earns its place twice over, because dns/verify.py is Python that
-# nothing else runs.
-#
-# The four configuration files at the bottom are the exception to that rule
-# and are listed for a weaker reason: no test reads them today. They are here
-# so that a change to how this repository releases or updates itself is not
-# the one kind of change that skips its own test suite.
+# .gitmodules is in the list because moving the pin under third_party/ changes
+# what device/fixtures/ says, which is what tests/unit/device_facts.test.ts
+# holds src/device/layout_facts.ts against.
 on:
   push:
     branches: [main]
     paths: &paths
       - index.html
       - src/**
-      # The second page, and everything the talker's half of the browser code
-      # is made of - the compiler, the tile renderer, the layout.bin writer and
-      # the cable. A change in here reaches tests/run.py as well as the two
-      # JavaScript suites, since that is where the tile and cable checks read
-      # their modules from now.
-      - loader/**
       - e2e/**
       - tests/**
-      # tools/installcheck.mjs runs ahead of all three suites, so a change to
-      # it changes what every one of them is standing on.
+      # tools/installcheck.mjs runs ahead of both suites, so a change to it
+      # changes what each of them is standing on.
       - tools/**
       - public/**
-      - example/**
-      - firmware/vorlaut/**
-      - docs/**
       - exchange/**
-      - device/**
-      - adr/**
-      - dns/**
-      - case/**
-      - voices/**
       - README.md
       - CLAUDE.md
+      - .gitmodules
       - package.json
       - package-lock.json
       - tsconfig*.json
@@ -72,8 +48,6 @@ on:
       - playwright.config.ts
       - renovate.json5
       - .github/renovate-shared.json5
-      - release-please-config.json
-      - .release-please-manifest.json
       - .github/workflows/ci-tests.yml
   pull_request:
     paths: *paths
@@ -84,6 +58,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # device/fixtures/, pinned - see third_party/README.md.
+          submodules: true
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -109,7 +86,6 @@ jobs:
         # moving the build; this is what stops the pin going quietly stale.
         run: node node_modules/@lautstark/design/pins.js
 
-      # Three toolchains, and each has a reason it cannot be one of the others.
       - name: Types
         run: npm run typecheck
 
@@ -134,30 +110,11 @@ jobs:
         # other check stayed green.
         run: npm run test:e2e
 
-      - name: What needs a C++ compiler
-        # tests/run.py is only this now: compiling the firmware's own readers
-        # and replaying the browser's bytes into them, plus the two checks on
-        # the repository itself. Python is standard library only.
-        #
-        # docs/device-interface.md section 5 expects g++ to leave this job once
-        # device/fixtures/ exists, and it has not. The reason is that section 5
-        # describes CI after a repository split: it moves the C to the firmware
-        # side because the firmware side would be a different repository, with
-        # a path filter of its own. Inside one repository the same move costs
-        # something rather than nothing - ci-firmware.yml runs on firmware/**,
-        # so the format checks would stop running on a change to
-        # src/data/layout_format.ts, which is the change that broke a format
-        # most recently. Widening that filter instead makes every src/ change
-        # pay for the ESP32 core.
-        #
-        # What did move is the new capability: ci-firmware.yml now compiles the
-        # firmware's readers on the host and runs them against the fixture
-        # index, so a firmware-only change is checked against the fixtures
-        # without depending on this job's path list at all.
+      - name: The prose, and the frozen references
+        # tests/run.py is the Python half: no German where English belongs, no
+        # link pointing at nothing, and the three locks under tests/reference/
+        # whose oracles were Python programs. Standard library only, and no
+        # compiler - adr/0012 put the firmware's C++ readers and the browser
+        # writers they are held against on the other side of the seam, which is
+        # where tests/run.py's own C++ half stayed.
         run: python tests/run.py
-
-      - name: g++ really was there
-        # tests/run.py skips rather than fails where g++ is missing, so a
-        # runner image that quietly dropped it would leave this job green with
-        # the firmware's readers never compiled.
-        run: g++ --version | head -1

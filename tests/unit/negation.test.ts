@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { placeholder, renderSymbol, rgbTo565, TILE_SIZE } from "../../loader/src/tiles.js";
 import { documentToLayout, layoutToDocument, normalizeLayout } from "../../src/data/obf.js";
 import { pictureKey, symbolPlaces } from "../../src/data/app_package.js";
 import type { AppLayout, DiyLayout } from "../../src/core/types.js";
@@ -16,67 +15,16 @@ import type { AppLayout, DiyLayout } from "../../src/core/types.js";
  * cross that draws in the wrong place is a bug somebody sees. A cross that
  * makes two keys share one baked file is a board that says the opposite of
  * what it was built to say, on a device, silently.
+ *
+ * **This is the editor's half.** The file opened with the pixels - that
+ * renderSymbol(null, { negated: true }) draws design's --danger over the
+ * placeholder and does not touch the placeholder itself - and that block reads
+ * the tile renderer, which is in Lautstark/vorlaut-diy-talker now and stayed
+ * with it. What is left is the half where the fault is quiet: the picture a
+ * place wants, and the flag surviving a round trip through a document. The
+ * cross drawn in the wrong place is a bug somebody sees; two keys sharing one
+ * baked file is not, and that is this side's.
  */
-
-/* --------------------------------------------------------------- pixels --- */
-
-/** RGB565 big-endian back to the value, so a tile can be asked about colours. */
-const values = (bytes: Uint8Array): Set<number> => {
-  const seen = new Set<number>();
-  for (let at = 0; at < bytes.length; at += 2) seen.add((bytes[at]! << 8) | bytes[at + 1]!);
-  return seen;
-};
-
-/** design's --danger, light, as the panel would show it. tiles.ts writes the
- *  same three numbers; this is the colour arriving at the other end. */
-const RED = rgbTo565(173, 51, 44);
-
-describe("the tile the device gets", () => {
-  /* renderSymbol(null) is the one path through it that needs no canvas: a
-   * reference that resolves to nothing draws the placeholder. It is also a
-   * real key rather than a contrivance - a METACOM board opened in a browser
-   * that has not been given the folder back is every key on it. */
-
-  it("draws no cross unless it is asked to", () => {
-    // The frozen tiles are the other half of this - tests/test_tile_render_js.py
-    // holds every fixture byte for byte - but they were frozen before this
-    // option existed and would pass by never exercising it. This says the
-    // default is still the tile they were frozen from.
-    expect([...renderSymbol(null)]).toEqual([...renderSymbol(null, { negated: false })]);
-    expect(values(renderSymbol(null)).has(RED)).toBe(false);
-  });
-
-  it("bakes the cross into the pixels when it is", () => {
-    const crossed = renderSymbol(null, { negated: true });
-    // Baked, not flagged: the firmware is never told about negation and never
-    // will be. What reaches it is a tile that is already crossed out.
-    expect(values(crossed).has(RED)).toBe(true);
-    expect(crossed.length).toBe(TILE_SIZE * TILE_SIZE * 2);
-  });
-
-  it("makes a different file of it, which is what keeps two keys apart", () => {
-    // The tile's name is a hash of these bytes - see storeTile() in
-    // backend/local.ts. Equal bytes would mean one file for "Brot" and "kein
-    // Brot", and whichever was drawn first would end up on both.
-    expect([...renderSymbol(null, { negated: true })])
-      .not.toEqual([...renderSymbol(null)]);
-  });
-
-  it("draws the same bytes every time, so a rebuild changes nothing", () => {
-    // A tile that differed run to run would rename itself on every build and
-    // the device would re-fetch the whole board for nothing.
-    expect([...renderSymbol(null, { negated: true })])
-      .toEqual([...renderSymbol(null, { negated: true })]);
-  });
-
-  it("leaves the placeholder itself alone", () => {
-    // placeholder() is frozen too, and the cross is drawn over what it
-    // returns rather than into it.
-    expect(values(new Uint8Array(placeholder().data.buffer.slice(0))).size)
-      .toBeGreaterThan(0);
-    expect(values(renderSymbol(null)).has(RED)).toBe(false);
-  });
-});
 
 /* ------------------------------------------------------------- the keys --- */
 

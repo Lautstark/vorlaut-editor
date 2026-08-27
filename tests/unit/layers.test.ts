@@ -138,109 +138,130 @@ for (const name of all.filter(inEditor)) {
 check("no editor reaches into another editor", strays.length === 0,
       strays.join(", ") || `${EDITORS.length} editors, importing nothing from each other`);
 
-/* ## The second boundary: the editor does not know about the talker
+/* ## The second boundary: the editor is not a party to the device format
  *
- * adr/0011 took the device path out of the editor. The editor exports a file
- * and stops; loader/ takes a file and puts it on a talker; neither knows the
- * other exists. That is a claim about what is deleted, and a deleted thing
- * comes back one import at a time - `import { renderSymbol } from
- * "../../loader/src/tiles.js"` in a preview would compile, run, and pass every
- * other test here, exactly as the three shell modules that reached for the
- * board renderer did before the rule above existed. That import was real until
- * 2026-08-27, and this is the list it was on.
+ * adr/0011 took the device path out of the editor: the editor exports a file
+ * and stops, and the page that compiles it and puts it on a talker is the
+ * talker's own repository's. adr/0012 then put the two in two repositories.
  *
- * So the crossings are counted rather than forbidden, because the ones that
- * are left are real. They come in two kinds and the difference is the whole
- * reason this is a list rather than a ban.
+ * **What stood here was a list, and it could not survive the move.**
+ * ALLOWED_FROM_SRC named the eight things src/ was permitted to import out of
+ * loader/ - seven facts about layout.bin and thumbnailSize() out of the tile
+ * renderer - and its closing comment called that list "the bill for the
+ * split". The bill is paid. What must not happen is the list staying: every
+ * one of its checks reads `spec.includes("loader/")`, and in a repository with
+ * no loader/ that matches nothing, reports "eight names, from two modules" and
+ * is green for ever. This repository has been bitten twice by a test that was
+ * green for the wrong reason, and a file whose own comment is about
+ * dependencies a module graph cannot see should not end up as one.
  *
- * **Facts about the format.** A set holds four keys, a hash is sixteen bytes,
- * these are the languages the device has an index for, and this is the range
- * of sleep timeouts a conforming builder may write. The editor has to know all
- * of them because it writes a file a talker has to be able to read -
- * normalizeLayout() holds every builder to the sleep range, which is the writer
- * half of a rule whose reader half is layoutIdleSeconds() in the firmware's own
- * header. device/fixtures/ is the authority on every one of them and belongs to
- * neither half (adr/0009), which is what makes them safe to duplicate across a
- * repository boundary when the day comes.
+ * So it was replaced on both sides rather than moved, and the editor's
+ * successors are two files rather than one:
  *
- * **The pixels, once, and read-only.** thumbnailSize() is the app package's
- * fit - what Pillow's thumbnail() would make of a picture this size - and
- * src/data/app_assets.ts borrows it so that a symbol lands in the same
- * proportions on the tablet as on the device. docs/repository-map.md gives the
- * argument for it living in tiles.ts: it is one rounding rule that follows
- * Pillow step for step, and splitting the module would put that arithmetic in
- * two places with nothing holding the copies together.
+ *  - **tests/unit/device_facts.test.ts** is where the enumeration went. What
+ *    was a list of names the editor may *import* is a list of device facts the
+ *    editor holds a *copy* of, each one held against the pinned
+ *    device/fixtures/ and each one naming the fixture that says so. Adding a
+ *    name still costs an edit and an argument, which was the list's real
+ *    value; and a copy nothing checks is worse than an import, so it is a
+ *    stronger statement than the one retired.
+ *  - **tests/unit/thumbnail_frozen.test.ts** is thumbnailSize(), the one name
+ *    on the bill that is not a number: a frozen table taken from the original
+ *    while both halves were still in one tree.
  *
- * **There were three here until 2026-08-27.** renderSymbol() and TILE_SIZE
- * were the editor's device preview - a symbol drawn the way a ScreenKey draws
- * it, so that a pictogram could be judged at 15.21 mm - and they are gone
- * because the preview is, to the loader page, where it draws the tiles a
- * compile has already made (adr/0013). They are struck from this list rather
- * than kept against a return: this file's own rule is that a name left here
- * without a live argument is the boundary quietly closing again, and "the
- * editor might want to draw a tile again" is not one.
- *
- * **This list is the bill for the split.** When the editor leaves, these eight
- * names are what has to be answered for - written down on the editor's side
- * against device/fixtures/, or moved into a package both can pin. Anything
- * added here without that argument is the boundary quietly closing again.
+ * And the rule below is the other half of the replacement. It is what could
+ * not be said while loader/ was a legitimate exception eight names wide.
  */
-const ALLOWED_FROM_SRC = new Map<string, string[]>([
-  ["loader/src/layout_format.ts",
-   ["SLOTS_PER_SET", "HASH_BYTES", "LANGUAGE_CODES", "DEFAULT_LANGUAGE",
-    "SLEEP_MIN", "SLEEP_MAX", "SLEEP_DEFAULT"]],
-  ["loader/src/tiles.ts", ["thumbnailSize"]],
-]);
 
-/** Every name one module takes out of another, as `spec -> name` pairs.
+/** The packages this repository pins, which are the only bare names src/ may
+ *  take from outside itself.
  *
- * A regular expression over the statement rather than a parse, which is the
- * same reading importsOf() above does and is honest about its limits: a
- * namespace import is one name and it is a star, so it is reported as `*` and
- * fails the list below rather than passing it silently. `import * as tiles`
- * from the editor is precisely the crossing this is here to catch.
+ *  Four repositories of their own, each pinned by tag - the arrangement
+ *  docs/packages.md describes in Lautstark/vorlaut-diy-talker - plus the two
+ *  ordinary npm dependencies. They are prefixes rather than a rule about bare
+ *  specifiers in general, so that a fifth one costs a line and a look. */
+const PINNED_PACKAGES = [
+  "@lautstark/", "@diffusionstudio/", "idb", "onnxruntime-web",
+];
+
+/** The one absolute URL the page loads code from, and the argument for it.
  *
- * `export ... from` counts as an import and has to, because backend/index.ts
- * is written entirely in it: a re-export is how the editor's whole contract
- * with the outside used to name the cable, and a rule that only read `import`
- * would have watched that file hand the device path straight back. */
-function namesImported(text: string): { spec: string; name: string }[] {
-  /* Comments out first, and this file is why: backend/index.ts writes a
-   * paragraph beside every name in its re-export list, and a clause split on
-   * commas with those still in it reports half a sentence as an imported
-   * name. Crude, and safe for the one thing it is asked about - a "//" inside
-   * a string literal is not something any import statement here contains. */
-  const source = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  const out: { spec: string; name: string }[] = [];
-  const pattern = /(?:import|export)\s+(type\s+)?([^"';]*?)\s+from\s+"([^"]+)"/g;
-  for (const [, , clause, spec] of source.matchAll(pattern)) {
-    const braced = clause.match(/\{([^}]*)\}/);
-    if (braced) {
-      for (const piece of braced[1]!.split(",")) {
-        const name = piece.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]!.trim();
-        if (name) out.push({ spec, name });
-      }
-    } else if (clause.trim()) {
-      out.push({ spec, name: clause.includes("*") ? "*" : clause.trim() });
-    }
+ *  onnxruntime-web's ESM build off a CDN, fetched at run time by the piper
+ *  runtime rather than bundled. It is a fetch and not a build input, which is
+ *  why it is a separate list from the one above and not an entry in it: a
+ *  package that moved would break an install, and this would break a sentence
+ *  somebody is waiting to hear. Anything added here is a second thing this
+ *  page cannot do offline. */
+const ALLOWED_URLS = [
+  "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/esm/ort.wasm.min.js",
+];
+
+/** Every module specifier in one file, static and dynamic.
+ *
+ * Comments first, then a lookbehind that refuses a keyword sitting inside a
+ * string literal - which is not a hypothetical: core/boot_data.ts has an
+ * `"ui.import"` key and core/texts.ts asks the page for `$("import")`, and a
+ * pattern without it reads both as imports of whatever quoted thing comes
+ * next. importsOf() above never noticed because it drops everything that does
+ * not start with a dot; this one is asked precisely about the rest.
+ *
+ * A side-effect import counts (`import "@lautstark/design/components.css"`)
+ * and so does a dynamic one, because both are ways out of this directory. */
+function specifiersOf(text: string): string[] {
+  /* A line comment, except where the two slashes are a URL's - "https://" is
+   * a specifier this file has to be able to see, and stripping from the "//"
+   * in it leaves `import("https:` and a crossing reported against a scheme. */
+  const source = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(?<!:)\/\/[^\n]*/g, "");
+  const out: string[] = [];
+  const patterns = [
+    /(?<!["'\w$.])(?:import|export)\s+(?:[^;"']*?\s+from\s+)?"([^"]+)"/g,
+    /(?<!["'\w$.])import\s*\(\s*"([^"]+)"/g,
+  ];
+  for (const pattern of patterns) {
+    for (const [, spec] of source.matchAll(pattern)) out.push(spec!);
   }
   return out;
 }
 
-const intoLoader: string[] = [];
+/* ## src/ imports nothing outside src/ but the packages it pins
+ *
+ * An absolute rule, and it is new. Until adr/0012 nothing could say it: the
+ * editor legitimately reached into loader/ for eight names, so the strongest
+ * available statement was a list of exceptions kept honest by hand. With the
+ * other half of the repository in another repository the exception is gone,
+ * and what is left is a statement with no list of names in it.
+ *
+ * What it catches is the one edit that would undo adr/0011's boundary here: a
+ * relative path climbing out of src/ into third_party/ - the pinned checkout
+ * of the talker's repository, which exists for device/fixtures/ and happens to
+ * hold a whole working copy of code this repository is no longer a party to.
+ * third_party/README.md says that in prose; this is the check.
+ */
+const outward: string[] = [];
+let specifiers = 0;
 for (const name of all) {
-  const source = readFileSync(join(SRC, name), "utf8");
-  for (const { spec, name: imported } of namesImported(source)) {
-    if (!spec.includes("loader/")) continue;
-    const target = posix.normalize(posix.join("src", posix.dirname(name), spec))
-      .replace(/\.js$/, ".ts");
-    const allowed = ALLOWED_FROM_SRC.get(target) ?? [];
-    if (!allowed.includes(imported)) intoLoader.push(`${name} -> ${target}: ${imported}`);
+  for (const spec of specifiersOf(readFileSync(join(SRC, name), "utf8"))) {
+    specifiers++;
+    if (spec.startsWith(".")) {
+      const target = posix.normalize(posix.join("src", posix.dirname(name), spec));
+      if (!target.startsWith("src/")) outward.push(`${name} -> ${target}`);
+    } else if (/^[a-z]+:/.test(spec)) {
+      if (!ALLOWED_URLS.includes(spec)) outward.push(`${name} -> ${spec}`);
+    } else if (!PINNED_PACKAGES.some((one) => spec === one || spec.startsWith(one))) {
+      outward.push(`${name} -> ${spec}`);
+    }
   }
 }
 
-check("the editor takes nothing out of loader/ but the format's own numbers",
-      intoLoader.length === 0,
-      intoLoader.length ? intoLoader.join(", ")
-                        : `${[...ALLOWED_FROM_SRC.values()].flat().length} names, `
-                          + `from ${ALLOWED_FROM_SRC.size} modules`);
+check("src/ imports nothing outside src/ but the packages this repository pins",
+      outward.length === 0,
+      outward.length ? outward.join(", ")
+                     : `${specifiers} specifiers in ${all.length} modules, `
+                       + `${PINNED_PACKAGES.length} pinned packages, `
+                       + `${ALLOWED_URLS.length} URL`);
+
+/* And that the rule above is not passing because it reads nothing. A pattern
+ * that matched no imports at all would report zero crossings and be green, and
+ * this file's own subject is checks that go quiet. */
+check("and it read the imports it was meant to", specifiers > all.length,
+      `${specifiers} specifiers across ${all.length} modules`);

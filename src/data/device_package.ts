@@ -118,15 +118,16 @@ import { slotIsEmpty } from "./app_package.js";
 import {
   DEVICE_BITS_PER_SAMPLE, DEVICE_CHANNELS, DEVICE_SAMPLE_RATE,
 } from "./audio_format.js";
-/* Two numbers and nothing else, and that is the whole of what this file now
- * needs from the device's own code. The tile renderer and the layout.bin
+/* Two numbers and nothing else, and that is the whole of what this file needs
+ * to know about the device at all. The tile renderer and the layout.bin
  * writer went to loader/src/compile.ts with compileDevice() - see adr/0011 -
  * so the editor writes a package for the talker without holding any of the
  * code that turns one into what the talker reads. What is left is the shape
  * of the device: four keys to a set, and sixteen bytes of hash in a name.
- * device/fixtures/ is the authority on both, and
- * tests/unit/device_fixtures.test.ts is what holds them to it. */
-import { HASH_BYTES, SLOTS_PER_SET } from "../../loader/src/layout_format.js";
+ * device/fixtures/ is the authority on both - pinned under third_party/ now
+ * rather than sitting in this repository - and tests/unit/device_facts.test.ts
+ * is what holds them to it. */
+import { HASH_BYTES, SLOTS_PER_SET } from "../device/layout_facts.js";
 import { zipBytes, type ZipMember } from "./zip.js";
 import type { DiyLayout } from "../core/types.js";
 

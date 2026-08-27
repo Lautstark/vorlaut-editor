@@ -191,6 +191,27 @@ export function openPackageExport(name: string, stem: string): void {
   });
 }
 
+/** The page that takes an exported file to a talker, in the other repository.
+ *
+ * **Written out, and that is the change the split made.** This was built from
+ * import.meta.env.BASE_URL while the two pages came out of one deployment, so
+ * that a rename could not break it in silence - the argument the literal base
+ * paths in package.json and playwright.config.ts are the counter-example to.
+ * That reasoning does not survive the move: the page is served from
+ * Lautstark/vorlaut-diy-talker now, and a relative URL off this site's base
+ * points at a path that does not exist here.
+ *
+ * The address is safe to hard-code for the one reason that decided which half
+ * leaves. The talker keeps the repository it is named for, and the loader page
+ * takes that site's root once the editor is gone, so there is no rename
+ * underneath this - which is exactly what this repository's own address no
+ * longer has. Note it is the site's root and not the `loader/` under it.
+ *
+ * This is the only crossing on the split's bill whose breakage a carer sees
+ * rather than a test, and there is no gate for it.
+ */
+const TALKER_PAGE = "https://lautstark.github.io/vorlaut-diy-talker/";
+
 /** The Sammlung as the talker's own package, and where to take it.
  *
  * The hand-off is the reason this one keeps its sheet open. Everything before
@@ -198,11 +219,6 @@ export function openPackageExport(name: string, stem: string): void {
  * disk and the talker is on the table, and the page that joins the two is a
  * second address they have no reason to know. A link, at the moment the file
  * exists, is the whole of what stands between "exported" and a device.
- *
- * Built from import.meta.env.BASE_URL rather than written out, for the reason
- * docs/repository-map.md gives about the three places the base already is
- * written out literally: each of them is a place a rename breaks in silence,
- * and this would have been a fourth.
  */
 export function openDeviceExport(name: string, stem: string): void {
   openExport({
@@ -218,8 +234,7 @@ export function openDeviceExport(name: string, stem: string): void {
       const said = document.createElement("p");
       said.textContent = t("ui.device_export_next");
       const link = document.createElement("a");
-      link.href = new URL("loader/", new URL(import.meta.env.BASE_URL,
-                                             location.href)).href;
+      link.href = TALKER_PAGE;
       link.textContent = t("ui.device_export_open");
       // A new tab, because the Sammlung on this one is still open and going
       // back to it should not be a reload of everything.

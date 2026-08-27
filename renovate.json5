@@ -10,7 +10,7 @@
   // The .json5 is spelled out on purpose: the //path/to/file syntax implies
   // a .json extension, so omitting it looks for a file that is not there
   // and Renovate stops before it does anything.
-  extends: ["local>Lautstark/vorlaut-diy-talker//.github/renovate-shared.json5"],
+  extends: ["local>Lautstark/vorlaut-editor//.github/renovate-shared.json5"],
 
   packageRules: [
     // -----------------------------------------------------------------------

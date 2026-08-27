@@ -6,8 +6,16 @@ import { defineConfig, devices } from "@playwright/test";
  * a GitHub project site really uses. Both matter and neither is fussiness: a
  * dev server resolves things Vite's output does not, and serving from the root
  * would let an absolute path pass here and 404 once published.
+ *
+ * This string, package.json's test:e2e and package.json's build:pages are the
+ * three places the repository name is written out literally. .github's
+ * pages.yml derives it from the repository and follows a rename for free;
+ * these three do not, and both of their failure modes are silent - a build
+ * with no base renders an empty body with no error at all, and a wrong base
+ * fetches the phonemizer from a prefix that 404s on the first spoken sentence,
+ * which this suite cannot see because it stands that chunk in.
  */
-const BASE = "/vorlaut-diy-talker/";
+const BASE = "/vorlaut-editor/";
 
 /* The port, overridable, because reuseExistingServer is a trap between two
  * checkouts of this repository.
@@ -53,7 +61,7 @@ export default defineConfig({
     command: `npx vite preview --port ${PORT} --strictPort --host 127.0.0.1`,
     // The base is baked into the bundle at build time and read from this same
     // variable, so the server has to be told it too or it serves the built
-    // /vorlaut-diy-talker/ page from the root and every asset 404s.
+    // /vorlaut-editor/ page from the root and every asset 404s.
     env: { BASE_PATH: BASE },
     url: `http://127.0.0.1:${PORT}${BASE}`,
     reuseExistingServer: !process.env.CI,

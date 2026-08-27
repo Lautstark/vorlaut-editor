@@ -30,8 +30,10 @@ function mailward(id: string, key: string) {
 
 /* t() itself is core/boot.ts's now, beside the table it reads, and is
  * re-exported here so that every `import { t } from "../core/texts.js"` in the
- * editor stays what it was. The reason it moved is loader/: a second page that
- * needs the same labels and none of the markup this file fills in. */
+ * editor stays what it was. It moved for a second page that needed the same
+ * labels and none of the markup this file fills in; that page left with
+ * adr/0012, and the arrangement is kept because the reason it is right - the
+ * lookup belongs beside the table - never depended on there being two. */
 export { t } from "./boot.js";
 
 // Fills in every fixed label. Runs once - the page is served in one language

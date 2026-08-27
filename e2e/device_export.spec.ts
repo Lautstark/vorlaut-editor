@@ -7,7 +7,7 @@ import { pickExport } from "./sheets.js";
 /* Out of the modules that decide them rather than written here: a rule this
  * test spelled out for itself would agree with nothing. */
 import { isDeviceWav, wavFormat } from "../src/data/device_package.js";
-import { SLOTS_PER_SET } from "../loader/src/layout_format.js";
+import { SLOTS_PER_SET } from "../src/device/layout_facts.js";
 import { unzip } from "./obz.js";
 
 /* The language this page comes up in, pinned rather than left to the runner.
@@ -409,15 +409,27 @@ test("the sheet says where the file goes next, and it is a page that exists",
   });
   await expect(link).toBeVisible();
 
-  /* Under the base a project site is really served from, because that is the
-     one thing about this link that can be wrong in a way no other test sees:
-     it is built from import.meta.env.BASE_URL rather than written out, and a
-     literal here would have been a fourth place a rename breaks in silence. */
+  /* The other repository's page, written out, which is what adr/0012 made of
+     this. It was built from import.meta.env.BASE_URL while the two came out of
+     one deployment; now a relative URL off this site's base would point at a
+     path that does not exist here. Safe to hard-code for the one reason that
+     decided which half leaves: the talker keeps the repository it is named
+     for, and its page takes that site's root - so there is no rename
+     underneath it, which is exactly what this site's address no longer has.
+
+     Asserted as the whole URL rather than a substring: the root and not the
+     `loader/` under it is the part that is easy to get wrong, and it is the
+     one this test exists for. */
   const href = await link.getAttribute("href");
-  expect(new URL(href!).pathname).toBe(new URL("./loader/", page.url()).pathname);
+  expect(href).toBe("https://lautstark.github.io/vorlaut-diy-talker/");
 
   /* And it really is a page. A dead link at the end of an export is worse than
-     no link: it is the one moment somebody is sure they did the right thing. */
+     no link: it is the one moment somebody is sure they did the right thing.
+
+     A live request to another site, which is the one thing in this suite that
+     needs the network. It is deliberate: this link is the only crossing on
+     adr/0012's bill whose breakage a carer sees rather than a test, and after
+     the split nothing else can see it at all. */
   const answered = await page.request.get(href!);
   expect(answered.status()).toBe(200);
 });

@@ -1,0 +1,486 @@
+{
+  "what": "What thumbnailSize() answers, frozen from loader/src/tiles.ts in Lautstark/vorlaut-diy-talker while that module was still in the same tree as its only other consumer - so that the copy in src/device/thumbnail.ts can still be held to something once the two are in two repositories.",
+  "produced_by": "tools/thumbnailfreeze.mjs",
+  "produced_on": "2026-08-27",
+  "oracle": {
+    "repository": "Lautstark/vorlaut-diy-talker",
+    "commit": "0dda687777667fa735310030807bfc569f07ec5c",
+    "file": "loader/src/tiles.ts",
+    "sha256_16": "30c25c7834044b2b",
+    "function": "thumbnailSize(width, height, max)"
+  },
+  "why": "docs/split-crossings.md, hard case two: thumbnailSize() is the one name on adr/0012s bill that meets this familys extraction test and is deliberately not extracted. A package would cost a fifth repository, a prepare build, an installcheck row and a bump per touch, to prevent a fault nothing refuses - one pixel of proportion on a tablet. This table is what is paid instead, and adr/0012 calls for it by name.",
+  "invalidated_by": [
+    "a change to thumbnailSize() in Lautstark/vorlaut-diy-talker, which is the answer being recorded here rather than a bug in it",
+    "a change to Pillows round_aspect(), which is what both copies follow step for step",
+    "a new case here, which has to be frozen against the oracle rather than guessed"
+  ],
+  "not_invalidated_by": [
+    "changes to src/device/thumbnail.ts - that is the half being checked, and refreezing to make it pass would leave the copy agreeing with itself. frozen-references.md is the whole of why.",
+    "a change to TILE_SIZE. The oracle took it as a default argument; this copy has no default and every case here states its own max."
+  ],
+  "cases": [
+    {
+      "width": 1,
+      "height": 1,
+      "max": 116,
+      "x": 1,
+      "y": 1
+    },
+    {
+      "width": 116,
+      "height": 116,
+      "max": 116,
+      "x": 116,
+      "y": 116
+    },
+    {
+      "width": 115,
+      "height": 116,
+      "max": 116,
+      "x": 115,
+      "y": 116
+    },
+    {
+      "width": 116,
+      "height": 115,
+      "max": 116,
+      "x": 116,
+      "y": 115
+    },
+    {
+      "width": 58,
+      "height": 39,
+      "max": 116,
+      "x": 58,
+      "y": 39
+    },
+    {
+      "width": 1000,
+      "height": 1000,
+      "max": 116,
+      "x": 116,
+      "y": 116
+    },
+    {
+      "width": 2048,
+      "height": 1536,
+      "max": 116,
+      "x": 116,
+      "y": 87
+    },
+    {
+      "width": 1536,
+      "height": 2048,
+      "max": 116,
+      "x": 87,
+      "y": 116
+    },
+    {
+      "width": 4000,
+      "height": 3,
+      "max": 116,
+      "x": 116,
+      "y": 1
+    },
+    {
+      "width": 3,
+      "height": 4000,
+      "max": 116,
+      "x": 1,
+      "y": 116
+    },
+    {
+      "width": 10000,
+      "height": 1,
+      "max": 116,
+      "x": 116,
+      "y": 1
+    },
+    {
+      "width": 1,
+      "height": 10000,
+      "max": 116,
+      "x": 1,
+      "y": 116
+    },
+    {
+      "width": 228,
+      "height": 232,
+      "max": 116,
+      "x": 114,
+      "y": 116
+    },
+    {
+      "width": 232,
+      "height": 228,
+      "max": 116,
+      "x": 116,
+      "y": 114
+    },
+    {
+      "width": 229,
+      "height": 232,
+      "max": 116,
+      "x": 114,
+      "y": 116
+    },
+    {
+      "width": 232,
+      "height": 229,
+      "max": 116,
+      "x": 116,
+      "y": 115
+    },
+    {
+      "width": 230,
+      "height": 232,
+      "max": 116,
+      "x": 115,
+      "y": 116
+    },
+    {
+      "width": 232,
+      "height": 230,
+      "max": 116,
+      "x": 116,
+      "y": 115
+    },
+    {
+      "width": 231,
+      "height": 232,
+      "max": 116,
+      "x": 115,
+      "y": 116
+    },
+    {
+      "width": 232,
+      "height": 231,
+      "max": 116,
+      "x": 116,
+      "y": 116
+    },
+    {
+      "width": 232,
+      "height": 232,
+      "max": 116,
+      "x": 116,
+      "y": 116
+    },
+    {
+      "width": 233,
+      "height": 232,
+      "max": 116,
+      "x": 116,
+      "y": 116
+    },
+    {
+      "width": 232,
+      "height": 233,
+      "max": 116,
+      "x": 116,
+      "y": 116
+    },
+    {
+      "width": 234,
+      "height": 232,
+      "max": 116,
+      "x": 116,
+      "y": 115
+    },
+    {
+      "width": 232,
+      "height": 234,
+      "max": 116,
+      "x": 115,
+      "y": 116
+    },
+    {
+      "width": 235,
+      "height": 232,
+      "max": 116,
+      "x": 116,
+      "y": 115
+    },
+    {
+      "width": 232,
+      "height": 235,
+      "max": 116,
+      "x": 115,
+      "y": 116
+    },
+    {
+      "width": 236,
+      "height": 232,
+      "max": 116,
+      "x": 116,
+      "y": 114
+    },
+    {
+      "width": 232,
+      "height": 236,
+      "max": 116,
+      "x": 114,
+      "y": 116
+    },
+    {
+      "width": 1,
+      "height": 1,
+      "max": 512,
+      "x": 1,
+      "y": 1
+    },
+    {
+      "width": 512,
+      "height": 512,
+      "max": 512,
+      "x": 512,
+      "y": 512
+    },
+    {
+      "width": 511,
+      "height": 512,
+      "max": 512,
+      "x": 511,
+      "y": 512
+    },
+    {
+      "width": 512,
+      "height": 511,
+      "max": 512,
+      "x": 512,
+      "y": 511
+    },
+    {
+      "width": 256,
+      "height": 171,
+      "max": 512,
+      "x": 256,
+      "y": 171
+    },
+    {
+      "width": 1000,
+      "height": 1000,
+      "max": 512,
+      "x": 512,
+      "y": 512
+    },
+    {
+      "width": 2048,
+      "height": 1536,
+      "max": 512,
+      "x": 512,
+      "y": 384
+    },
+    {
+      "width": 1536,
+      "height": 2048,
+      "max": 512,
+      "x": 384,
+      "y": 512
+    },
+    {
+      "width": 4000,
+      "height": 3,
+      "max": 512,
+      "x": 512,
+      "y": 1
+    },
+    {
+      "width": 3,
+      "height": 4000,
+      "max": 512,
+      "x": 1,
+      "y": 512
+    },
+    {
+      "width": 10000,
+      "height": 1,
+      "max": 512,
+      "x": 512,
+      "y": 1
+    },
+    {
+      "width": 1,
+      "height": 10000,
+      "max": 512,
+      "x": 1,
+      "y": 512
+    },
+    {
+      "width": 1020,
+      "height": 1024,
+      "max": 512,
+      "x": 510,
+      "y": 512
+    },
+    {
+      "width": 1024,
+      "height": 1020,
+      "max": 512,
+      "x": 512,
+      "y": 510
+    },
+    {
+      "width": 1021,
+      "height": 1024,
+      "max": 512,
+      "x": 510,
+      "y": 512
+    },
+    {
+      "width": 1024,
+      "height": 1021,
+      "max": 512,
+      "x": 512,
+      "y": 511
+    },
+    {
+      "width": 1022,
+      "height": 1024,
+      "max": 512,
+      "x": 511,
+      "y": 512
+    },
+    {
+      "width": 1024,
+      "height": 1022,
+      "max": 512,
+      "x": 512,
+      "y": 511
+    },
+    {
+      "width": 1023,
+      "height": 1024,
+      "max": 512,
+      "x": 511,
+      "y": 512
+    },
+    {
+      "width": 1024,
+      "height": 1023,
+      "max": 512,
+      "x": 512,
+      "y": 512
+    },
+    {
+      "width": 1024,
+      "height": 1024,
+      "max": 512,
+      "x": 512,
+      "y": 512
+    },
+    {
+      "width": 1025,
+      "height": 1024,
+      "max": 512,
+      "x": 512,
+      "y": 512
+    },
+    {
+      "width": 1024,
+      "height": 1025,
+      "max": 512,
+      "x": 512,
+      "y": 512
+    },
+    {
+      "width": 1026,
+      "height": 1024,
+      "max": 512,
+      "x": 512,
+      "y": 511
+    },
+    {
+      "width": 1024,
+      "height": 1026,
+      "max": 512,
+      "x": 511,
+      "y": 512
+    },
+    {
+      "width": 1027,
+      "height": 1024,
+      "max": 512,
+      "x": 512,
+      "y": 511
+    },
+    {
+      "width": 1024,
+      "height": 1027,
+      "max": 512,
+      "x": 511,
+      "y": 512
+    },
+    {
+      "width": 1028,
+      "height": 1024,
+      "max": 512,
+      "x": 512,
+      "y": 510
+    },
+    {
+      "width": 1024,
+      "height": 1028,
+      "max": 512,
+      "x": 510,
+      "y": 512
+    },
+    {
+      "width": 500,
+      "height": 500,
+      "max": 512,
+      "x": 500,
+      "y": 500
+    },
+    {
+      "width": 2048,
+      "height": 2048,
+      "max": 512,
+      "x": 512,
+      "y": 512
+    },
+    {
+      "width": 512,
+      "height": 384,
+      "max": 512,
+      "x": 512,
+      "y": 384
+    },
+    {
+      "width": 800,
+      "height": 600,
+      "max": 512,
+      "x": 512,
+      "y": 384
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "max": 512,
+      "x": 512,
+      "y": 384
+    },
+    {
+      "width": 640,
+      "height": 480,
+      "max": 512,
+      "x": 512,
+      "y": 384
+    },
+    {
+      "width": 300,
+      "height": 900,
+      "max": 512,
+      "x": 171,
+      "y": 512
+    },
+    {
+      "width": 900,
+      "height": 300,
+      "max": 512,
+      "x": 512,
+      "y": 171
+    }
+  ]
+}

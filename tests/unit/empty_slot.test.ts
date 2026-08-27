@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildAppPackage, slotIsEmpty, type PackageInput }
   from "../../src/data/app_package.js";
-import { blank, placeholder, TILE_SIZE, toRgb565Be } from "../../loader/src/tiles.js";
 import type { CollectionRef, DiyLayout } from "../../src/core/types.js";
 
 /* A talker key with nothing on it, on both sides of the seam.
@@ -20,9 +19,13 @@ import type { CollectionRef, DiyLayout } from "../../src/core/types.js";
  * predicate the build asks agree cell for cell, which is the statement that
  * goes false again if either side starts deciding for itself.
  *
- * The build's own half is not driven here: runBuild() wants a canvas, a store
- * and a synthesiser. What can be held is the pair of tiles it chooses between,
- * and that they are not the same picture.
+ * **This is the editor's half, and it is the half that survived the split.**
+ * The file used to end with the pair of tiles the build chooses between - that
+ * blank() is white to the edge and is not placeholder()'s grey cross, so an
+ * untouched key and a missing picture cannot hash to one file on the device.
+ * That block reads the tile renderer, which is in Lautstark/vorlaut-diy-talker
+ * now, and stayed with it. What is left is the predicate and the grid, which
+ * are src/'s own and are the side the fault was on.
  */
 
 const collection = (): CollectionRef => ({
@@ -109,21 +112,5 @@ describe("the two halves agree", () => {
     const board = pkg.boards[1]!;
     expect(board.grid.order.flat().filter(Boolean)).toEqual(["set-2-set"]);
     expect(board.buttons.map((one) => one.id)).toEqual(["set-2-set"]);
-  });
-});
-
-describe("the tile a blank key gets", () => {
-  it("is white, the whole panel", () => {
-    const pixels = blank();
-    expect(pixels.width).toBe(TILE_SIZE);
-    expect(pixels.height).toBe(TILE_SIZE);
-    expect(new Set(pixels.data)).toEqual(new Set([255]));
-  });
-
-  it("is not the missing-picture cross", () => {
-    // The two say different things and must not be one file: an unresolved
-    // reference still draws placeholder(), and a name is a hash of the bytes,
-    // so identical pixels would silently make them one key on the device.
-    expect(toRgb565Be(blank())).not.toEqual(toRgb565Be(placeholder()));
   });
 });

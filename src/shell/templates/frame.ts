@@ -47,7 +47,7 @@ import { HOME_TONES } from "../homekey.js";
 /* The logo lives in public/, so Vite copies it verbatim and does not rewrite
  * references to it that sit inside a template string the way it would inside
  * index.html. BASE_URL is what the build's `base` resolves to - "/" while
- * developing and "/vorlaut-diy-talker/" once published - so this is the same
+ * developing and "/vorlaut-editor/" once published - so this is the same
  * rewriting done by hand, in the one place the bundler cannot reach. */
 const logo = `${import.meta.env.BASE_URL}icon.svg`;
 

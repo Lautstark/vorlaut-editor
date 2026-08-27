@@ -1,9 +1,9 @@
 {
-  "name": "vorlaut-diy-talker",
+  "name": "vorlaut-editor",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Editor for a small AAC talker: five keys that are displays at the same time.",
+  "description": "Board editor for the Lautstark AAC tools: five-key talker boards and tablet boards, exported as files.",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -13,9 +13,9 @@
     "preflight": "node tools/installcheck.mjs",
     "test": "node tools/installcheck.mjs && vitest run",
     "test:watch": "vitest",
-    "test:e2e": "node tools/installcheck.mjs && BASE_PATH=/vorlaut-diy-talker/ npm run build && playwright test",
+    "test:e2e": "node tools/installcheck.mjs && BASE_PATH=/vorlaut-editor/ npm run build && playwright test",
     "test:e2e:only": "playwright test",
-    "build:pages": "BASE_PATH=/vorlaut-diy-talker/ npm run build"
+    "build:pages": "BASE_PATH=/vorlaut-editor/ npm run build"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "^1.0.0",

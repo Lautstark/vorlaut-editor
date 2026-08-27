@@ -22,21 +22,10 @@
 # the container was run from a clone.
 /data
 
-# arduino-cli puts its intermediate directory inside the sketch folder
-firmware/vorlaut/build/
-# the same for the test stages
-firmware/tests/*/build/
-# where --output-dir collects the finished images, as CI and the release do.
-# An 8 MB merged.bin is easy to commit by accident and hard to get back out.
-build/
-
-# What the firmware gets is recreated from content/ in seconds
-firmware/vorlaut/data/
-# layout.h is no longer produced, but may be lying around from older states -
-# and it held the sentences in plain text.
-firmware/vorlaut/layout.h
-firmware/vorlaut/littlefs.bin
-
+# The firmware's leavings were here - arduino-cli's build directories, the
+# LittleFS image, the generated layout.h that held the sentences in plain text.
+# firmware/ went to Lautstark/vorlaut-diy-talker with adr/0012 and they went
+# with it. Nothing here compiles anything.
 
 # Python
 # Also without a trailing slash, and for a reason that turned up in practice:

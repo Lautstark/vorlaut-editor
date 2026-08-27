@@ -33,6 +33,13 @@ import { unzip } from "./obz.js";
  * reads nothing this produced - which is what makes the pair survive being put
  * in two repositories, and what makes it worth having in one.
  *
+ * **Where the fixtures are now.** They were `device/fixtures/` in this
+ * repository when this file was written; after adr/0012 they are in
+ * Lautstark/vorlaut-diy-talker, beside both implementations of the format, and
+ * this repository pins them - see third_party/README.md. Nothing else about
+ * the arrangement changed, because pinning is consumption and not ownership:
+ * the fixture is still the meeting point and it still belongs to neither half.
+ *
  * The archive is opened with the suite's own zip reader (tests/unit/obz.ts)
  * rather than with the loader's, because the fixture's bytes are the input
  * here and not the thing under test. Opening it at all is what lets the
@@ -41,7 +48,8 @@ import { unzip } from "./obz.js";
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = resolve(HERE, "..", "..", "device", "fixtures");
+const FIXTURES = resolve(HERE, "..", "..", "third_party", "vorlaut-diy-talker",
+                         "device", "fixtures");
 
 const readJson = (name: string) =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));

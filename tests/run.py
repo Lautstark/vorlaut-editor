@@ -1,36 +1,42 @@
 #!/usr/bin/env python3
-"""Runs the checks that need a C++ compiler, and says what failed.
+"""Runs the Python checks, and says what failed.
 
     python3 tests/run.py              # all of them
-    python3 tests/run.py pairing      # only the ones whose name contains this
+    python3 tests/run.py frozen       # only the ones whose name contains this
 
-**This is no longer the whole suite, and that is the point.** Most of what
-vorlaut checks is JavaScript, and the JavaScript checks live where JavaScript
-tooling can run them:
+**This is not the whole suite, and that is the point.** Most of what this
+repository checks is JavaScript, and the JavaScript checks live where
+JavaScript tooling can run them:
 
-    npm test         vitest - the frozen references for the tile renderer, the
-                     OBF converter, the recording chain and the text table, and
-                     the walk that says every module under src/ is one the page
-                     reaches. They import src/ directly, which is why they are
-                     here and not in this file: the modules are TypeScript, and
-                     putting a build between a frozen reference and the source
-                     it names is how it quietly stops measuring it.
+    npm test         vitest - the frozen references for the OBF converter, the
+                     recording chain and the symbol index, the device facts
+                     held against the pinned fixtures, and the walk that says
+                     every module under src/ is one the page reaches. They
+                     import src/ directly, which is why they are here and not
+                     in this file: the modules are TypeScript, and putting a
+                     build between a frozen reference and the source it names
+                     is how it quietly stops measuring it.
     npm run test:e2e Playwright - the page, built and opened in a real browser,
                      under the base a project site is served from. The check
                      whose absence let a page that rendered nothing ship green.
 
-What is left here is the half that no JavaScript runner can do: compiling the
-firmware's own readers from firmware/vorlaut/*.h and replaying the browser's
-bytes into them. layout.bin, the cable protocol, the pairing codes and the
-panel's text all have two implementations that have to agree, one of them C++,
-and g++ is the only thing that can hold them together. Plus the two checks on
-the repository itself - that no German is left in the code, and that no link in
-the docs points at nothing.
+What is left here is what Python is still the right tool for: the frozen
+references whose oracles were Python programs, and the two checks on the
+repository itself - that no German is left in the code, and that no link in the
+prose points at nothing.
 
-Each test is a separate process on purpose. Several compile something and write
-into a temporary directory of their own; importing them all into one
-interpreter would let those settings leak into each other, and the first test to
-call sys.exit would take the rest with it.
+**Nothing here needs a compiler, and that is what the split changed.** ADR 0006
+gave this repository three toolchains, because one repository had to hold the
+firmware's C++ readers against the browser's writers on a single commit.
+ADR 0012 put both of those implementations on the other side of the seam:
+firmware/, loader/ and tests/run.py's C++ half are all in
+Lautstark/vorlaut-diy-talker, and that argument is satisfied there rather than
+overruled here. This half needs node and Python and nothing else.
+
+Each test is a separate process on purpose. Some write into a temporary
+directory of their own; importing them all into one interpreter would let those
+settings leak into each other, and the first test to call sys.exit would take
+the rest with it.
 
 **Run this AFTER `git add`, not before, when you have added files.**
 test_language.py and test_links.py take their file list from `git ls-files`, so
@@ -62,8 +68,8 @@ def install_is_current() -> bool:
     rule drift, and a drifted staleness check is a worse thing to own than none.
 
     A missing node is not a stale install, so it does not stop the run - the
-    checks that need node fail on their own terms, and the ones that need only
-    g++ have no business being blocked by it.
+    checks that need node fail on their own terms, and the ones that read only
+    prose have no business being blocked by it.
     """
     try:
         return subprocess.run(["node", str(PREFLIGHT)]).returncode == 0

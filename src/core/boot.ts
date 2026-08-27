@@ -108,11 +108,11 @@ export let TEXTS = BUILT_IN_TEXTS[LANG];
  *
  * Here rather than in core/texts.ts, which is where it used to sit and which
  * still re-exports it so that nothing had to change: TEXTS is this file's, and
- * the lookup belongs beside it. What made the move worth an edit is that there
- * are two pages now - the editor, and loader/, which takes an exported file to
- * a talker - and the second one needs the same table without any of the
- * editor's markup. A second t() would have been a second translation system
- * within a week; this is the same one, read from both.
+ * the lookup belongs beside it. What made the move worth an edit was a second
+ * page - the one that takes an exported file to a talker - needing the same
+ * table without any of the editor's markup. That page is in another repository
+ * since adr/0012 and has a copy of these ten lines; this one is the only
+ * reader of this table, which is what it was before and is again.
  *
  * The key itself when there is no entry, deliberately. A blank would hide a
  * missing label in whichever language nobody is reading, and a key on the

@@ -994,7 +994,7 @@ test("a move stops at the edge of the grid rather than walking off it",
     await page.keyboard.press("Alt+ArrowUp");
     await page.keyboard.press("Alt+ArrowLeft");
     await expect(cells(page).nth(0).locator(".cell__word")).toHaveText("ich");
-    expect(page.url()).toContain("vorlaut-diy-talker");
+    expect(page.url()).toContain("vorlaut-editor");
   });
 
 test("a talker Sammlung and a tablet Sammlung swap cleanly", async ({ page }) => {

@@ -10,7 +10,7 @@ viewer, plus the fixtures an importer is checked against.
 | [`fixtures/index.json`](fixtures/index.json) | Machine-readable list of them. |
 | [`fixtures/source/`](fixtures/source/) | German fixture content, kept out of the generator. |
 | [`assets/`](assets/) | The images and audio the packages embed, committed. |
-| [`../adr/`](../adr/) | Decisions that will otherwise be "tidied up" later. They live at the top of the repository, not here: several of them decide things wider than this format. |
+| [`adr/`](https://github.com/Lautstark/vorlaut-diy-talker/tree/main/adr) | Decisions that will otherwise be "tidied up" later. They are in `Lautstark/vorlaut-diy-talker`, whole: the sequence is never renumbered, so ADR 0012 kept one set of numbers in one repository rather than two divergent copies, and this half links across. |
 | [`tools/make_fixtures.mjs`](tools/make_fixtures.mjs) | Regenerates `fixtures/`. Pure node. |
 | [`tools/make_assets.mjs`](tools/make_assets.mjs) | Re-renders `assets/`. Needs ffmpeg. |
 
@@ -32,10 +32,24 @@ Tags are named `exchange-vMAJOR.MINOR.PATCH` and track `SPEC.md`'s version.
 > round-trips to a tablet, so `exchange-v1.2.0` is not cut. Pin a **commit
 > SHA** in the meantime, and expect the fixtures to move under you.
 
+> **This directory changed repository on 2026-08-27**, when the editor left
+> `Lautstark/vorlaut-diy-talker` under
+> [ADR 0012](https://github.com/Lautstark/vorlaut-diy-talker/blob/main/adr/0012-the-repository-splits-editor-leaves.md).
+> It went with the writer, which is
+> [`src/data/app_package.ts`](../src/data/app_package.ts) — so the rule below
+> still reads correctly, and the fixtures are now in the repository whose code
+> they describe. A pin that names the old repository is not broken: that
+> history was not rewritten and every commit SHA already cited goes on
+> resolving. What it cannot do is move forward. This repository's history is a
+> **filtered copy**, so its ids are not translations of the old ones, and
+> re-pointing a pin here is a fresh pin rather than a bump. The cheapest moment
+> to do it is when `exchange-v1.2.0` is cut, which is what ends SHA-pinning
+> anyway.
+
 ### As a submodule
 
 ```bash
-git submodule add https://github.com/Lautstark/vorlaut-diy-talker.git third_party/vorlaut
+git submodule add https://github.com/Lautstark/vorlaut-editor.git third_party/vorlaut
 ```
 
 ```bash
@@ -51,7 +65,7 @@ change with a test run attached — never as a routine bump.
 If a submodule is unwelcome, fetch the tag and verify what arrived:
 
 ```bash
-curl -sSL https://github.com/Lautstark/vorlaut-diy-talker/archive/refs/tags/exchange-v1.2.0.tar.gz -o exchange.tar.gz
+curl -sSL https://github.com/Lautstark/vorlaut-editor/archive/refs/tags/exchange-v1.2.0.tar.gz -o exchange.tar.gz
 ```
 
 ```bash
@@ -213,7 +227,7 @@ a drifted expectation passes whatever the importer does.
 The generator never reads a `.obz` back. It has no parser and must not grow one:
 a generator that checked its own output would be comparing a thing against
 itself, which is the failure mode
-[`docs/frozen-references.md`](../docs/frozen-references.md) exists to record.
+[`docs/frozen-references.md`](https://github.com/Lautstark/vorlaut-diy-talker/blob/main/docs/frozen-references.md) exists to record.
 
 ### German fixture content
 
@@ -251,7 +265,7 @@ repository's code-language check for this reason; the generator is not.
 ## What they do not cover
 
 Said plainly, in the spirit of
-[`docs/frozen-references.md`](../docs/frozen-references.md), because a fixture
+[`docs/frozen-references.md`](https://github.com/Lautstark/vorlaut-diy-talker/blob/main/docs/frozen-references.md), because a fixture
 set that overstates itself is worse than a small one.
 
 1. **No importer has ever run these.** Every expectation is an assertion about
