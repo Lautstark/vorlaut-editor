@@ -42,6 +42,11 @@ import { confirmDialog } from "@lautstark/design/dialog";
  * genuinely shared between the two belongs in the shell. */
 import { dropdown, formRow, hint, missing, openSheet, textField }
   from "../shell/sheet.js";
+/* What part of speech a word is, as far as the lexicon behind the symbol
+ * search can say. In data/ rather than here because it is knowledge about a
+ * language, not about a tablet - the talker has no word class at all, and the
+ * next thing that wants to read a word will want it from there too. */
+import { guessWordClass } from "../data/wordclass.js";
 import type { Choice, Left } from "../shell/sheet.js";
 import {
   collectionPages, paintOpenCollection, paintPages, sizeChoices,
@@ -1289,6 +1294,25 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
     draft.vocalization = value;
   });
   spoken.id = "appSpoken";
+  /* What this field would say if nothing were typed into it, shown in it while
+   * nothing is - which is the Aufschrift, by exchange/SPEC.md §7.2's rule.
+   *
+   * A placeholder that is a value rather than a placeholder that is a
+   * sentence, which is the distinction that makes this safe to add after the
+   * sentence was deliberately taken out of here. That one said what an empty
+   * field means and vanished the moment somebody typed - so it disappeared
+   * exactly when it might have been wanted - and it now lives on the caption's
+   * line where it stays put. This says something else: not the rule, but what
+   * the rule currently comes to. It is right to vanish when there is a
+   * vocalization, because then it is no longer true.
+   *
+   * Kept in step with the field above by listening rather than by replacing
+   * its handler: textField() has already put the draft write on `oninput`, and
+   * a second listener is the way to have both.
+   */
+  const echoLabel = () => { spoken.placeholder = draft.label.trim(); };
+  echoLabel();
+  labelInput.addEventListener("input", echoLabel);
   const play = document.createElement("button");
   play.type = "button";
   play.className = "btn";
@@ -1329,9 +1353,58 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
     [{ value: "", label: t("ui.wordclass_none") },
      ...WORD_CLASSES.map((one) =>
        ({ value: one.key, label: t(`ui.wordclass_${one.key}`) }))],
-    draft.wordClass, (value) => { draft.wordClass = value; });
+    draft.wordClass, (value) => {
+      draft.wordClass = value;
+      /* Somebody has answered, so nothing may answer for them again. Set from
+       * the control rather than from the value: choosing "Keine Wortart"
+       * deliberately is an answer, and a guess arriving afterwards to fill the
+       * field back in would be the page overruling a press. */
+      classChosen = true;
+    });
   classes.button.id = "appClass";
   rows.push(formRow(t("ui.app_button_class"), classes.anchor, "", classes.button));
+
+  /* --- Guessing the word class from the word --------------------------------
+   *
+   * The class is a second question about a word that has already been typed,
+   * and most of the time the word contains the answer: "Apfel" is a Nomen.
+   * data/wordclass.ts is what knows, and what it will not say - it answers for
+   * Nomen, Verb and Pronomen and returns "" for everything else, including
+   * every word it is not certain about.
+   *
+   * **Only into a field nobody has touched.** `classChosen` starts true for a
+   * button that already carries a class, so opening an old button never
+   * re-guesses it, and it is set by the dropdown above the moment somebody
+   * chooses anything at all. That is the same rule the Aufschrift keeps for
+   * the collection's caption, one row up, and it matters more here: a wrong
+   * class is a wrong colour on a board somebody else reads, and a field that
+   * is already filled in is a field nobody looks at twice.
+   *
+   * Hung off the Aufschrift rather than off the search, although the ask was
+   * "either". They are the same event by the time it matters: typing in the
+   * search finds a picture, taking the picture writes the word into an empty
+   * Aufschrift, and that write comes through here. Typing in the search with a
+   * name already on the button is not an event about the name.
+   *
+   * The answer arrives late - the tables are fetched on the first word - so
+   * the guard is re-read on the way back, and a newer word invalidates an
+   * older question the way the search's own token does.
+   */
+  let classChosen = Boolean(draft.wordClass);
+  let asking = 0;
+  const guessClass = (): void => {
+    if (classChosen) return;
+    const word = draft.label;
+    const mine = ++asking;
+    void guessWordClass(word, LANG).then((key) => {
+      if (mine !== asking || classChosen) return;
+      draft.wordClass = key;
+      // Assigning redraws the trigger and calls nobody back - see dropdown() -
+      // so this cannot be mistaken for somebody having chosen.
+      classes.value = key;
+    }, () => { /* the tables never arrived; the field keeps saying nothing */ });
+  };
+  labelInput.addEventListener("input", guessClass);
 
   /** The rows that depend on the answer above them, and the note under it.
    *
@@ -1417,15 +1490,28 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
       // most likely looking for a picture of.
       seed: draft.label,
       negated: draft.negated,
-      /* Fills an empty label from the collection's own word for the symbol but
-       * never writes over one somebody typed - the same rule both editors have
-       * always kept, and for the same reason: the symbol may be called
-       * "zustimmen" while the button should say "Ja!". */
-      onPick: (symbol, caption) => {
+      /* Fills an empty label, and never writes over one somebody typed - the
+       * same rule both editors have always kept, and for the same reason: the
+       * symbol may be called "zustimmen" while the button should say "Ja!".
+       *
+       * What is new is which word fills it. The collection's caption was the
+       * only thing on offer, so a search for "trinken" that landed on a
+       * pictogram filed under "Getraenk" named the button "Getraenk" - the
+       * collection's word, over the top of the one its owner had just written
+       * three inches to the left. The typed word leads now and the caption is
+       * what is left for the picks that were not searched for: an upload has
+       * neither, and the prescribed start-key tile has only its own name. */
+      onPick: (symbol, caption, typed) => {
         draft.symbol = symbol;
-        if (caption && !draft.label.trim()) {
-          draft.label = caption;
-          labelInput.value = caption;
+        const word = typed || caption;
+        if (word && !draft.label.trim()) {
+          draft.label = word;
+          labelInput.value = word;
+          // Or the field below goes on offering to say the empty label.
+          echoLabel();
+          // The same word the search was run on is a word to guess a class
+          // from, and this is the write the listener above cannot see.
+          guessClass();
         }
       },
       onNegate: (negated) => { draft.negated = negated; },
@@ -1459,9 +1545,10 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
     } : {}),
     next: { label: t("ui.app_button_next"), onPress: keep },
     done: { label: t("ui.done"), onPress: keep },
-    // Into the label, because a button somebody has just opened is a button
-    // they are about to name.
-    focus: labelInput,
+    /* No `focus`: the sheet opens in the picture column's search field, which
+     * is where a button is now begun. See SheetSpec.focus, which carries the
+     * argument - the word is typed once, into the search, and picking what it
+     * finds writes it into the empty Aufschrift behind. */
   });
 }
 

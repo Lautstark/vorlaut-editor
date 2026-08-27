@@ -183,6 +183,26 @@ ALLOWED = [
     ("Wo ist Mama?", "a sentence in the levelling batch"),
     ("Mir tut der Bauch weh, und ", "a sentence in the levelling batch"),
     ("Ich habe Durst und möchte e", "a sentence in the levelling batch"),
+    # The word class guesser and its test, where German words are the data.
+    #
+    # src/data/wordclass.ts answers what part of speech a word is out of the
+    # lexicon @lautstark/bildquelle already ships, and the one thing it cannot
+    # get from there is the pronouns - a closed class is a list, and the list
+    # is German words. Its test then has to name the words that would break it:
+    # the -en words that are not verbs are the reason the verb rule asks the
+    # lexicon instead of the spelling, and a test that made that point with
+    # ASCII stand-ins would not be making it.
+    #
+    # The same line this file already draws for the fixture boards and the
+    # levelling batch: the rule is that *we* write English, and a German word
+    # being looked up is input rather than prose.
+    ('"ich", "du", "er", "sie", "es", "wir", "ihr",', "the German pronouns, as data"),
+    ('"morgen", "oben", "unten", "sieben", "neben", "gegen"',
+     "German words ending in -en that are not verbs"),
+    ('"hinten", "innen", "eben", "draußen", "zusammen", "wegen"',
+     "German words ending in -en that are not verbs"),
+    ('"schnell", "müde", "traurig", "jetzt", "nochmal"',
+     "German words the lexicon holds but cannot place"),
     # Regular expressions and word lists that match German.
     ('re.search(r"[äöüßÄÖÜ]"', "a check for German"),
     ('re.search(r"[äöüß]"', "a check for German"),

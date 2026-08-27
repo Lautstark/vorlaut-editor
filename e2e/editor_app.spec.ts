@@ -215,6 +215,22 @@ const among = (key: string) => new RegExp(
       .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"));
 
 async function pick(page: Page, trigger: string, key: string): Promise<void> {
+  /* Nothing to press where the answer is already the answer.
+   *
+   * `entry` reaches an item by its label alone and says why it may: an entry
+   * about to be chosen is by definition not the one in force, and the one in
+   * force wears a tick in its accessible name. That held while every answer in
+   * this file was typed in by a test. It stopped holding when the word class
+   * learned to guess itself - `put(page, {label: "ich", wordClass: "pronoun"})`
+   * now finds Pronomen already chosen, and asks for the one entry `entry`
+   * cannot see.
+   *
+   * Skipping is the honest reading rather than a way round the locator: what
+   * this helper promises its callers is that the answer is in force
+   * afterwards, and choosing what is chosen is a no-op in the control too -
+   * see dropdown(), which returns early on it. */
+  const now = (await page.locator(trigger).textContent() || "").trim();
+  if (label(key).test(now)) return;
   await page.locator(trigger).click();
   await entry(page, key).click();
 }
@@ -1837,3 +1853,54 @@ test("a Sammlung nobody has touched exports as the board it was handed",
     // And still a package the format's own checks accept.
     expect(checkPackage(pkg)).toEqual([]);
   });
+
+/* The word class, already chosen where the word says what it is.
+ *
+ * Pinned to German, and that is the test as much as the setting: the lexicon
+ * this reads is German, and English gets pronouns and nothing else - see
+ * src/data/wordclass.ts, which says why and refuses to guess rather than
+ * guessing badly. A test left on CI's own locale would have been asserting the
+ * empty half.
+ *
+ * What is checked here is the wiring, because the guessing itself is
+ * tests/unit/wordclass.test.ts's and is checked there against the words that
+ * would break it. Three things can go wrong between the two: the guess never
+ * runs, it runs and does not reach the control, or it runs over an answer
+ * somebody has already given. The last is the one that matters - a field that
+ * is already filled in is a field nobody looks at twice - and it is the last
+ * assertion below.
+ */
+test.describe("with the page in German, which is the language the lexicon is in", () => {
+  test.use({ locale: "de-DE" });
+
+  test("the word class follows the word, until somebody chooses one themselves",
+    async ({ page }) => {
+      await standIn(page);
+      await build(page);
+      await goHome(page);
+
+      await hit(page, 7).click();
+      const box = buttonSheet(page);
+      await expect(box).toBeVisible();
+      await showing(page, "#appClass", "ui.wordclass_none");
+
+      // A noun, from the lexicon's noun table.
+      await box.locator("#appLabel").fill("Apfel");
+      await showing(page, "#appClass", "ui.wordclass_noun");
+
+      /* A verb - and the word after it is what says this is the lexicon
+       * answering rather than the spelling. "trinken" and "morgen" end the
+       * same way; only one of them has a "trinkt". */
+      await box.locator("#appLabel").fill("trinken");
+      await showing(page, "#appClass", "ui.wordclass_verb");
+      await box.locator("#appLabel").fill("morgen");
+      await showing(page, "#appClass", "ui.wordclass_none");
+
+      // And once somebody has answered, nothing answers over them - not even
+      // for a word the lexicon is certain about.
+      await pick(page, "#appClass", "ui.wordclass_social");
+      await box.locator("#appLabel").fill("Apfel");
+      await showing(page, "#appClass", "ui.wordclass_social");
+      await page.keyboard.press("Escape");
+    });
+});
