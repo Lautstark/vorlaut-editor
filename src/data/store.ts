@@ -510,17 +510,23 @@ export async function versionOf(text: string): Promise<string> {
     .slice(0, 16);
 }
 
-/** A name safe to write down: as a key in the symbols store, or as the file
- *  name a download arrives under.
+/** A name safe to write down as a key in the symbols store.
  *
- * Here rather than in the two places that used to hold the same expression,
- * because this is where the first of them is: a picture somebody uploads
- * becomes a key in an object store, and what a key may contain is the store's
- * question. A slash in one reads like a folder that is not there.
+ * Here because this is where the key is: a picture somebody uploads becomes a
+ * key in an object store, and what a key may contain is the store's question.
+ * A slash in one reads like a folder that is not there.
+ *
+ * **It also named the downloads, and it should not have.** This said "or as
+ * the file name a download arrives under", and one function answering both
+ * questions is why a Sammlung called "haeufige Woerter", spelled with the
+ * umlauts somebody types, was offered as `h_ufige_W_rter`. shell/filename.ts
+ * is the other half now. Nothing about this one changed in the split, on
+ * purpose: a key that spells itself differently after that file exists is a
+ * picture the Sicherung it came out of can no longer find.
  *
  * conventions.md §5 #3 pairs this with `touched()`; mitreden's and bildhaft's
- * are download-filename sanitisers and this is both, which is the shape the
- * eventual shared one has to have. Deliberately not the same as their
+ * are download-filename sanitisers, so it is filename.ts that has to converge
+ * with theirs and this that has to stay where it is. Deliberately not their
  * transliterating `slug` - a symbol's key has to survive a round trip through
  * a Sicherung and an .obz unchanged, so it maps what it cannot keep to `_`
  * rather than trying to spell it. */

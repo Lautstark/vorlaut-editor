@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { GRID, LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { expectSaid, put, within } from "./diy.js";
-import { openCollectionSettings, openPanel, pickFromMenu } from "./sheets.js";
+import { openCollectionSettings, openPanel, pickExport, pickFromMenu } from "./sheets.js";
 
 /* Several Sammlungen in one browser: making them, switching, copying, deleting.
  *
@@ -379,6 +379,49 @@ test("the export entry leads with the talker, and takes no for an answer",
     // opened, and no file went anywhere.
     await expect(page.locator("dialog[open]")).toHaveCount(0);
     expect(downloaded).toBe(false);
+  });
+
+/* The name on the file, which is the one thing about an export somebody sees
+ * before they open it.
+ *
+ * A Sammlung called "MetaTalkDE 3x5 (haeufige Woerter)" - typed with the
+ * umlauts, the way somebody actually types it - used to arrive as
+ * `MetaTalkDE_3x5_h_ufige_W_rter_.obz`, because the exports were named by
+ * data/store.ts's safeName() and that is an object-store key's rule: it maps
+ * every letter it cannot keep to `_`, so a key survives a round trip through a
+ * Sicherung spelling itself exactly as it went in. A file name has no round
+ * trip and does have a reader. shell/filename.ts is the reader's half, and
+ * tests/unit/download_name.test.ts is where the rule itself is held.
+ *
+ * Here rather than only there because the two halves being right separately is
+ * not the claim - the claim is that it is this one the export reaches for, and
+ * the seam between them is an import in collections.ts that nothing else would
+ * notice going back.
+ *
+ * The single board is the cheapest of the three doors and they share one
+ * fileStem(), which is deliberate: exchange/SPEC.md 5.2 keeps the three
+ * writers apart, and what the file is called is not one of the things they are
+ * allowed to differ about. The package's own `-app.zip` is held in
+ * e2e/editor_app.spec.ts, on the extension rather than the stem.
+ */
+test("the exported file spells the Sammlung's name out rather than punching holes in it",
+  async ({ page }) => {
+    await openCollection(page);
+    await page.locator("#collectionName").fill("MetaTalkDE 3x5 (häufige Wörter)");
+    await page.locator("#collectionName").blur();
+    // The rename lands on a debounce and the sidebar is the last thing it
+    // touches, so the row carrying the new name is the signal that the export
+    // below has something to be named after.
+    await expect(row(page, "MetaTalkDE 3x5 (häufige Wörter)")).toHaveCount(1);
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      pickExport(page, "other"),
+    ]);
+    // The trailing `_` is the closing bracket, and it was there before: what
+    // was wrong was the two words with holes in them, not every wart in the
+    // name.
+    expect(download.suggestedFilename()).toBe("MetaTalkDE_3x5_haeufige_Woerter_.obz");
   });
 
 /* One scrolling area in the settings sheet, and only one.
