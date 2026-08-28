@@ -49,6 +49,13 @@ const obf = await import("../../src/data/obf.js");
 const { layoutToDocument, documentToLayout, normalizeLayout } = obf;
 
 import { check } from "./harness.js";
+import type { DiyLayout } from "../../src/core/types.js";
+
+/** What a caught thing has to say for itself. `catch` binds `unknown`, and the
+ *  message is the whole reason these two failures are reported rather than
+ *  thrown - a roundtrip case that will not even go out should name why. */
+const reason = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 /* --- saying what differs, not that something does ----------------------- */
 
@@ -126,7 +133,7 @@ const board = (over = {}) => normalizeLayout({
  * not "nothing is lost". */
 const EXEMPT = { "no sets at all": ["language"] };
 
-const CASES = [
+const CASES: [string, DiyLayout][] = [
   ["one full set", board()],
   ["no sets at all", board({ sets: [] })],
   ["a slot with text and no symbol",
@@ -167,19 +174,22 @@ for (const [name, layout] of CASES) {
   try {
     there = await layoutToDocument(layout);
   } catch (error) {
-    check(`${name}: goes out as a document`, false, String(error.message || error));
+    check(`${name}: goes out as a document`, false, reason(error));
     continue;
   }
   let back;
   try {
     back = documentToLayout({ root: there.root, boards: there.boards });
   } catch (error) {
-    check(`${name}: and comes back`, false, String(error.message || error));
+    check(`${name}: and comes back`, false, reason(error));
     continue;
   }
   const exempt = EXEMPT[name] || [];
   const want = { ...layout }, got = { ...back };
-  for (const field of exempt) { delete want[field]; delete got[field]; }
+  for (const field of exempt) {
+    delete (want as Record<string, unknown>)[field];
+    delete (got as Record<string, unknown>)[field];
+  }
   const found = difference(want, got);
   check(`${name}: comes back the same board`
         + (exempt.length ? ` (except ${exempt.join(", ")}, which cannot travel)` : ""),

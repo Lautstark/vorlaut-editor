@@ -306,7 +306,11 @@ function itRefusesWhatWouldComeOutEmpty() {
   for (const rate of ["-5%", 0, -16000, NaN, undefined]) {
     let threw = false;
     try {
-      postprocess(new Uint8Array(bytes), { ...VORLAUT, rate });
+      // Cast on purpose: the wrong *types* are half of what is being tried
+      // here. checkRate() is a runtime guard, and the caller it exists for is
+      // the one who did not read the signature - a rate arriving as "-5%" out
+      // of a form or a JSON file is the case it was written for.
+      postprocess(new Uint8Array(bytes), { ...VORLAUT, rate: rate as number });
     } catch {
       threw = true;
     }

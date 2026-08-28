@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import * as store from "../../src/data/store.js";
-import type { Layout } from "../../src/core/types.js";
+import type { DiyLayout } from "../../src/core/types.js";
+import { diy } from "./layout.js";
 
 /* Several boards in one browser: making them, switching, copying, deleting.
  *
@@ -10,10 +11,10 @@ import type { Layout } from "../../src/core/types.js";
  * exchange/SPEC.md §8 is what that eventually feeds.
  */
 
-const board = (name: string): Layout => ({
+const board = (name: string): DiyLayout => ({
   sleep_timeout_seconds: 600,
   sets: [{
-    name, symbol: "", color: "#3B5BDB",
+    name, symbol: "",
     slots: [0, 1, 2, 3].map(() => ({ text: "", symbol: "" })),
   }],
 });
@@ -40,7 +41,7 @@ describe("a browser with several Sammlungen in it", () => {
     const list = await store.readCollections();
     expect(list.collections).toHaveLength(1);
     expect(list.current).toBe(list.collections[0]!.id);
-    expect((await store.readLayout()).layout?.sets[0]?.name).toBe("First");
+    expect(diy((await store.readLayout()).layout).sets[0]?.name).toBe("First");
   });
 
   it("keeps three apart, and opens the one it was told to", async () => {
@@ -59,9 +60,9 @@ describe("a browser with several Sammlungen in it", () => {
     expect(list.current).toBe(garden);
 
     await store.useCollection(kitchen);
-    expect((await store.readLayout()).layout?.sets[0]?.name).toBe("Kitchen set");
+    expect(diy((await store.readLayout()).layout).sets[0]?.name).toBe("Kitchen set");
     await store.useCollection(nursery);
-    expect((await store.readLayout()).layout?.sets[0]?.name).toBe("Nursery set");
+    expect(diy((await store.readLayout()).layout).sets[0]?.name).toBe("Nursery set");
   });
 
   it("writes to the board that is open and to no other", async () => {
@@ -71,7 +72,7 @@ describe("a browser with several Sammlungen in it", () => {
     // "Two" is open. Writing here must not reach "One".
     await store.writeLayout(board("Edited"), null);
 
-    expect((await store.readLayoutOf(one))?.sets[0]?.name).toBe("Untouched");
+    expect(diy(await store.readLayoutOf(one)).sets[0]?.name).toBe("Untouched");
   });
 
   /* Every Sammlung's id is its own. Nothing here derives one from a name or a
@@ -95,7 +96,7 @@ describe("a browser with several Sammlungen in it", () => {
     const list = await store.readCollections();
     expect(list.collections[0]!.id).toBe(id);
     expect(list.collections[0]!.name).toBe("The kitchen one");
-    expect((await store.readLayoutOf(id))?.sets[0]?.name).toBe("Kitchen set");
+    expect(diy(await store.readLayoutOf(id)).sets[0]?.name).toBe("Kitchen set");
   });
 
   it("deleting takes the layout with it", async () => {
@@ -114,7 +115,7 @@ describe("a browser with several Sammlungen in it", () => {
     await store.deleteCollection(first);
 
     expect((await store.readCollections()).current).toBe(second);
-    expect((await store.readLayout()).layout?.sets[0]?.name).toBe("Second");
+    expect(diy((await store.readLayout()).layout).sets[0]?.name).toBe("Second");
   });
 
   it("deleting one that is not open leaves the open one open", async () => {
@@ -175,7 +176,7 @@ describe("a browser with several Sammlungen in it", () => {
 
     const late = await store.writeLayout(board("This tab"), held.version);
     expect(late.conflict).toBe(true);
-    expect((await store.readLayout()).layout?.sets[0]?.name).toBe("Somebody else");
+    expect(diy((await store.readLayout()).layout).sets[0]?.name).toBe("Somebody else");
   });
 
   it("does not refuse a write because a different one moved", async () => {

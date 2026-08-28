@@ -102,7 +102,7 @@ describe("a board that leaves as a document", () => {
     const document = await layoutToDocument(
       talker([{ text: "kein Brot", symbol: "brot.png", negated: true }]));
     const keys = Object.values(document.boards)
-      .flatMap((board: { buttons: Record<string, unknown>[] }) => board.buttons)
+      .flatMap((board) => (board as { buttons: Record<string, unknown>[] }).buttons)
       .flatMap((button) => Object.keys(button));
     expect(keys).toContain("ext_vorlaut_negated");
     expect(keys.filter((key) => key.startsWith("ext_lautstark_"))).toEqual([]);

@@ -1,0 +1,34 @@
+{
+  /* The unit suite. Same shape as tsconfig.e2e.json beside it, and for the same
+     reason: these run in node and import src/, so they need both worlds in one
+     program.
+
+     It is a project of its own rather than another directory in the e2e one,
+     because the two suites are run by different tools and fail for different
+     reasons - and because that file's comment is about the browser tests
+     specifically.
+
+     src/ is in `include` rather than reached through a project reference,
+     because a reference would need the app project to emit declarations and it
+     is deliberately noEmit. Checking those files twice costs a second and
+     avoids a build artefact nothing else wants. */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "strict": true,
+    /* Off for the same reason tsconfig.app.json has them off, and they move
+       when that file's do - see the note there, and the measurement in it. */
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
+  },
+  "include": ["tests", "src"]
+}

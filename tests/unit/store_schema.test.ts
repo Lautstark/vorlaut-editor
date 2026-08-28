@@ -23,6 +23,7 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { diy } from "./layout.js";
 import type { Layout } from "../../src/core/types.js";
 import type { Migrated } from "../../src/data/store.js";
 
@@ -34,7 +35,6 @@ const board: Layout = {
   sets: [{
     name: "Morning",
     symbol: "arasaac-2483.png",
-    color: "#3B5BDB",
     slots: [
       { text: "I want to go outside", symbol: "arasaac-2483.png" },
       { text: "", symbol: "" },
@@ -132,7 +132,7 @@ describe("opening a database left behind by version 2", () => {
     expect(list.current).toBe(KITCHEN);
 
     const open = await store.readLayout();
-    expect(open.layout?.sets[0]?.slots[0]?.text).toBe("I want to go outside");
+    expect(diy(open.layout).sets[0]?.slots[0]?.text).toBe("I want to go outside");
     expect(open.version).toBe(STAMP);
   });
 
@@ -182,6 +182,6 @@ describe("opening a database left behind by version 1", () => {
     expect(list.current).toBe(list.collections[0]!.id);
 
     const open = await store.readLayout();
-    expect(open.layout?.sets[0]?.slots[0]?.text).toBe("I want to go outside");
+    expect(diy(open.layout).sets[0]?.slots[0]?.text).toBe("I want to go outside");
   });
 });

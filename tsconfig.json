@@ -6,40 +6,32 @@
      program would give the browser half node's globals, and the first symptom
      of that is `clearTimeout(null)` type-checking against the wrong overload
      rather than anything that looks like a mixed-up environment. */
-  /* `tests/` is in none of them, and that is a gap rather than a decision.
-     tsconfig.e2e.json covers e2e/ and src/; the vitest suite under tests/ is
-     covered by nothing, so `npm run typecheck` has never read a line of it and
-     vitest only transpiles - which compiles a file without ever comparing it to
-     the types it exercises. mitreden and bildhaft closed the same gap on
-     2026-08-28; this one is left open on purpose, because closing it here is
-     not a config change.
+  /* Four of them, and tsconfig.test.json is the newest: tests/ was in none of
+     the others until 2026-08-28, so `npm run typecheck` had never read a line
+     of the vitest suite. vitest transpiles, which compiles a file without ever
+     comparing it to the types it exercises.
 
-     Measured that day, with a project of the same shape as tsconfig.e2e.json
-     over ["tests", "src"]: **34 errors in 10 files.** Seventeen of them are one
-     thing, and it is worth knowing before anybody starts:
+     Closing that found 34 errors in 10 files, and they were worth having.
+     Seventeen were one thing:
 
-         tests/unit/collections.test.ts(43,47):
          Property 'sets' does not exist on type 'Layout'.
 
-     Layout is a union of DiyLayout and AppLayout, and core/types.ts says in so
-     many words why: "`layout.sets` on an app Sammlung would type-check and
-     answer undefined, which is how the sidebar came to count every Sammlung
-     with whichever editor happened to be installed. With a union that line does
-     not compile until it has asked which shape it is holding." The source was
-     fixed. The tests still read `.sets` off the union without asking, because
-     nothing was ever going to tell them. They are not wrong about what they
-     build - every one of them builds a diy Sammlung - so the repair is to make
-     them say so, once, rather than to cast it away seventeen times.
+     Layout is a union of DiyLayout and AppLayout, and core/types.ts says why:
+     "`layout.sets` on an app Sammlung would type-check and answer undefined,
+     which is how the sidebar came to count every Sammlung with whichever
+     editor happened to be installed." The source was fixed when that was
+     found; the tests went on doing it, because nothing was going to tell them.
+     They ask through tests/unit/layout.ts's diy() now rather than casting.
 
-     The rest are assorted: unknown properties in object literals, a spread of a
-     non-object, an `unknown` caught in a catch. Each needs a look at whether
-     the test or the type is the stale one, which is why this is a session and
-     not a sweep - the same call made about strictNullChecks in
-     tsconfig.app.json, for the same reason. */
+     The rest: a colour BoardSet no longer has, still set in six fixtures; a
+     backup fixture written in a board shape the app stopped making, which
+     passed because the store round-trips whatever JSON it is handed; and four
+     places where a `catch` binding or an untyped helper had gone unnoticed. */
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.node.json" },
-    { "path": "./tsconfig.e2e.json" }
+    { "path": "./tsconfig.e2e.json" },
+    { "path": "./tsconfig.test.json" }
   ]
 }

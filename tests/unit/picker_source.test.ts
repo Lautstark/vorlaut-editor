@@ -29,7 +29,7 @@ import type { AppLayout, Layout } from "../../src/core/types.js";
 const talker = (...refs: string[]): Layout => ({
   sleep_timeout_seconds: 600,
   sets: [{
-    name: "Set", symbol: "", color: "#3B5BDB",
+    name: "Set", symbol: "",
     slots: refs.map((symbol) => ({ text: "x", symbol })),
   }],
 });

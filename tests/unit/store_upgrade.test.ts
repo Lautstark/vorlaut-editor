@@ -24,6 +24,7 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
+import { diy } from "./layout.js";
 import type { Layout } from "../../src/core/types.js";
 import type { Migrated } from "../../src/data/store.js";
 
@@ -35,7 +36,6 @@ const board = (name: string, says: string): Layout => ({
   sets: [{
     name,
     symbol: "arasaac-2483.png",
-    color: "#3B5BDB",
     slots: [
       { text: says, symbol: "arasaac-2483.png" },
       { text: "", symbol: "" },
@@ -147,14 +147,14 @@ describe("a version 3 database opened by version 4", () => {
 
   it("keeps what is on them, and the stamp over it", async () => {
     const open = await store.readLayout();
-    expect(open.layout?.sets[0]?.name).toBe("Morning");
-    expect(open.layout?.sets[0]?.slots[0]?.text).toBe("I want to go outside");
+    expect(diy(open.layout).sets[0]?.name).toBe("Morning");
+    expect(diy(open.layout).sets[0]?.slots[0]?.text).toBe("I want to go outside");
     // Verbatim, not recomputed: the bytes did not change, so neither may the
     // stamp over them - adr/0015 says why nothing on this path may re-hash.
     expect(open.version).toBe(KITCHEN_STAMP);
 
     const other = await store.readLayoutOf(BEDROOM);
-    expect(other?.sets[0]?.slots[0]?.text).toBe("story please");
+    expect(diy(other).sets[0]?.slots[0]?.text).toBe("story please");
   });
 
   it("leaves the stamp and the bytes still a matched pair, so a save is not a conflict",
@@ -162,11 +162,11 @@ describe("a version 3 database opened by version 4", () => {
        const open = await store.readLayout();
        // The carried board rather than whatever a first visit would have
        // seeded, or this says nothing about a stamp that crossed.
-       expect(open.layout?.sets[0]?.name).toBe("Morning");
-       const changed = { ...open.layout!, sleep_timeout_seconds: 900 };
+       expect(diy(open.layout).sets[0]?.name).toBe("Morning");
+       const changed = { ...diy(open.layout), sleep_timeout_seconds: 900 };
        const saved = await store.writeLayout(changed, open.version);
        expect(saved.conflict).toBeFalsy();
-       expect((await store.readLayout()).layout?.sleep_timeout_seconds).toBe(900);
+       expect(diy((await store.readLayout()).layout).sleep_timeout_seconds).toBe(900);
      });
 
   it("keeps the pictures", async () => {

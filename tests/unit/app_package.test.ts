@@ -42,12 +42,12 @@ const layout = (): DiyLayout => ({
   sleep_timeout_seconds: 600,
   sets: [
     {
-      name: "Essen", symbol: "arasaac-31337.png", color: "#3B5BDB",
+      name: "Essen", symbol: "arasaac-31337.png",
       slots: [slot("Ich habe Hunger", "arasaac-2462.png"), slot("Ich habe Durst"),
               slot(""), slot("Mehr bitte", "arasaac-2462.png")],
     },
     {
-      name: "Spielen", symbol: "", color: "#2F9E44",
+      name: "Spielen", symbol: "",
       slots: [slot("Noch einmal"), slot(""), slot(""), slot("")],
     },
   ],
@@ -815,7 +815,7 @@ describe("the language a package says it is in", () => {
 describe("one symbol collection per package", () => {
   const withSymbols = (...refs: string[]): Layout => ({
     sets: [{
-      name: "Set", symbol: "", color: "#3B5BDB",
+      name: "Set", symbol: "",
       slots: refs.map((symbol) => ({ text: "x", symbol })),
     }],
   });
@@ -967,14 +967,14 @@ describe("what the checker refuses", () => {
 
   it("catches a gap hint that is not a boolean", () => {
     expect(broken((pkg) => {
-      (pkg.manifest as Record<string, unknown>).ext_lautstark_first_column_gap = "yes";
+      (pkg.manifest as unknown as Record<string, unknown>).ext_lautstark_first_column_gap = "yes";
     })).toEqual([expect.stringContaining("[manifest]")]);
   });
 
   it("catches an image entry that is a reference rather than pixels", () => {
     // §5: the viewer resolves nothing - no url, no data_url, no symbol set.
     expect(broken((pkg) => {
-      (board(pkg, "set-1").images[0] as Record<string, unknown>).url =
+      (board(pkg, "set-1").images[0] as unknown as Record<string, unknown>).url =
         "https://api.arasaac.org/api/pictograms/2462";
     })).toEqual([expect.stringContaining("[image-reference]")]);
   });

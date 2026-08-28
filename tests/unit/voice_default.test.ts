@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { shippable } from "@lautstark/stimmquelle";
 import * as store from "../../src/data/store.js";
 import { defaultVoice, listVoices } from "../../src/backend/local.js";
-import type { Layout } from "../../src/core/types.js";
+import type { DiyLayout, Layout } from "../../src/core/types.js";
 
 /* Which voice a Sammlung speaks in when nobody has said, and what happens to
  * one that was said and is no longer on offer.
@@ -32,10 +32,10 @@ const OFFERED = shippable({ ownsInference: true });
 const catalogued = (id: string) =>
   OFFERED.find((voice) => `piper:${voice.id}` === id);
 
-const board = (extra: Partial<Layout> = {}): Layout => ({
+const board = (extra: Partial<DiyLayout> = {}): DiyLayout => ({
   sleep_timeout_seconds: 600,
   sets: [{
-    name: "Set", symbol: "", color: "#3B5BDB",
+    name: "Set", symbol: "",
     slots: [0, 1, 2, 3].map(() => ({ text: "", symbol: "" })),
   }],
   ...extra,

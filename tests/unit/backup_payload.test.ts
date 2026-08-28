@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
+import { diy } from "./layout.js";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   BACKUP_FORMAT, exportEverything, importBackup, isBackup, stripSecrets, TOO_NEW,
 } from "../../src/data/backup.js";
 import * as store from "../../src/data/store.js";
 import { LANGUAGES, TEXTS } from "../../src/core/boot_data.js";
-import type { Layout, Settings } from "../../src/core/types.js";
+import type { DiyLayout, Layout, Settings } from "../../src/core/types.js";
 
 /* What may reach a folder that is very likely inside Dropbox.
  *
@@ -24,20 +25,21 @@ import type { Layout, Settings } from "../../src/core/types.js";
  *  in that table alone (tests/test_language.py). */
 const NOTICE = "what this file does and does not contain";
 
-const board = (): Layout => ({
+const board = (): DiyLayout => ({
   sets: [{
     name: "Kitchen",
-    keys: [
+    symbol: "",
+    slots: [
       // A METACOM reference: a symbol the user chose and put on their own
       // board. It travels; see the note in data/backup.ts about why a
       // reference is not an index.
-      { label: "Yes", symbol: "metacom:PNG_ohne_Rahmen/yes", text: "Yes" },
+      { text: "Yes", symbol: "metacom:PNG_ohne_Rahmen/yes" },
       // An ARASAAC download, living in symbols/ as bytes.
-      { label: "Water", symbol: "arasaac-2483.png", text: "I would like water" },
+      { text: "I would like water", symbol: "arasaac-2483.png" },
     ],
   }],
   voice: "de_DE-thorsten",
-} as unknown as Layout);
+});
 
 const LICENSED = "/Users/someone/Documents/METACOM 9/PNG_ohne_Rahmen";
 
@@ -194,7 +196,7 @@ describe("the round trip", () => {
     const done = await importBackup(backup);
 
     expect(done.symbols).toBe(1);
-    expect(done.layout?.sets[0].name).toBe("Kitchen");
+    expect(diy(done.layout).sets[0].name).toBe("Kitchen");
     expect((await store.listFiles("symbols")).map((f) => f.name)).toEqual(["arasaac-2483.png"]);
   });
 
@@ -206,7 +208,7 @@ describe("the round trip", () => {
     const held = await store.readLayout();
     // The board is restored. The pictures stay blank until that person
     // reconnects their own licensed folder, and that is the feature.
-    expect(held.layout?.sets[0].keys[0].symbol).toBe("metacom:PNG_ohne_Rahmen/yes");
+    expect(diy(held.layout).sets[0].slots[0].symbol).toBe("metacom:PNG_ohne_Rahmen/yes");
     expect(backup.symbols.some((one) => one.name.includes("metacom"))).toBe(false);
   });
 
