@@ -1973,3 +1973,87 @@ dialog.sheet--page { max-width: 520px; }
 .status { transition: opacity .6s ease; }
 .status--rested { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .status { transition: none; } }
+
+/* ------------------------------------------- where a package is being sent
+
+   One idea, and everything below serves it: an address typed as its four
+   numbers rather than as one string. design's docs/mocks/senden.css is where
+   the argument is written out and these are its rules, with the class names in
+   this repository's language rather than the mock's - the same translation
+   .cell and .grid came across under. Everything else on that sheet - the
+   sheet, the buttons, the label, the outcome plate - is components.css's and
+   is not restated here.
+
+   The boxes are pin.css's shape reused, and the differences are what the
+   content forces: a box holds up to three digits rather than one, so it is
+   wider and its type smaller, and nothing is masked - an address on a home
+   network is not a secret, it is a number being copied off a screen two feet
+   away.
+
+   Mono and tabular. Four numbers that change one at a time must not shift the
+   boxes beside them, and 1 is the digit that would. */
+/* The one gap components.css cannot supply. Its sheet rhythm is `p + p`, and
+   what follows this sentence is a label rather than a paragraph - so the line
+   saying where to read the number off sat directly on top of the boxes. */
+.send-lead { margin: 0 0 14px; }
+
+.address-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+
+.address-row__box {
+  width: 72px;
+  font: inherit;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 19px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 10px 4px;
+  caret-color: var(--accent);
+}
+.address-row__box:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The two numbers that rarely change, on a visit where they are already known.
+
+   They step back to an outline so the eye lands on the two that do change -
+   and they stay fields, focusable and editable, because 192.168 is a habit
+   rather than a rule. A Fritzbox hands out 192.168.178.x, most other routers
+   192.168.0.x or 192.168.1.x, and a home network on 10.x is not unusual. A
+   design that wrote the first half into the product would work in most German
+   houses and strand the rest with no way back - so all four are typed the
+   first time, and only the ones worth doubting are quiet the next.
+   shell/tabletSend.ts takes the flag off the moment one is touched. */
+.address-row__box[data-known="1"] {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+
+.address-row__dot {
+  font-family: var(--mono);
+  font-size: 19px;
+  color: var(--text-faint);
+  padding-bottom: 3px;
+  user-select: none;
+}
+
+/* Said once under the row, and only where there is something to say. */
+.address-row__note { margin-top: 10px; font-size: 12.5px; color: var(--text-faint); }
+.address-row__note[hidden] { display: none; }
+
+/* The ways on from a finished export, in the foot beside the one that
+   dismisses it - see shell/packageExport.ts, which fills this after the file
+   exists rather than when the sheet opens.
+
+   `display: contents`, so the buttons are the foot's own flex items: a box
+   here would take one gap of its own and space the foot differently in the two
+   exports, and an empty one would space it differently again. */
+.doors { display: contents; }

@@ -589,6 +589,9 @@ export async function writeSettings(wanted: WantedSettings): Promise<Settings> {
   if (wanted.activeProvider !== undefined) {
     next.activeProvider = wanted.activeProvider;
   }
+  if (wanted.tabletAddress !== undefined) {
+    next.tabletAddress = wanted.tabletAddress;
+  }
   // An untouched field must not wipe the key - the same rule settings.js
   // follows on the way in. Which left removal with no door at all: this
   // branch only ever set, so a stored key was permanent until null became

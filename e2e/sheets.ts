@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Download, type Locator, type Page } from "@playwright/test";
 import { label } from "./diy.js";
 
 /* The two settings surfaces, and getting into either one.
@@ -109,4 +109,34 @@ export async function openVoices(page: Page): Promise<Locator> {
   const sheet = await openCollectionSettings(page);
   await openPanel(page, "#voicePanel");
   return sheet;
+}
+
+/**
+ * The app package's sheet, from the press that writes it to the file on disk.
+ *
+ * Two presses, and the second one is the change: the sheet used to hand the
+ * file over by itself the moment it existed and close, and it now asks where
+ * the package goes - the Downloads folder, or a tablet on the same wifi. So
+ * every spec that wants the bytes has to say Speichern, and this is the one
+ * place that knows so.
+ *
+ * The wait between the two is where the whole export happens: every distinct
+ * sentence synthesised, encoded and zipped. It used to sit on the download
+ * event and now sits on the button appearing, so it carries its own generous
+ * timeout rather than the five seconds an assertion gets by default.
+ *
+ * The two doors themselves are asserted in e2e/app_package.spec.ts and in
+ * e2e/send.spec.ts, which are the specs that are about them. A helper that
+ * checked what it was helping with would make every caller a second, quieter
+ * copy of that test.
+ */
+export async function savePackage(sheet: Locator): Promise<Download> {
+  await sheet.locator("button", { hasText: label("ui.package_go") }).click();
+  const save = sheet.locator("button", { hasText: label("ui.package_save") });
+  await expect(save).toBeVisible({ timeout: 45_000 });
+  const [download] = await Promise.all([
+    sheet.page().waitForEvent("download"),
+    save.click(),
+  ]);
+  return download;
 }

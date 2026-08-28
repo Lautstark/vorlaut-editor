@@ -265,3 +265,47 @@ check("src/ imports nothing outside src/ but the packages this repository pins",
  * this file's own subject is checks that go quiet. */
 check("and it read the imports it was meant to", specifiers > all.length,
       `${specifiers} specifiers across ${all.length} modules`);
+
+/* ## The third boundary: the send door belongs to the app package
+ *
+ * exchange/SPEC.md §5.2 keeps the exports apart - "a different function, not
+ * the same one behind a flag" - and adr/0010 says why no helper may cross that
+ * line, at length and twice: a shared helper is where a flag grows, and the
+ * merge it forbids is the one somebody will propose without ever seeing the
+ * sentence forbidding it.
+ *
+ * shell/tabletSend.ts is the same shape approached from the other end. It does
+ * not write a package - it takes bytes that already exist - so §5.2's own
+ * words do not reach it, and the rule that does is the reason behind them.
+ * Three exports write a file here. Exactly one of them has anywhere to send it:
+ * the app package is what an Android viewer opens, and the tablet is the
+ * machine the viewer runs on. The talker export is a document for other AAC
+ * software and the device export is a talker's input, and neither has a tablet
+ * at the end of it. A module both could reach would be a module that had to
+ * decide which package was being sent, which is precisely the one-door design
+ * the ADR spends a section refusing.
+ *
+ * So it has one caller, and that is checked rather than intended. An import
+ * from anywhere else is the first line of the thing being prevented, it
+ * compiles, and it passes every other test in this repository.
+ */
+const SEND = "shell/tabletSend.ts";
+const MAY_SEND = "shell/packageExport.ts";
+
+check(`there is a ${SEND} for this rule to be about`, all.includes(SEND),
+      all.includes(SEND) ? SEND : `no ${SEND} under src/`);
+
+const reaching = all.filter((name) =>
+  name !== MAY_SEND && importsOf(name).includes(SEND));
+
+check("only the app package's export may reach the send door",
+      reaching.length === 0,
+      reaching.length ? reaching.map((one) => `${one} -> ${SEND}`).join(", ")
+                      : `${MAY_SEND} alone, out of ${all.length} modules`);
+
+/* And that the one permitted caller really does import it, so the rule above
+ * is not green because nothing reaches the module at all - which is what it
+ * would say the day somebody moved the send door and left this behind. */
+check("and the export it belongs to does reach it",
+      importsOf(MAY_SEND).includes(SEND),
+      importsOf(MAY_SEND).join(", "));

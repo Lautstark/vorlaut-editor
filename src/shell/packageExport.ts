@@ -24,6 +24,15 @@
  * never a picture or a licence, and each caller below names its own door. What
  * would be forbidden is a `run` that decided between the two.
  *
+ * **That rule is what shaped the ending as well.** Where a written file goes
+ * is now a different question for each export - the app package can be sent to
+ * a tablet, and nothing else here can - so the sheet stopped answering it. It
+ * no longer downloads anything and no longer knows a filename; each export
+ * ends itself. Which keeps the one thing that must not exist from being
+ * writable at all: a send that takes a package as an argument. See
+ * shell/tabletSend.ts, and tests/unit/layers.test.ts for the check that only
+ * this file may reach it.
+ *
  * In the shell rather than in either editor, because both targets export a
  * package. A talker Sammlung goes to a tablet through exactly this path - that
  * is what vorlaut-app's BuilderPackageTest opens - so the sheet cannot belong
@@ -35,6 +44,7 @@ import { reason } from "../core/errors.js";
 import { t } from "../core/texts.js";
 import { exportAppPackage, exportDevicePackage } from "../backend/index.js";
 import type { PackageProgress } from "../backend/local.js";
+import { openTabletSend } from "./tabletSend.js";
 
 /** Hands a finished file to the browser as a download.
  *
@@ -62,27 +72,60 @@ interface Offered {
   /** What is about to happen, before the press. */
   lead: string;
   go: string;
-  filename: string;
   write(
     onProgress: (at: PackageProgress) => boolean | void,
   ): Promise<{ blob: Blob; missing: number } | null>;
   /** The status line afterwards, given how many pictures resolved to nothing. */
   told(missing: number): string;
-  /** What the sheet keeps saying after the file has been handed over, or
-   *  nothing. The device export uses it to say where the file goes next; the
-   *  app package has nowhere to point, because the file goes to a tablet. */
-  next?: () => HTMLElement;
+  /** What the sheet becomes once the bytes exist.
+   *
+   *  **The export's own last step, and deliberately not the sheet's.** This
+   *  was `next`, an optional line of text under a file the sheet had already
+   *  handed to the browser, and the handing over was the sheet's: one path,
+   *  because there was one thing a package could be. That stopped being true
+   *  the moment a package could go to a tablet, and where a file goes is
+   *  precisely what an export must answer for itself - so the download moved
+   *  out of here and into the two endings, and this file no longer knows a
+   *  filename. The device export writes its file and says where to take it
+   *  next; the app package asks, because it has two answers.
+   *
+   *  `dismiss` closes the sheet, for an ending that finishes somewhere else. */
+  ending(made: Made, dismiss: () => void): Ending;
+}
+
+/** A written package, before anybody has said where it goes. */
+interface Made {
+  blob: Blob;
+  missing: number;
+}
+
+/** The last state of an export's sheet.
+ *
+ *  `doors` are the ways on from here, in the foot after the one that dismisses
+ *  it. An ending with none is one whose file has already gone somewhere.
+ *
+ *  A different sense of the word from §5.2's, and worth saying in a file that
+ *  uses both: these are buttons, and which package was written was settled two
+ *  steps ago by which of the three export functions was called. */
+interface Ending {
+  body: Node[];
+  doors?: HTMLElement[];
 }
 
 /**
  * Opens the sheet, and writes the package if somebody presses the button.
  *
  * Two steps in one dialog, which does not close between them: what is about to
- * be written, then the writing. What happens at the end depends on whether
- * there is anything left to read - an export with a `next` keeps the sheet up,
- * because the sentence it adds is the point of having pressed the button at
- * all, and one without closes itself, since a sheet that has to be dismissed
- * after a download is a click that says nothing.
+ * be written, then the writing. The sheet then stays up and hands over to the
+ * export's own ending, because with two possible destinations there is always
+ * something left to say - which of them, or where the file that has already
+ * gone is to be taken next.
+ *
+ * The sheet used to close itself when an export had nothing to add, and that
+ * shape has gone with the automatic download it was the other half of. It was
+ * right while a package could only ever land in the Downloads folder: a sheet
+ * that has to be dismissed after a file has already been handed over is a
+ * click that says nothing.
  */
 function openExport(what: Offered): void {
   // Set by the confirming press and read by the progress callback, which is
@@ -110,11 +153,19 @@ function openExport(what: Offered): void {
   close.textContent = t("ui.close");
   close.hidden = true;
 
+  /* Where an ending's doors go, and it is in the foot from the start because
+     an ending is built too late to be passed to openDialog(). `display:
+     contents` in ui.css, so that the buttons are the foot's own flex items and
+     an empty one adds no gap - a wrapper drawn as a box would space the foot
+     differently in the two exports for no reason anybody could see. */
+  const after = document.createElement("span");
+  after.className = "doors";
+
   const sheet = openDialog({
     title: what.title,
     closeLabel: t("ui.close"),
     body: [line],
-    footer: [go, cancel, close],
+    footer: [go, cancel, close, after],
     // Closing the sheet mid-run is the same act as pressing Abbrechen, and it
     // has to be, or the corner ✕ would leave a loop running against a dialog
     // nobody can see - which is the shape of the hang design.md §3.4 warns
@@ -150,17 +201,22 @@ function openExport(what: Offered): void {
         status(t("ui.package_stopped"));
         return;
       }
-      offer(made.blob, what.filename);
       // Missing pictures are worth a sentence rather than a refusal: the
       // package works, and the usual cause is a METACOM folder this browser
       // has not been given back yet.
       status(what.told(made.missing));
-      if (!what.next) { sheet.close(); return; }
-      sheet.body.replaceChildren(what.next());
+      const ending = what.ending(made, () => sheet.close());
+      sheet.body.replaceChildren(...ending.body);
       cancel.hidden = true;
       go.hidden = true;
       close.hidden = false;
-      close.focus();
+      // design.md §4.3 allows one primary per view. Where the ending brought
+      // doors, one of them is the act and dismissing steps back to quiet;
+      // where it brought none, dismissing is the only thing left to press.
+      const doors = ending.doors ?? [];
+      close.className = doors.length ? "btn quiet" : "btn primary";
+      after.replaceChildren(...doors);
+      (doors[doors.length - 1] ?? close).focus();
     } catch (error) {
       sheet.close();
       status(t("ui.collection_export_failed", { error: reason(error) }));
@@ -168,26 +224,101 @@ function openExport(what: Offered): void {
   }
 }
 
-/** The Sammlung as the package the Android viewer opens. */
+/** How big the file turned out, in the one unit anybody reads it in.
+ *
+ *  voices.ts weighs a voice model the same way and to the same rounding: this
+ *  is a number somebody glances at to see that a package is the size a package
+ *  should be, not one they do arithmetic with. */
+const weighs = (bytes: number): string => `${Math.round(bytes / 1e6)} MB`;
+
+/** The Sammlung as the package the Android viewer opens.
+ *
+ * **Two doors at the end of it, where there used to be none.** The file was
+ * downloaded the moment it existed and the sheet closed itself, which was the
+ * right shape for a step with one possible outcome. There are two now - the
+ * Downloads folder, or a tablet on the same wifi - and a question cannot be
+ * answered by doing one of the two before it is asked. Sending would otherwise
+ * leave a stray zip behind every single time.
+ *
+ * **The cost is one press, and it is paid by the person who only ever saves.**
+ * That is the whole of the trade and it was argued before it was built; the
+ * mock in design's docs/mocks/vorlaut-senden.html states it in its own copy
+ * rather than hiding it. The alternative - keep the automatic download and add
+ * a send button beside it - buys that press back by making every send litter,
+ * which is the thing the tablet route exists to stop.
+ *
+ * The send door is this export's alone. exchange/SPEC.md §5.2 and adr/0010
+ * keep the three writers apart, and shell/tabletSend.ts's own header carries
+ * the reason that reaches the delivery end too: the talker export and the
+ * device export have no tablet to go to, and a helper that could send either
+ * would be a helper that had to decide which.
+ */
 export function openPackageExport(name: string, stem: string): void {
+  // .zip rather than .obz, and only on this export. Chrome on Android goes by
+  // the blob's media type for an unregistered extension, so a file declared
+  // application/zip and named .obz is one the download manager will not take —
+  // the package never reaches the tablet it was made for. The bytes are
+  // unchanged and the viewer never looks at a filename, so the rename costs
+  // nothing it can see. exchange/SPEC.md §2 says which of the two an importer
+  // goes by. The two exports beside this one keep .obz: other AAC software
+  // looks for that extension, and the talker's is read by a page that takes
+  // whatever it is given.
+  const filename = `${stem}-app.zip`;
   openExport({
     title: t("ui.package_title"),
     lead: t("ui.package_lead", { name }),
     go: t("ui.package_go"),
-    // .zip rather than .obz, and only on this export. Chrome on Android goes
-    // by the blob's media type for an unregistered extension, so a file
-    // declared application/zip and named .obz is one the download manager will
-    // not take — the package never reaches the tablet it was made for. The
-    // bytes are unchanged and the viewer never looks at a filename, so the
-    // rename costs nothing it can see. exchange/SPEC.md §2 says which of the
-    // two an importer goes by. The two exports beside this one keep .obz:
-    // other AAC software looks for that extension, and the talker's is read by
-    // a page that takes whatever it is given.
-    filename: `${stem}-app.zip`,
     write: (onProgress) => exportAppPackage(onProgress),
     told: (missing) => missing
       ? t("ui.collection_exported_app_gaps", { n: missing })
       : t("ui.collection_exported_app"),
+    ending: (made, dismiss) => {
+      const said = document.createElement("p");
+      said.textContent = t("ui.package_ready",
+                           { name, size: weighs(made.blob.size) });
+
+      /* The gaps, said here as well as in the status line, and the two are not
+         the same sentence. The line behind the sheet is the outcome and
+         outlives it - design.md §4.3 - while this one is on the sheet somebody
+         is standing on, deciding, and says the thing that decision wants to
+         know: the package works, and the keys without a picture will show
+         their word. It exists because the sheet stays up now; it used to be
+         gone before the status line was read. */
+      const gaps = document.createElement("p");
+      gaps.className = "notice";
+      gaps.textContent = t("ui.package_gaps", { n: made.missing });
+      gaps.hidden = !made.missing;
+
+      const save = () => { offer(made.blob, filename); dismiss(); };
+
+      const keep = document.createElement("button");
+      keep.className = "btn";
+      keep.type = "button";
+      keep.textContent = t("ui.package_save");
+      keep.onclick = save;
+
+      const send = document.createElement("button");
+      send.className = "btn primary";
+      send.type = "button";
+      send.textContent = t("ui.package_send");
+      send.onclick = () => void (async () => {
+        // Two presses would be two sheets, stacked, each holding the same
+        // bytes: the sheet is opened after a read of the remembered address,
+        // so there is a gap between the press and anything appearing.
+        if (send.disabled) return;
+        send.disabled = true;
+        try {
+          // The sheet behind it goes only if the package got there. Every
+          // other way out of that one leaves this one standing, with
+          // Speichern on it.
+          if (await openTabletSend({ blob: made.blob, name, save })) dismiss();
+        } finally {
+          send.disabled = false;
+        }
+      })();
+
+      return { body: [said, gaps], doors: [keep, send] };
+    },
   });
 }
 
@@ -225,12 +356,16 @@ export function openDeviceExport(name: string, stem: string): void {
     title: t("ui.device_export_title"),
     lead: t("ui.device_export_lead", { name }),
     go: t("ui.device_export_go"),
-    filename: `${stem}-device.obz`,
     write: (onProgress) => exportDevicePackage(onProgress),
     told: (missing) => missing
       ? t("ui.collection_exported_device_gaps", { n: missing })
       : t("ui.collection_exported_device"),
-    next: () => {
+    // Unasked, and it stays unasked: this file has one place to go and the
+    // page it goes to is the sentence below. The question the app package now
+    // puts is a question because that one has two answers, and there is no
+    // tablet at the end of a talker's file for a second door to lead to.
+    ending: (made) => {
+      offer(made.blob, `${stem}-device.obz`);
       const said = document.createElement("p");
       said.textContent = t("ui.device_export_next");
       const link = document.createElement("a");
@@ -241,7 +376,7 @@ export function openDeviceExport(name: string, stem: string): void {
       link.target = "_blank";
       link.rel = "noopener";
       said.append(" ", link);
-      return said;
+      return { body: [said] };
     },
   });
 }

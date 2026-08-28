@@ -158,11 +158,21 @@ test("a Sammlung leaves as a package, and it passes the spec's own checks",
     // thing at the start covers a wait of minutes with silence.
     const asked = sheet(page, "ui.package_title");
     await expect(asked).toBeVisible();
+    await asked.locator("button", { hasText: label("ui.package_go") }).click();
+    /* The sheet does not hand the file over by itself any more. Synthesis,
+     * encoding and zipping happen between that click and this button
+     * appearing, and then it asks where the package goes: the Downloads
+     * folder, or a tablet on the same wifi. Nothing is downloaded until one of
+     * the two is pressed, which is the point - a send that also saved would
+     * leave a stray zip behind every time. */
+    const save = asked.locator("button", { hasText: label("ui.package_save") });
+    await expect(save).toBeVisible({ timeout: 30_000 });
+    await expect(asked.locator("button", { hasText: label("ui.package_send") }))
+      .toBeVisible();
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      asked.locator("button", { hasText: label("ui.package_go") }).click(),
+      save.click(),
     ]);
-    // Synthesis, encoding and zipping happen between the click and the file.
     const path = await download.path();
     expect(path).toBeTruthy();
     // .zip, not .obz. Chrome on Android goes by the media type for an
@@ -277,9 +287,12 @@ test("the two exports are two different files, not one behind a flag",
 
     await pickExport(page, "app");
     const asked = sheet(page, "ui.package_title");
+    await asked.locator("button", { hasText: label("ui.package_go") }).click();
+    const save = asked.locator("button", { hasText: label("ui.package_save") });
+    await expect(save).toBeVisible({ timeout: 30_000 });
     const [app] = await Promise.all([
       page.waitForEvent("download"),
-      asked.locator("button", { hasText: label("ui.package_go") }).click(),
+      save.click(),
     ]);
     const packaged = unzip(new Uint8Array(readFileSync((await app.path())!)));
     expect([...packaged.keys()].filter((name) => name.startsWith("images/"))).toHaveLength(1);
