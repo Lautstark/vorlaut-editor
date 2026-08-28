@@ -71,6 +71,15 @@ const backup = new Sicherung({
   // page is in - and it comes from the table, because this repository keeps
   // German in boot_data.ts alone (tests/test_language.py).
   produce: () => exportEverything(t("ui.data_notice")),
+  // No boards means this browser holds nothing, and saving that over a folder
+  // that has the real thing is the loss @lautstark/sicherung v1.3.0 holds back
+  // rather than makes. Only vorlaut can say what its own emptiness looks like,
+  // which is why the predicate lives here and not in the package.
+  //
+  // Boards alone, deliberately: symbols without a board to sit on are orphans
+  // the importer would drop anyway, so a browser holding only those is still a
+  // browser holding nothing worth writing over somebody's collection.
+  looksEmpty: (produced) => (produced as { boards?: unknown[] }).boards?.length === 0,
 });
 
 // Every write that changes what a Sicherung would contain, through the one
