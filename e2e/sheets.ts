@@ -51,24 +51,24 @@ export async function pickFromMenu(page: Page, key: string): Promise<void> {
  *
  * Two presses rather than one since the three entries became one: the menu
  * says the act, and the sheet behind it leads with what this Sammlung is for.
- * `which` is the card - "talker", "app" or "other" - and the three behind them
- * are still three functions, which is exchange/SPEC.md §5.2 and not this
- * file's problem.
+ * `which` is the card - "talker" or "app" - and the writers behind them are
+ * still separate functions, which is exchange/SPEC.md §5.2 and not this file's
+ * problem.
  *
- * A talker Sammlung leads with "talker" and folds the other two away, so this
- * opens the fold before looking for a card. Unconditionally, and by the fold
- * rather than by which card was asked for: a helper that knew which of the
- * three is the lead would be a second copy of collections.ts's exportsFor(),
- * kept in step by hand, and the one thing these tests must not do is agree
- * with the page about something neither of them checked.
+ * A talker Sammlung leads with "talker" and folds "app" away, so this opens
+ * the fold before looking for a card. Unconditionally, and by the fold rather
+ * than by which card was asked for: a helper that knew which card is the lead
+ * would be a second copy of collections.ts's exportsFor(), kept in step by
+ * hand, and the one thing these tests must not do is agree with the page about
+ * something neither of them checked.
  *
  * A tablet Sammlung has no sheet here at all - it has one honest export and is
  * taken straight to it - so this is the talker's helper. editor_app.spec.ts
  * presses that entry directly.
  *
- * Nothing is written by getting here. Two of the three cards open a sheet that
- * asks again, and the third writes a file that costs no synthesis; a caller
- * waiting on a download waits after this returns.
+ * Nothing is written by getting here. Both cards open a sheet that asks
+ * again, so a caller waiting on a download waits after this returns -
+ * exportForTalker() below is that wait for the talker's card.
  */
 export async function pickExport(page: Page, which: string): Promise<void> {
   await pickFromMenu(page, "ui.collection_export");
@@ -83,6 +83,52 @@ export async function pickExport(page: Page, which: string): Promise<void> {
    * out waiting for a download that was never asked for. */
   await choice.locator("button.choice strong",
                        { hasText: label(`ui.collection_export_for_${which}`) }).click();
+}
+
+/**
+ * The talker's export, from the menu to the file on disk.
+ *
+ * Here rather than copied into four specs because it stopped being one press.
+ * The card under ui.collection_export_for_other was the cheap door - a .obz
+ * of references, written without speaking a word - and every spec that only
+ * wanted *a file*
+ * out of the page reached for it. It is gone from the sheet, so those specs
+ * come through the talker's card instead, which asks again before it writes
+ * and hands the file over at the end of its own sheet.
+ *
+ * What it costs them is synthesis of every distinct sentence in the Sammlung,
+ * which is why the wait is generous and why the callers that use it keep their
+ * boards small. A Sammlung with no sentences in it costs nothing at all and
+ * still writes a file, which is what makes this usable in a spec about a file
+ * name.
+ *
+ * What the file *is* stays e2e/device_export.spec.ts's question. This waits
+ * for it and asserts nothing about it, for savePackage()'s reason: a helper
+ * that checked what it was helping with would make every caller a second,
+ * quieter copy of that spec.
+ */
+export async function exportForTalker(page: Page): Promise<Download> {
+  await pickExport(page, "talker");
+  const asked = page.locator("dialog[open]")
+    .filter({ has: page.getByRole("heading", { name: label("ui.device_export_title") }) });
+  await expect(asked).toBeVisible();
+  /* Registered before the press, not after: the file is offered from inside
+     the export's own ending, which is the same turn as the last progress
+     tick, and a listener attached afterwards has already missed it. */
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 45_000 }),
+    asked.locator("button", { hasText: label("ui.device_export_go") }).click(),
+  ]);
+  /* And then dismissed, which the app package's helper has no equivalent of.
+     This sheet does not close itself when the file is written: it stays up to
+     say where the file goes next, because the page that puts it on a talker is
+     a second address nobody would guess. A modal <dialog> makes the page under
+     it inert, so a caller that went straight on to the board would be clicking
+     into a scrim - which is what it looks like from the outside, and reads
+     like the export having hung. */
+  await asked.locator("button", { hasText: label("ui.close") }).click();
+  await expect(asked).toBeHidden();
+  return download;
 }
 
 /** The Sammlung's own sheet, from that menu. */

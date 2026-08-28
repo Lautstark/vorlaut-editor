@@ -6,7 +6,9 @@ import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { checkPackage } from "../src/data/app_package.js";
 import { readPackage, unzip } from "./obz.js";
 import { KEY_CELL, cells, key, keySheet, nameSet, press, put } from "./diy.js";
-import { openPanel, openSettings, openVoices, pickExport } from "./sheets.js";
+import {
+  exportForTalker, openPanel, openSettings, openVoices, pickExport,
+} from "./sheets.js";
 
 /* The app package, made by the real page and read back off disk.
  *
@@ -268,22 +270,32 @@ test("the two exports are two different files, not one behind a flag",
     await standIn(page);
     await fill(page);
 
-    // exchange/SPEC.md §5.2: the talker's export writes symbols as references
-    // and never as pixels, and that guarantee is structural rather than an
-    // argument. Both are cards of one entry now, and what comes out of them is
-    // different in exactly that way - which is the point of asserting it here
-    // rather than trusting that one menu means one writer.
-    const [plain] = await Promise.all([
-      page.waitForEvent("download"),
-      pickExport(page, "other"),
-    ]);
+    /* exchange/SPEC.md §5.2: an app package that bakes pixels must be "a
+       different function, not the same one behind a flag" from the talker's
+       export. Both are cards of one entry now, and the point of asserting it
+       here rather than trusting that one menu means one writer is that a flag
+       is exactly what a menu makes tempting.
+
+       What is compared is the recordings. Both files carry pictures, so
+       pictures cannot tell them apart; the sounds can, and not by taste - a
+       five-key device plays 16 kHz PCM WAV and nothing else, and the Android
+       viewer is handed Ogg Opus. One writer answering for both would have to
+       decide between them from an argument, which is the shape §5.2 forbids.
+
+       This comparison used to be made against the document export - the card
+       under ui.collection_export_for_other, which wrote symbols as references
+       and no pixels at all. That card was
+       dropped from the sheet, and the guarantee it carried - obf.ts's
+       checkLicensing(), which refuses to write METACOM pixels - is held over
+       data in the unit suite, where a writer the page no longer reaches can
+       still be held. What is asserted here is the separation somebody can
+       press. */
+    const plain = await exportForTalker(page);
+    expect(plain.suggestedFilename()).toMatch(/-device\.obz$/);
     const talker = unzip(new Uint8Array(readFileSync((await plain.path())!)));
-    expect([...talker.keys()].some((name) => name.startsWith("images/"))).toBe(false);
-    const board = JSON.parse(new TextDecoder().decode(talker.get("boards/set-1.obf")!.data));
-    // A reference into a symbol set, which is what the viewer must never have
-    // to resolve and what the talker's export must never bake.
-    expect(board.images[0].symbol).toBeTruthy();
-    expect(board.images[0].path).toBeUndefined();
+    const played = [...talker.keys()].filter((name) => name.startsWith("sounds/"));
+    expect(played).not.toHaveLength(0);
+    expect(played.every((name) => name.endsWith(".wav"))).toBe(true);
 
     await pickExport(page, "app");
     const asked = sheet(page, "ui.package_title");
@@ -294,7 +306,11 @@ test("the two exports are two different files, not one behind a flag",
       page.waitForEvent("download"),
       save.click(),
     ]);
+    expect(app.suggestedFilename()).toMatch(/-app\.zip$/);
     const packaged = unzip(new Uint8Array(readFileSync((await app.path())!)));
+    const heard = [...packaged.keys()].filter((name) => name.startsWith("sounds/"));
+    expect(heard).not.toHaveLength(0);
+    expect(heard.every((name) => name.endsWith(".opus"))).toBe(true);
     expect([...packaged.keys()].filter((name) => name.startsWith("images/"))).toHaveLength(1);
     const page1 = JSON.parse(new TextDecoder().decode(packaged.get("boards/set-1.obf")!.data));
     expect(page1.images[0].path).toMatch(/^images\//);

@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { GRID, LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { expectSaid, put, within } from "./diy.js";
-import { openCollectionSettings, openPanel, pickExport, pickFromMenu } from "./sheets.js";
+import {
+  exportForTalker, openCollectionSettings, openPanel, pickFromMenu,
+} from "./sheets.js";
 
 /* Several Sammlungen in one browser: making them, switching, copying, deleting.
  *
@@ -321,17 +323,21 @@ test("the ⋯ holds this Sammlung's acts, then its settings, then the delete",
  * what the file was for, over three equal cards - a question every Sammlung
  * had already answered when it was made, so somebody with a five-key Sammlung
  * was asked every time whether the file was for a tablet. What is asserted is
- * that
- * the talker's export is the one card standing on its own, and that the other
- * two are behind a fold that starts closed: reachable, and not in the way.
+ * that the talker's export is the one card standing on its own, and that what
+ * is left is behind a fold that starts closed: reachable, and not in the way.
+ *
+ * There is one card in that fold now rather than two. The document export -
+ * ui.collection_export_for_other, obf.ts's file of references for other AAC
+ * software - was dropped from the sheet, and the count in the fold is asserted
+ * rather than only the name, because a card coming back is exactly the kind of
+ * change nobody would notice in a check that looked for one card and stopped.
  *
  * The dismissal is the half that must not change. A dialog that has already
  * done something by the time somebody declines it is the defect this product
  * got wrong twice in one day, and the fix is never to take the dialog away -
  * so what is asserted is that the ✕ leaves no file, no sheet and nothing in
- * the status line. What the three cards actually write is asserted where the
- * bytes are: app_package.spec.ts opens two of them and compares what comes
- * out.
+ * the status line. What the cards actually write is asserted where the bytes
+ * are: app_package.spec.ts opens both of them and compares what comes out.
  */
 test("the export entry leads with the talker, and takes no for an answer",
   async ({ page }) => {
@@ -353,23 +359,23 @@ test("the export entry leads with the talker, and takes no for an answer",
       label("ui.collection_export_for_talker_note"),
     ]);
 
-    // The other two, still here and still both of them, but folded - and the
-    // fold is shut until somebody opens it, or leading with an answer would
-    // only have added a heading above the same three cards.
+    /* The app package, alone in the fold and still folded. The document
+       export was the second card in here and was dropped; what is asserted is
+       the count as well as the name, because a fold that quietly grew a second
+       card back would still pass a check that only looked for this one. */
     expect(await fold.getAttribute("open")).toBeNull();
     await fold.locator("summary").click();
     await expect(fold.locator("button.choice strong")).toHaveText([
       label("ui.collection_export_for_app"),
-      label("ui.collection_export_for_other"),
     ]);
     await expect(fold.locator("button.choice span")).toHaveText([
       label("ui.collection_export_for_app_note"),
-      label("ui.collection_export_for_other_note"),
     ]);
 
     // Nothing has been written and nothing said: the presses are the cards,
     // and opening the fold is not one of them.
-    await expect(page.locator("#status")).not.toContainText(within("ui.collection_exported"));
+    await expect(page.locator("#status"))
+      .not.toContainText(within("ui.collection_exported_device"));
 
     let downloaded = false;
     page.on("download", () => { downloaded = true; });
@@ -398,11 +404,15 @@ test("the export entry leads with the talker, and takes no for an answer",
  * the seam between them is an import in collections.ts that nothing else would
  * notice going back.
  *
- * The single board is the cheapest of the three doors and they share one
- * fileStem(), which is deliberate: exchange/SPEC.md 5.2 keeps the three
- * writers apart, and what the file is called is not one of the things they are
- * allowed to differ about. The package's own `-app.zip` is held in
- * e2e/editor_app.spec.ts, on the extension rather than the stem.
+ * The talker's export, because it is the one this Sammlung is for and because
+ * a Sammlung with nothing typed into it has no sentence to speak - so the file
+ * arrives without a voice, a network or a wait. It used to be the document
+ * export, which was cheaper still and is no longer a door.
+ *
+ * The doors share one fileStem(), which is deliberate: exchange/SPEC.md 5.2
+ * keeps the writers apart, and what the file is called is not one of the
+ * things they are allowed to differ about. The package's own `-app.zip` is
+ * held in e2e/editor_app.spec.ts, on the extension rather than the stem.
  */
 test("the exported file spells the Sammlung's name out rather than punching holes in it",
   async ({ page }) => {
@@ -414,14 +424,12 @@ test("the exported file spells the Sammlung's name out rather than punching hole
     // below has something to be named after.
     await expect(row(page, "MetaTalkDE 3x5 (häufige Wörter)")).toHaveCount(1);
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      pickExport(page, "other"),
-    ]);
+    const download = await exportForTalker(page);
     // The trailing `_` is the closing bracket, and it was there before: what
     // was wrong was the two words with holes in them, not every wart in the
     // name.
-    expect(download.suggestedFilename()).toBe("MetaTalkDE_3x5_haeufige_Woerter_.obz");
+    expect(download.suggestedFilename())
+      .toBe("MetaTalkDE_3x5_haeufige_Woerter_-device.obz");
   });
 
 /* One scrolling area in the settings sheet, and only one.
