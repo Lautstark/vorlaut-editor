@@ -67,6 +67,25 @@
  * the same refused permission until it is taken back in the browser, and a
  * button that silently does nothing is worse than no button.
  *
+ * **The refusal has never been seen outside a fixture, and that is worth
+ * knowing rather than assuming.** On 2026-08-28 this path was run end to end
+ * for the first time - a real editor on a laptop, the real app on a tablet, a
+ * package arriving over the wifi - and the happy path worked, the remembered
+ * address worked, `already_current` read as the success it is. None of that
+ * touched the two sentences below. Chrome 151 as it ships answers `granted`
+ * silently, so nothing was asked and nothing was refused: `ui.send_blocked`
+ * has been drawn by e2e/send.spec.ts and by nothing else. A live 422 and a
+ * live 413 are unseen for the same reason - the tablet accepted what it was
+ * sent.
+ *
+ * So the half of this design that had the most care spent on it is the half
+ * with the least evidence behind it. Exercising it deliberately costs one
+ * session: run Chrome with `--enable-features=LocalNetworkAccessChecks` and
+ * refuse the prompt, and the sentence, the standing address and the Speichern
+ * foot are all right there to be looked at. Until somebody has, "it shipped"
+ * is not "it was seen working", and this comment is here so that the two do
+ * not get quietly conflated by whoever reads this next.
+ *
  * That is also the rule for which failures offer another send at all. Exactly
  * one does - nothing at that number - and it is not a guess that a retry might
  * work: the four boxes are still there and still editable, so "send again" is

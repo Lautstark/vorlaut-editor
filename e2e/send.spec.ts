@@ -241,6 +241,17 @@ test("a dot moves on, and a whole address pasted at once fills all four",
     await page.keyboard.type("10.0.1.7");
     expect(await typed(send)).toEqual(["10", "0", "1", "7"]);
 
+    /* A zero, a dot, and the last box - reported from the first run against a
+     * real tablet as not advancing, on the address that run actually used.
+     * It advances here, and the events are the browser's own rather than
+     * dispatched ones, which is the difference between this and the way that
+     * report was typed. Kept as the case it was, so that if real fingers ever
+     * do reproduce it, this is the test that was wrong rather than a gap. */
+    for (const box of await boxes(send).all()) await box.fill("");
+    await boxes(send).first().click();
+    await page.keyboard.type("192.168.0.36");
+    expect(await typed(send)).toEqual(["192", "168", "0", "36"]);
+
     /* And the way most of them really arrive. Four numbers with dots between
      * them go in as four numbers - a paste that landed whole in one box would
      * be a box holding "1000107" after the digit filter had had it. */
