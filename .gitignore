@@ -60,3 +60,7 @@ node_modules/.tmp/
 # tsc -b leaves this at the root for the solution file itself.
 tsconfig.tsbuildinfo
 shots/
+
+# macOS writes these into every directory it is shown; four of the five
+# sibling repositories already ignore them.
+.DS_Store
