@@ -62,6 +62,11 @@ export function sentence(status: Status): string {
       return t("ui.folder_permission", { folder: status.folder, age: lastCopy(status.lastWrite) });
     case "failed":
       return t("ui.folder_failed", { reason: status.reason, age: lastCopy(status.lastWrite) });
+    // Not "something went wrong": nothing did. The copy in the folder is still
+    // whole, and the only question is whether this browser being empty is the
+    // truth. Leads with the reassurance for that reason.
+    case "held":
+      return t("ui.folder_held", { folder: status.folder, age: lastCopy(status.lastWrite) });
   }
 }
 
