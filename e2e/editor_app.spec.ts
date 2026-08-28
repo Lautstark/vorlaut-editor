@@ -1016,11 +1016,18 @@ test("a move stops at the edge of the grid rather than walking off it",
     // "ich" is in the top left. Up and left have nowhere to go, and Alt+Left
     // is history-back in some engines - so both are claimed and neither moves
     // anything.
+    //
+    // The URL is compared against itself rather than against a base path. It
+    // used to look for "vorlaut-editor" in it, which stopped being true when
+    // the page moved to editor.lautstark.tech and served from the root; the
+    // question the line is actually asking is whether the browser navigated,
+    // and an unchanged URL answers that whatever the site is served under.
+    const before = page.url();
     await hit(page, 0).focus();
     await page.keyboard.press("Alt+ArrowUp");
     await page.keyboard.press("Alt+ArrowLeft");
     await expect(cells(page).nth(0).locator(".cell__word")).toHaveText("ich");
-    expect(page.url()).toContain("vorlaut-editor");
+    expect(page.url()).toBe(before);
   });
 
 test("a talker Sammlung and a tablet Sammlung swap cleanly", async ({ page }) => {
