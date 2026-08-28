@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { checkPackage } from "../src/data/app_package.js";
 import { readPackage } from "./obz.js";
-import { openCollectionSettings, openPanel, openSettings, openVoices }
+import { openCollectionSettings, openPanel, openSettings, openVoices, savePackage }
   from "./sheets.js";
 
 /* A tablet Sammlung, built through the page and exported.
@@ -456,10 +456,7 @@ test("a tablet Sammlung leaves as a package, and it passes the spec's own checks
     await exportPackage(page);
     const asked = sheet(page, "ui.package_title");
     await expect(asked).toBeVisible();
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      asked.locator("button", { hasText: label("ui.package_go") }).click(),
-    ]);
+    const download = await savePackage(asked);
 
     const path = await download.path();
     expect(path).toBeTruthy();
@@ -500,10 +497,7 @@ test("what a press does survives the round trip through the archive",
 
     await exportPackage(page);
     const asked = sheet(page, "ui.package_title");
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      asked.locator("button", { hasText: label("ui.package_go") }).click(),
-    ]);
+    const download = await savePackage(asked);
     const { pkg } = readPackage(new Uint8Array(readFileSync((await download.path())!)));
 
     const start = pkg.boards.find((one) => one.id === "board-1")!;
@@ -627,10 +621,7 @@ test("a button puts its word in the sentence and leads onward in one press",
 
     await exportPackage(page);
     const asked = sheet(page, "ui.package_title");
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      asked.locator("button", { hasText: label("ui.package_go") }).click(),
-    ]);
+    const download = await savePackage(asked);
     const { pkg } = readPackage(new Uint8Array(readFileSync((await download.path())!)));
     expect(checkPackage(pkg)).toEqual([]);
 
@@ -1661,10 +1652,7 @@ test("a crossed-out picture is its own picture in the package", async ({ page })
   await exportPackage(page);
   const asked = sheet(page, "ui.package_title");
   await expect(asked).toBeVisible();
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    asked.locator("button", { hasText: label("ui.package_go") }).click(),
-  ]);
+  const download = await savePackage(asked);
   const { pkg, members } = readPackage(
     new Uint8Array(readFileSync((await download.path())!)));
 
@@ -1820,10 +1808,7 @@ test("a Sammlung nobody has touched exports as the board it was handed",
     await exportPackage(page);
     const sending = sheet(page, "ui.package_title");
     await expect(sending).toBeVisible();
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      sending.locator("button", { hasText: label("ui.package_go") }).click(),
-    ]);
+    const download = await savePackage(sending);
     const { pkg } = readPackage(
       new Uint8Array(readFileSync((await download.path())!)));
 

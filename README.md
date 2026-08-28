@@ -1,8 +1,9 @@
 # vorlaut-editor
 
 The board editor for the Lautstark AAC tools. It runs in a browser tab, holds
-your collections, finds symbols, speaks sentences, and writes files — and it
-stops there. Nothing here touches a device.
+your collections, finds symbols, speaks sentences, and writes files. It touches
+no device over a cable: the talker's file is compiled and sent by a page in
+another repository, and that boundary is [ADR 0011](https://github.com/Lautstark/vorlaut-diy-talker/blob/main/adr/0011-editor-exports-the-talker-repository-sends.md)'s.
 
 Three kinds of file leave it:
 
@@ -11,6 +12,18 @@ Three kinds of file leave it:
 | **for the talker** | a device-shaped `.obz` — the sources unresampled, negation as a flag, the device's own WAVs. A page in [`Lautstark/vorlaut-diy-talker`](https://github.com/Lautstark/vorlaut-diy-talker) compiles it and sends it down the cable. |
 | **for the tablet** | an app package — PNGs and Opus baked in — that [`Lautstark/vorlaut-app`](https://github.com/Lautstark/vorlaut-app) reads. [`exchange/SPEC.md`](exchange/SPEC.md) is the format. |
 | **for other AAC software** | a plain `.obz`: symbols by reference, no pixels. |
+
+**One of the three has a second way out.** A finished app package can be
+posted straight to a tablet on the same wifi rather than saved — `POST /paket`
+to an address somebody reads off the tablet and types into four boxes, which is
+`src/shell/tabletSend.ts`. It is the only request this page makes to anything
+on your own network; everything else it fetches is a public service it was
+asked for, ARASAAC or a voice. And no other export can reach that door: the
+talker's file and the plain `.obz` have no tablet to go to, and
+`tests/unit/layers.test.ts` is what keeps it that way rather than a comment
+asking nicely. The sentence that used to stand at the top said this page
+touched nothing at all; it stopped being true the day the send landed, and
+saying so here is cheaper than letting somebody find out.
 
 > **Work in progress.** No board has run any of this yet.
 

@@ -15,6 +15,7 @@ import type { Layout, Settings } from "../../src/core/types.js";
  *
  *   the Azure key           a paid credential, handed to whoever has the folder
  *   the METACOM folder path derived from a collection licensed per person
+ *   the tablet's address    a fact about one house's wiring, right nowhere else
  *
  * A failure in this file is a leak or a licence, not a bug to triage. */
 
@@ -40,6 +41,13 @@ const board = (): Layout => ({
 
 const LICENSED = "/Users/someone/Documents/METACOM 9/PNG_ohne_Rahmen";
 
+/** The tablet an app package was last sent to. Not a credential, and it is in
+ *  this file for a different reason from the two above: a restore on another
+ *  machine - or in another home - would fill the four boxes with a number that
+ *  is right nowhere, and the one failure the send path is built to keep
+ *  distinguishable is a wrong number. */
+const TABLET = "192.168.178.42";
+
 async function seed(): Promise<void> {
   await store.writeLayout(board(), null);
   await store.putFile("symbols", "arasaac-2483.png", new Uint8Array([137, 80, 78, 71]).buffer);
@@ -50,6 +58,7 @@ async function seed(): Promise<void> {
     metacom: { path: LICENSED, ok: true, count: 1284, keywords: false, fixed: false },
     activeProvider: "metacom",
     metacomRendering: "PNG_ohne_Rahmen",
+    tabletAddress: TABLET,
     local: true,
   } as unknown as Settings);
 }
@@ -115,6 +124,14 @@ describe("what the standing backup is handed", () => {
       elevenLabsToken: "tok-999",
     };
     expect(stripSecrets(future as never)).toEqual({ activeProvider: "arasaac" });
+  });
+
+  it("carries no address of anybody's tablet", async () => {
+    await seed();
+    const json = JSON.stringify(await exportEverything(NOTICE));
+
+    expect(json).not.toContain(TABLET);
+    expect(json).not.toContain("tabletAddress");
   });
 
   it("does carry the references the board itself uses", async () => {

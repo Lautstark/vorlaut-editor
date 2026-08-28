@@ -456,6 +456,23 @@ export interface Settings {
    *  preference living in two stores gets restored by one and overwritten by
    *  the other. conventions.md §1.3. Absent counts as open. */
   sidebarOpen?: boolean;
+  /** The tablet an app package was last sent to, as `a.b.c.d`, or absent
+   *  because none ever has been.
+   *
+   *  **It is one of the things a Sicherung must not carry**, and it sits in
+   *  this object with the Azure key and the METACOM path for exactly that
+   *  reason. data/backup.ts's stripSecrets() is an allow-list, so it is
+   *  dropped by construction rather than by anybody remembering; what makes it
+   *  belong in that company is not that it is a secret but that it is a fact
+   *  about one house's wiring. A file restored on another machine, or in
+   *  another home, would fill the four boxes with a number that is right
+   *  nowhere - and the one failure this whole path is built to keep
+   *  distinguishable is a wrong number.
+   *
+   *  Four numbers rather than a URL: a scheme, a port and a path are the
+   *  product's to know, and the person copies a number off a screen. See
+   *  shell/tabletSend.ts, which is the only thing that reads or writes it. */
+  tabletAddress?: string;
   local?: boolean;
 }
 
@@ -477,6 +494,10 @@ export interface WantedSettings {
   metacomRendering?: string | null;
   activeProvider?: "arasaac" | "metacom";
   sidebarOpen?: boolean;
+  /** Absent leaves the remembered one alone, like every field above it. Only
+   *  ever written after a package has actually arrived somewhere: an address
+   *  that answered nothing is the one thing worth not remembering. */
+  tabletAddress?: string;
 }
 
 /** A voice as the picker shows it.
