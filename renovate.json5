@@ -1,16 +1,17 @@
 // Renovate, for this repository.
 //
-// Everything general lives in .github/renovate-shared.json5, which is written
-// to be copied into Lautstark/.github unchanged; that file's header says how.
-// What is left here is the part that is true of this repository and of no
-// other, and that is the whole point of the split.
+// Everything general lives in Lautstark/.github, which is where the preset
+// moved on 2026-08-28; it was written here to be lifted without an edit, and
+// it was. What is left below is the part that is true of this repository and
+// of no other, and that is the whole point of the split.
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
 
   // The .json5 is spelled out on purpose: the //path/to/file syntax implies
   // a .json extension, so omitting it looks for a file that is not there
-  // and Renovate stops before it does anything.
-  extends: ["local>Lautstark/vorlaut-editor//.github/renovate-shared.json5"],
+  // and Renovate stops before it does anything. The shorter "owner/repo:name"
+  // form implies it too, so it cannot be used for this file either.
+  extends: ["github>Lautstark/.github//renovate-shared.json5"],
 
   packageRules: [
     // -----------------------------------------------------------------------
@@ -44,9 +45,11 @@
     // and names the pins that are behind. It warns and never fails.
     //
     // This rule is also the clearest thing that must NOT move into the shared
-    // preset. It is about four specific packages and one specific contract,
-    // and a repository that inherited it would be silently opting out of
-    // updates to dependencies it does not have.
+    // preset, and it did not: Lautstark/.github holds the schedule, the
+    // grouping and the automerge policy, and names no package anywhere. This
+    // is about four specific packages and one specific contract, and a
+    // repository that inherited it would be silently opting out of updates to
+    // dependencies it does not have.
     {
       matchPackageNames: ["@lautstark/**"],
       enabled: false,
