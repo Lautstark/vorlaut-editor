@@ -15,7 +15,7 @@ import { defineConfig, devices } from "@playwright/test";
  * fetches the phonemizer from a prefix that 404s on the first spoken sentence,
  * which this suite cannot see because it stands that chunk in.
  */
-const BASE = "/vorlaut-editor/";
+const BASE = "/";
 
 /* The port, overridable, because reuseExistingServer is a trap between two
  * checkouts of this repository.
