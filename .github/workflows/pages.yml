@@ -113,7 +113,7 @@ jobs:
         # BASE do not, and both of those fail silently. A build with no base at
         # all renders an empty body with no error anywhere.
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/
+          BASE_PATH: /
         run: npm run build
 
       - uses: actions/configure-pages@v6
