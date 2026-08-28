@@ -5,7 +5,7 @@ import {
   KEY_CELL, cells, expectSaid, key, keySheet, label, nameSet, openBoard, press, within,
   put, search, searchNote, setCard, setKey, word,
 } from "./diy.js";
-import { openSettings, openVoices, pickExport } from "./sheets.js";
+import { exportForTalker, openSettings, openVoices } from "./sheets.js";
 
 /* The whole editing loop, end to end, in one browser.
  *
@@ -366,12 +366,16 @@ test("a Sammlung leaves as a .obz and comes back beside the others", async ({ pa
   await put(page, 0, "Das bleibt");
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
 
-  // Exporting is in the work head's ⋯, beside the Sammlung it exports, and
-  // the entry asks what the file is for before it writes one.
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    pickExport(page, "other"),
-  ]);
+  /* Exporting is in the work head's ⋯, beside the Sammlung it exports, and
+     the sheet behind it leads with the talker - which is what this Sammlung
+     is for and, since the document export was dropped from that sheet, the
+     door a round trip comes through.
+
+     It writes without speaking, which is why this file may still have it. No
+     voice has been chosen here - that is this spec's whole rule, at the top -
+     so the export has nothing to synthesise and every key travels silent,
+     which is exactly the Sammlung layout.bin's per-slot flag is for. */
+  const download = await exportForTalker(page);
   const file = await download.path();
   expect(file).toBeTruthy();
 

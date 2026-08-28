@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { cells, hits, key, keySheet, press, query, search, searchNote } from "./diy.js";
-import { openCollectionSettings, pickExport } from "./sheets.js";
+import { exportForTalker, openCollectionSettings } from "./sheets.js";
 
 /* Which collection the sheet offers, across a reload.
  *
@@ -365,13 +365,14 @@ test.describe("with the folder already connected at load", () => {
      * the language of the page it is opened on. So the second half below
      * asserts that the field is still naming the collection, in the language
      * the page was already in and stays in. */
-    // Exporting is in the work head's ⋯ now, beside the Sammlung it exports,
-    // and the entry asks what the file is for before it writes one.
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      pickExport(page, "other"),
-    ]);
-    const file = await download.path();
+    /* Exporting is in the work head's ⋯ now, beside the Sammlung it exports,
+       and the sheet behind it leads with the talker. That is the door this
+       goes through since the document export was dropped from that sheet;
+       what is
+       wanted here is a file of this board that the import will take back, and
+       any of them is that. No voice has been chosen in this spec, so nothing
+       is spoken on the way. */
+    const file = await (await exportForTalker(page)).path();
     expect(file).toBeTruthy();
 
     await page.locator("#settingsLink").click();

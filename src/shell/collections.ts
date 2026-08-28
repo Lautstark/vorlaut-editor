@@ -39,12 +39,12 @@ import { renameField, type RenameField } from "@lautstark/design/rename";
 import { drawCollections } from "@lautstark/design/collections";
 import { reason } from "../core/errors.js";
 import {
-  createCollection, deleteCollection, exportBoard,
+  createCollection, deleteCollection,
   layoutOf, listCollections, readSettings, renameCollection, useCollection,
   writeSettings,
 } from "../backend/index.js";
 import { editorFor, editorOf, FIRST_TARGET } from "../core/editor.js";
-import { offer, openDeviceExport, openPackageExport } from "./packageExport.js";
+import { openDeviceExport, openPackageExport } from "./packageExport.js";
 import { openCollectionSettings } from "./voices.js";
 import { homeSymbol, homeSymbolSource, takeHomeSymbol } from "./homekey.js";
 import { state } from "../core/state.js";
@@ -727,23 +727,23 @@ const currentName = (): string => {
 
 /** The name of the Sammlung, as something a file system will take.
  *
- *  One rule for all three exports, which is the only thing this line is for:
- *  the package, the talker's .obz and the single board are three writers by
- *  design (exchange/SPEC.md 5.2), and what they are called is not one of the
- *  things they are allowed to differ about. Somebody who exports the same
- *  Sammlung twice should get two files with one name and two extensions.
+ *  One rule for both exports, which is the only thing this line is for: the
+ *  package and the talker's .obz are separate writers by design
+ *  (exchange/SPEC.md 5.2), and what they are called is not one of the things
+ *  they are allowed to differ about. Somebody who exports the same Sammlung
+ *  twice should get two files with one name and two extensions.
  *
  *  filename.ts rather than the store's safeName(), and the difference is a
  *  Sammlung with an umlaut in it: this one spells the letter out where that
  *  one punched a `_` through it. */
 const fileStem = (): string => downloadSlug(currentName());
 
-/** One card of the export sheet: which of the three it names, and its door.
+/** One card of the export sheet: which of the exports it names, and its door.
  *
  * `which` is the middle of `ui.collection_export_for_*`, and `run` is the
  * function it presses. A door rather than a target, a kind or a flag: what is
- * carried here is already a decision about which of the three writers to call,
- * so there is nothing left for a writer to branch on. That is the shape
+ * carried here is already a decision about which writer to call, so there is
+ * nothing left for a writer to branch on. That is the shape
  * exchange/SPEC.md §5.2 asks for, held one line further out than it asks.
  */
 interface ExportDoor {
@@ -759,20 +759,30 @@ interface ExportDoor {
  * whether the file was for a tablet. `lead` is the answer that was already
  * there; `otherwise` is what is left, and it is left behind a fold.
  *
+ * **The document export is not offered any more, and that is a decision
+ * rather than a fault in it.** The card under ui.collection_export_for_other
+ * wrote data/obf.ts's .obz - the keys and the names of the pictures, for other
+ * AAC software to open - and it sat in the talker's fold from the day the
+ * fold was made. It
+ * was asked for and taken away: a card in a fold is still read past by
+ * everybody who opens the fold for the one beside it, and this was the one
+ * nobody was pressing. The writer stays where it is - backend/local.ts's
+ * exportBoard(), which tools/obfcheck.html drives and
+ * tests/unit/obf_roundtrip.test.ts holds - so what went is a door and not a
+ * format. adr/0005's interoperability story is the argument for reopening it,
+ * and reopening it is one ExportDoor here.
+ *
+ * If it is ever reopened it belongs in the talker's fold and nowhere else,
+ * which was measured rather than reasoned: on an app layout obf.ts's
+ * layoutToDocument() reads `layout.sets || []`, undefined and then empty, and
+ * exportObz() answers 188 bytes of zip holding no boards at all - a file,
+ * downloaded, named after the Sammlung, with none of it inside.
+ *
  * **A tablet Sammlung has nothing to put in the fold, and that is a finding
- * rather than a simplification.** Both of the other two doors were opened on
- * an app layout and watched:
- *
- *   - The talker's export refuses it outright - exportDevicePackage() checks
- *     isDiy() and throws, because there are no sets and so nothing a device
- *     could show.
- *   - The document export does not refuse it, which is worse. obf.ts's
- *     layoutToDocument() reads `layout.sets || []`, which on an app Sammlung
- *     is undefined and then empty, and exportObz() answers 188 bytes of zip
- *     holding no boards at all. A file, downloaded, named after the Sammlung,
- *     with none of it inside.
- *
- * Neither is demoted, because neither is an option: an entry that writes a
+ * rather than a simplification.** The talker's export was opened on an app
+ * layout and watched: exportDevicePackage() refuses it outright - it checks
+ * isDiy() and throws, because there are no sets and so nothing a device could
+ * show. It is not demoted, because it is not an option: an entry that writes a
  * useless file is worse than no entry, which is exchange/SPEC.md §7.4's
  * argument about a control that looks live and does the wrong thing. So `lead`
  * stands alone and chooseExport() does not ask a question with one answer.
@@ -781,23 +791,22 @@ interface ExportDoor {
  * Sammlung exports as an app package: buildAppPackage() branches on
  * layout.target and diyBoards() is a written half of it, one board per set -
  * that is the path vorlaut-app's BuilderPackageTest opens. It is demoted, not
- * dropped. So is the document export, which is obf.ts's own shape.
+ * dropped, and it is the whole of the fold now.
  *
- * All three functions are still three, and this decides only which of them are
- * offered. Nothing here is passed to one.
+ * The writers are still three functions, and this decides only which of them
+ * are offered. Nothing here is passed to one.
  */
 function exportsFor(layout: Layout): { lead: ExportDoor; otherwise: ExportDoor[] } {
   const talker: ExportDoor = { which: "talker", run: () => { void exportDevice(); } };
   const app: ExportDoor = { which: "app", run: () => { void exportApp(); } };
-  const other: ExportDoor = { which: "other", run: () => { void exportOne(); } };
   return isApp(layout)
     ? { lead: app, otherwise: [] }
-    : { lead: talker, otherwise: [app, other] };
+    : { lead: talker, otherwise: [app] };
 }
 
-/** The one entry, the three doors behind it, and the one this Sammlung is for.
+/** The one entry, the doors behind it, and the one this Sammlung is for.
  *
- * **One button, three functions, and keeping those two facts apart is the
+ * **One button, two doors, three writers, and keeping those facts apart is the
  * whole of this.** What a person presses is one act - export this Sammlung -
  * which is what adr/0011 meant by "one action ... whatever kind of board it
  * is", and it says in the same breath that the writers stay three. They share
@@ -807,7 +816,7 @@ function exportsFor(layout: Layout): { lead: ExportDoor; otherwise: ExportDoor[]
  * site away from being untrue.
  *
  * So the choice is spent here and never travels. Each card names one of the
- * three functions below literally, and each of those names one door; nothing
+ * functions below literally, and each of those names one door; nothing
  * carries a kind, a flag or a target past this line for a writer to branch on.
  * A dispatch that decided *inside* an export which package to write is the
  * thing §5.2 forbids by name, and there is no such value to pass.
@@ -823,11 +832,11 @@ function exportsFor(layout: Layout): { lead: ExportDoor; otherwise: ExportDoor[]
  *
  * A card fires rather than selects, which is where this differs from
  * askTarget(): that dialog has a second question inside it and this one has
- * none. Nothing is written on the press either - the two exports that cost
- * minutes open the sheet that names the Sammlung and asks again, and the
- * document export is a file that is already there to write.
+ * none. Nothing is written on the press either - both exports cost minutes,
+ * and each opens the sheet that names the Sammlung and asks again before
+ * anything is synthesised.
  *
- * **Dismissed, it does nothing at all** - not even the save each of the three
+ * **Dismissed, it does nothing at all** - not even the save each export
  * begins with, because the save is inside them rather than in front of them. A
  * cancelled dialog costs nothing, and the answer to one that costs something
  * is never to take the dialog away.
@@ -895,25 +904,6 @@ function chooseExport(): void {
   // The gap between the cards, which components.css does not reach: its sheet
   // body spaces `p + p`, and these are buttons. ui.css carries the rest.
   sheet.dialog.classList.add("sheet--choices");
-}
-
-/** The Sammlung as a document other AAC software opens: symbols by reference.
- *
- *  The talker's, and only the talker's: obf.ts writes sets, the ring and the
- *  hole where the speaker is. exportsFor() has what a tablet Sammlung gets
- *  instead of this card, and what was watched to decide it - an empty archive,
- *  offered as a download, with none of the Sammlung inside. On a talker it is
- *  under the fold, which is where the rare thing belongs and not where a
- *  dropped one would be. */
-async function exportOne(): Promise<void> {
-  if (held.collections.findIndex((one) => one.id === held.current) < 0) return;
-  try {
-    await saveNow();
-    offer(await exportBoard(), `${fileStem()}.obz`);
-    status(t("ui.collection_exported"));
-  } catch (error) {
-    status(t("ui.collection_failed", { error: reason(error) }));
-  }
 }
 
 /** The Sammlung as the talker's own .obz: the sources, the negation flags and
