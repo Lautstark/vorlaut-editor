@@ -22,7 +22,7 @@
     /* Off for the same reason tsconfig.app.json has them off, and they move
        when that file's do - see the note there, and the measurement in it. */
     "noImplicitAny": false,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,

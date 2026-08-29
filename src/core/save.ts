@@ -12,8 +12,8 @@ import { paintCollectionLanguage } from "../shell/voices.js";
 import { editorFor, FIRST_TARGET, showEditorFor } from "./editor.js";
 import type { Layout } from "./types.js";
 
-let saveTimer = null;
-let layoutVersion = null;   // the state this page loaded
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let layoutVersion: string | null = null;   // the state this page loaded
 // What the page holds and the store does not. Set by every caller that has
 // something to write (see save()), put down again by the write that lands it,
 // and read by two: the prompt on the way out of the window, and saveNow(),
@@ -208,7 +208,7 @@ async function doSave() {
       status(t("ui.not_saved"));
       return;
     }
-    layoutVersion = result.version;
+    layoutVersion = result.version ?? null;
     // Do NOT replace state.layout with the answer here. The input fields hang
     // off exactly these objects; a fresh graph from the server would leave
     // their handlers pointing at nothing, and everything typed afterwards
@@ -216,8 +216,10 @@ async function doSave() {
     const saved = result.saved;
 
     // Verify instead of trust: does the file really hold what is on screen?
-    // If not, better to say so loudly than to lose it quietly.
-    if (comparable(saved) !== comparable(state.layout)) {
+    // If not, better to say so loudly than to lose it quietly. A write that
+    // came back without a layout at all takes the same branch, and for the
+    // same reason: it has certainly not saved what is on screen.
+    if (!saved || comparable(saved) !== comparable(state.layout)) {
       $("conflictText").textContent =
         t("ui.conflict_mismatch");
       $("conflict").classList.add("show");

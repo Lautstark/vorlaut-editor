@@ -142,15 +142,22 @@ export const layoutOf = store.readLayoutOf;
  * would have had to hold a `sets` array to say it. core/editor.ts's blank() is
  * where it comes from now, and core/save.ts passes it in.
  */
-export async function loadLayout(seed: Layout) {
+/* Always a layout, which the two returns below make true and the annotation
+   says. `held` is only handed back when it has one, and the seeding write
+   cannot conflict - writeLayout only conflicts against a truthy `expected` and
+   this passes null - so `seeded.saved` is there. Without the annotation the
+   inferred union carries `Layout | null | undefined` out to save.ts, where
+   every use of it then has to re-ask a question this function already
+   answered. */
+export async function loadLayout(seed: Layout): Promise<{ layout: Layout; version: string | null }> {
   const held = await store.readLayout();
-  if (held.layout) return held;
+  if (held.layout) return { layout: held.layout, version: held.version };
   // Written rather than only returned, so that the stamp the page carries is
   // one the store agrees with. Handing back a layout that is not in there
   // would make the first save look like somebody else's write. The write also
   // mints the board this page has been editing all along without a name for.
   const seeded = await store.writeLayout(seed, null);
-  return { layout: seeded.saved, version: seeded.version };
+  return { layout: seeded.saved as Layout, version: seeded.version ?? null };
 }
 
 export async function saveLayout(layout, version) {
@@ -267,8 +274,26 @@ export async function symbolInto(image, reference) {
   const canvas = document.createElement("canvas");
   canvas.width = source.naturalWidth || source.width;
   canvas.height = source.naturalHeight || source.height;
-  canvas.getContext("2d").drawImage(source, 0, 0);
+
+  /* Both of these can fail, and both fail the same way as a missing source: a
+     browser that will not give a 2d context, or an encode that comes back with
+     nothing, leaves the caller with an <img> that has to say so. Silently
+     leaving the previous picture in place would be worse than the broken-image
+     the error event draws, because the previous picture is somebody else's
+     symbol. */
+  const context = canvas.getContext("2d");
+  if (!context) {
+    image.removeAttribute("src");
+    image.dispatchEvent(new Event("error"));
+    return;
+  }
+  context.drawImage(source, 0, 0);
   canvas.toBlob((blob) => {
+    if (!blob) {
+      image.removeAttribute("src");
+      image.dispatchEvent(new Event("error"));
+      return;
+    }
     const url = URL.createObjectURL(blob);
     image.dataset.blobUrl = url;
     image.src = url;

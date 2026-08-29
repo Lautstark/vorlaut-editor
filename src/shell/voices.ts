@@ -17,6 +17,7 @@
 // is here - so the module that fetches it is the one that opens them. The
 // Azure and METACOM panels inside Einstellungen are settings.js, which this
 // calls into.
+import type { VoiceList } from "../core/types.js";
 import { $, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
 import { reason } from "../core/errors.js";
@@ -34,7 +35,13 @@ import { editor } from "../core/editor.js";
 import { speak } from "./speech.js";
 import { forgetKey, loadSettings, paintStates, saveSettings } from "./settings.js";
 
-let voices = { voices: [], active: "", chosen: "", chosenLabel: "" };
+/* Annotated because the empty list has no element type to infer, and every
+   read of a voice below then asks for a property on `never`. This is what
+   listVoices() answers with; the literal is only what stands in until it
+   has. */
+let voices: VoiceList = {
+  voices: [], active: "", chosen: "", chosenLabel: "", backend: "",
+};
 // Nothing is "pending" on this sheet any more. What is ticked IS what stands
 // in layout.json, because choosing writes - so voices.chosen is the single
 // answer to "which voice", and the gap that used to be held open between

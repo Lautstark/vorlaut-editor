@@ -9,25 +9,33 @@
     "strict": true,
     /* The port from JavaScript was a rename, not a rewrite: the modules came
        across unchanged so that the frozen references still measure the same
-       code. Two strictness flags are what that costs, rather than the whole of
-       `strict`.
+       code. One strictness flag is what that still costs, rather than two.
 
-       This comment used to say that strictNullChecks, "which is where the real
-       bugs are, stays on" — with the line below turning it off. Both halves
-       had been here since the port. The comment is the half that was wrong,
-       and it is worth being exact about which: the intent it describes is
-       right and unmet, not a rule the code is breaking.
+       **strictNullChecks came on 2026-08-29**, and the 64 errors it had been
+       hiding were worth the session. Most were not null-safety at all: an
+       empty `const written = []` infers `never[]` under the flag, so every
+       later read of it asks for a property on `never` - store.ts, voices.ts
+       and eleven places in obf.ts were that, and the repair is to say what the
+       collection holds. A handful were real: `canvas.getContext("2d")` and
+       `canvas.toBlob()` can each answer null and neither was checked, and
+       `input.files` is a FileList *or null* in two places that read [0] off it
+       straight away.
 
-       Measured 2026-08-28, `tsc -p tsconfig.app.json --strictNullChecks`:
-       **64 errors.** That is a session's work and not a sweep — each one is a
-       judgement about whether a value can really arrive null, in code that
-       writes the file a talker is built from — so it wants doing deliberately
-       and in one piece, per CLAUDE.md §3. Note also that noImplicitAny hides
-       some of the same ground: a value that is `any` is not null-checked
-       either, so 64 is a floor. tsconfig.e2e.json turns both off too and has
-       to move with this file. */
+       noImplicitAny is still off, and that is a decision rather than what is
+       left over. Measured the same day: 116 errors on its own, 130 with both -
+       and **70 of the 116 are in data/obf.ts**, the OBF/OBZ reader and writer
+       held against the frozen references. Annotating that file is the highest
+       risk and the lowest reward in the repository, because the locks prove
+       behaviour and a wrong annotation there would be invisible to them.
+
+       What that costs, stated plainly: an `any` is not null-checked either, so
+       the guarantee this flag now gives is real but partial. It is the right
+       half to have done first.
+
+       tsconfig.e2e.json and tsconfig.test.json carry the same pair and moved
+       with this file. */
     "noImplicitAny": false,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
 
     "noUnusedLocals": true,
     "noUnusedParameters": true,

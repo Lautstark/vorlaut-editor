@@ -712,7 +712,13 @@ export interface IncomingCollection {
 export async function replaceCollections(incoming: IncomingCollection[],
                                     current: string | null): Promise<CollectionList> {
   // Hashed before the transaction, like every other write here - see versionOf().
-  const written = [];
+  //
+  // Annotated because an empty array literal has nothing to infer an element
+  // type from, and every read of it below then asks for a property on `never`.
+  // It is the row as both stores want it, split between them further down.
+  const written: {
+    id: string; name: string; text: string; updatedAt: number; version: string;
+  }[] = [];
   for (const one of incoming) {
     const text = serialise(one.layout);
     written.push({ id: one.id || mintId(), name: one.name, text,

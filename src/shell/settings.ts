@@ -410,7 +410,7 @@ export function wireImport() {
   // rare, and it belongs beside the prose that says what the format is.
   $<HTMLButtonElement>("boardImport").onclick = () => $<HTMLInputElement>("boardFile").click();
   $<HTMLInputElement>("boardFile").onchange = async () => {
-    const file = $<HTMLInputElement>("boardFile").files[0];
+    const file = $<HTMLInputElement>("boardFile").files?.[0];
     $<HTMLInputElement>("boardFile").value = "";
     if (!file) return;
     $("boardState").textContent = "";
@@ -472,7 +472,7 @@ export function wireData(backup: Sicherung) {
 
   $<HTMLButtonElement>("dataImport").onclick = () => $<HTMLInputElement>("dataFile").click();
   $<HTMLInputElement>("dataFile").onchange = async () => {
-    const file = $<HTMLInputElement>("dataFile").files[0];
+    const file = $<HTMLInputElement>("dataFile").files?.[0];
     $<HTMLInputElement>("dataFile").value = "";
     if (!file) return;
     $("dataState").textContent = "";

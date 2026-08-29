@@ -48,7 +48,7 @@ import {
   SLEEP_MAX,
   SLEEP_DEFAULT,
 } from "../device/layout_facts.js";
-import type { DiyLayout } from "../core/types.js";
+import type { BoardSet, DiyLayout, Slot } from "../core/types.js";
 
 /* The Open Board Format shapes this reads and writes.
  *
@@ -281,7 +281,9 @@ export function checkLicensing(document) {
  * lost.
  */
 export function order(document) {
-  const seen = [];
+  /* Board ids, in the order a device walks them. Annotated because an empty
+     literal has no element type to infer. */
+  const seen: string[] = [];
   const queue = document.root in document.boards ? [document.root] : [];
   while (queue.length) {
     const current = queue.shift();
@@ -318,8 +320,8 @@ export async function layoutToDocument(
     // The ring: the set key switches to the next set and the last one comes
     // back round to the first, which is what the device does.
     const following = ids[(index + 1) % ids.length];
-    const buttons = [];
-    const images = {};
+    const buttons: ObfButton[] = [];
+    const images: Record<string, unknown> = {};
 
     /** Adds the images[] entry for a symbol and returns its id. */
     const remember = async (symbol) => {
@@ -437,7 +439,7 @@ export function grid(boardId) {
  * import is how a sentence disappears without an error.
  */
 export function gridOrder(board) {
-  const ordered = [];
+  const ordered: string[] = [];
   const cells = (board.grid || {}).order || [];
   for (const row of cells) {
     for (const cell of row || []) {
@@ -466,7 +468,7 @@ export function imagesById(board) {
 /** Which boards this one links to, in button order. */
 function targetsOf(document, boardId) {
   const board = document.boards[boardId] || {};
-  const found = [];
+  const found: string[] = [];
   for (const button of buttonsInOrder(board)) {
     const target = linkTarget(document, button);
     if (target) found.push(target);
@@ -511,14 +513,16 @@ export function linkTarget(document, button) {
  * which is a board with more speech keys than there are keys.
  */
 export function documentToLayout(document) {
-  const sets = [];
+  const sets: BoardSet[] = [];
   const rootBoard = document.boards[document.root] || {};
 
   for (const boardId of order(document)) {
     const board = document.boards[boardId];
     const images = imagesById(board);
-    const slots = [];
-    let switchKey = null;
+    const slots: Slot[] = [];
+    /* The set's own key, which is a symbol rather than an id - see where it
+       is read below. */
+    let switchKey: { symbol: string } | null = null;
 
     for (const button of buttonsInOrder(board)) {
       const symbol = symbolOf(images[text(button.image_id)] || {});
@@ -758,7 +762,7 @@ async function through(bytes, stream) {
   const writer = stream.writable.getWriter();
   const written = writer.write(bytes).then(() => writer.close());
   const reader = stream.readable.getReader();
-  const parts = [];
+  const parts: Uint8Array[] = [];
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
@@ -816,7 +820,7 @@ function sortDeep(value) {
  * the thing a tool rewrites without thinking about what it was carrying.
  */
 export function manifestOf(document) {
-  const paths = {};
+  const paths: Record<string, string> = {};
   for (const boardId of order(document)) paths[boardId] = boardPath(boardId);
   const manifest = { format: FORMAT, root: document.root
     ? boardPath(document.root) : "", paths: { boards: paths } };
@@ -849,8 +853,8 @@ export async function writeObz(document) {
   }
 
   const encoder = new TextEncoder();
-  const pieces = [];
-  const central = [];
+  const pieces: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
   let offset = 0;
   for (const member of members) {
     const name = encoder.encode(member.name);
@@ -989,7 +993,10 @@ export async function readObz(bytes, name = "This file") {
     if (!isObject(manifest)) manifest = {};
   }
 
-  let wanted = ((manifest.paths || {}).boards);
+  /* `?? {}` so this is a map from here on rather than a maybe-map: the
+     isObject() below still guards a manifest whose `boards` is not an object
+     at all, which a hand-edited .obz can carry and the type cannot rule out. */
+  let wanted: Record<string, string> = ((manifest.paths || {}).boards) ?? {};
   if (!isObject(wanted) || !Object.keys(wanted).length) {
     wanted = {};
     for (const member of sorted(names)) {
@@ -997,11 +1004,11 @@ export async function readObz(bytes, name = "This file") {
     }
   }
 
-  const boards = {};
+  const boards: Record<string, unknown> = {};
   // The order the boards went in, kept beside them: an object with a board
   // called "12" in it does not iterate in insertion order, and the first board
   // is what the root falls back to.
-  const inserted = [];
+  const inserted: string[] = [];
   const byMember = new Map();
   for (const key of sorted(Object.keys(wanted))) {
     const member = wanted[key];
