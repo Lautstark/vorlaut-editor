@@ -17,7 +17,7 @@
 import { Sicherung, type Status } from "@lautstark/sicherung";
 import { LANG } from "../core/boot.js";
 import { t } from "../core/texts.js";
-import { actionsFor, ago as relative, needsAttention } from "@lautstark/sicherung/ui";
+import { actionsFor, ago as relative, lineFor, needsAttention } from "@lautstark/sicherung/ui";
 import { $ } from "./dom.js";
 
 /* "vor 3 Minuten" / "3 minutes ago", against the language in force.
@@ -46,27 +46,33 @@ const lastCopy = (at: number | null): string =>
  *  both carry the age: "es funktioniert nicht" is a sentence somebody can put
  *  off, "seit elf Tagen nichts gesichert" is not.
  *
- *  Exported for the test that holds that rule, which is the one thing about
- *  this panel still written out in three products with nothing checking they
- *  agree - @lautstark/sicherung/ui owns the rest, and deliberately not the
- *  words. Nothing outside this file calls it. */
+ *  Which arms exist and which of them carry an age is
+ *  @lautstark/sicherung/ui's `lineFor` as of v1.4.0. It used to be the one
+ *  thing about this panel written out in three products with nothing checking
+ *  they agree; the words are still each product's, deliberately, and an arm
+ *  this switch misses is now a compile error rather than a state the panel
+ *  says nothing in.
+ *
+ *  Exported for the test that holds the age rule. Nothing outside this file
+ *  calls it. */
 export function sentence(status: Status): string {
-  switch (status.kind) {
-    case "unsupported": return "";
+  const line = lineFor(status);
+  switch (line.key) {
+    case "none": return "";
     case "off": return t("ui.folder_off");
     case "saving": return t("ui.folder_saving");
-    case "idle": return status.lastWrite === null
-      ? t("ui.folder_idle_never", { folder: status.folder })
-      : t("ui.folder_idle", { folder: status.folder, age: ago(status.lastWrite) });
+    case "idle-never": return t("ui.folder_idle_never", { folder: line.folder });
+    case "idle":
+      return t("ui.folder_idle", { folder: line.folder, age: ago(line.lastWrite) });
     case "needs-permission":
-      return t("ui.folder_permission", { folder: status.folder, age: lastCopy(status.lastWrite) });
+      return t("ui.folder_permission", { folder: line.folder, age: lastCopy(line.lastWrite) });
     case "failed":
-      return t("ui.folder_failed", { reason: status.reason, age: lastCopy(status.lastWrite) });
+      return t("ui.folder_failed", { reason: line.reason, age: lastCopy(line.lastWrite) });
     // Not "something went wrong": nothing did. The copy in the folder is still
     // whole, and the only question is whether this browser being empty is the
     // truth. Leads with the reassurance for that reason.
     case "held":
-      return t("ui.folder_held", { folder: status.folder, age: lastCopy(status.lastWrite) });
+      return t("ui.folder_held", { folder: line.folder, age: lastCopy(line.lastWrite) });
   }
 }
 
