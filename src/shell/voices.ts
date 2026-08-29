@@ -48,6 +48,12 @@ export const PANELS = [
   "arasaacPanel", "symbolsPanel", "boardPanel", "dataPanel",
 ] as const;
 
+/** The one panel the sheet loads with open - settings_sheet.ts marks it so.
+ *  Reopened after the fold below, because "folded again on every open" means
+ *  back to how the sheet loads and not all-closed: e2e/theme.spec.ts leans on
+ *  Sprache being open to show the accordion working at all. */
+export const OPENS_WITH = "languagePanel";
+
 let voices: VoiceList = {
   voices: [], active: "", chosen: "", chosenLabel: "", backend: "",
 };
@@ -674,6 +680,7 @@ export async function openSettings() {
   // be. A list beside the markup is the smallest thing that cannot drift from
   // it the way five names left out of a line could.
   for (const id of PANELS) $<HTMLDetailsElement>(id).open = false;
+  $<HTMLDetailsElement>(OPENS_WITH).open = true;
   $<HTMLDialogElement>("voices").showModal();
   await Promise.all([loadVoices(), readFetch(), loadSettings()]);
   paintLanguage();

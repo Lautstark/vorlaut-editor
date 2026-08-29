@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PANELS } from "../../src/shell/voices.js";
+import { OPENS_WITH, PANELS } from "../../src/shell/voices.js";
 
 /*
  * The settings sheet folds every panel when it opens, and this is the list it
@@ -38,5 +38,15 @@ describe("the settings sheet's panel list", () => {
 
   it("names each panel once", () => {
     expect(new Set(PANELS).size).toBe(PANELS.length);
+  });
+
+  /* The sheet is reset to how it loads rather than closed outright, so the one
+     panel the markup opens has to be the one the code reopens. The first
+     version of this fix folded everything, which broke the accordion test that
+     leans on Sprache being open. */
+  it("reopens exactly the panel the markup marks open", () => {
+    const open = [...markup.matchAll(/id="(\w+Panel)"[^>]*\bopen\b/g)].map((m) => m[1]);
+    expect(open).toEqual([OPENS_WITH]);
+    expect(PANELS).toContain(OPENS_WITH);
   });
 });
