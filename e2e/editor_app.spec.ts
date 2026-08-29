@@ -28,10 +28,15 @@ import { openCollectionSettings, openPanel, openSettings, openVoices, savePackag
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const label = (key: string) => new RegExp(
-  `^(${LANGUAGES.map((l) =>
-    (TEXTS as Record<string, Record<string, string>>)[l][key]
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`);
+/** The key's words in every language the page ships, escaped and joined into
+ *  one alternation - the table every matcher below is built out of. It was
+ *  written out four times over once entry() grew a case of its own, which is
+ *  three copies too many of the one line that has to keep agreeing. */
+const spelling = (key: string) => LANGUAGES.map((l) =>
+  (TEXTS as Record<string, Record<string, string>>)[l][key]
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+
+const label = (key: string) => new RegExp(`^(${spelling(key)})$`);
 
 const SAVED = label("ui.saved");
 
@@ -42,10 +47,8 @@ const SAVED = label("ui.saved");
  *  wrong for a line holding several labels at once. Read out of TEXTS rather
  *  than written here for the reason label() is: a German word in this file is
  *  a German word in an English file, and tests/test_language.py says so. */
-const says = (key: string, after: string) => new RegExp(
-  `(${LANGUAGES.map((l) =>
-    (TEXTS as Record<string, Record<string, string>>)[l][key]
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})${after}`);
+const says = (key: string, after: string) =>
+  new RegExp(`(${spelling(key)})${after}`);
 
 /** The one open sheet, named by its heading rather than by its whole text.
  *
@@ -200,35 +203,51 @@ const HOME = "ui.app_act_home";
  * menuitemradio rather than button: these are alternatives with one in force,
  * which is what `checked` on every item buys. */
 const entry = (page: Page, key: string) =>
-  page.getByRole("menuitemradio", { name: label(key) });
+  page.getByRole("menuitemradio", { name: new RegExp(`^(${spelling(key)})(\\s*\u2713)?$`) });
 
-/** The same words, unanchored, for the one entry `entry` cannot reach.
+/* Why the tick is written into that pattern rather than the anchors dropped.
  *
- * components.css draws the tick on a checked item as generated content, and
- * generated content joins both the text and the accessible name - so the entry
- * in force reads as its label followed by a check, and an anchored match for
- * the label alone finds nothing. Every entry `entry` is asked for is one that
- * is about to be chosen, which is by definition not that one. */
-const among = (key: string) => new RegExp(
-  LANGUAGES.map((l) =>
-    (TEXTS as Record<string, Record<string, string>>)[l][key]
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"));
+ * components.css draws the tick on a checked item as generated content -
+ * `.menu button[aria-checked="true"]::after { content: "\2713" }` - and
+ * generated content joins both the text and the accessible name, so the entry
+ * in force reads as its label followed by a check.
+ *
+ * This matched the label alone for as long as every answer in this file was
+ * typed in by a test, on the reading that an entry about to be chosen is by
+ * definition not the one already in force. The word class ended that. Its
+ * guess is answered out of a table that is fetched on the first word, so it
+ * lands whenever it lands - including in the moment between pick() reading the
+ * trigger and Playwright looking inside the menu pick() then opened. The entry
+ * grows a tick while the wait for that same entry *without* one is still
+ * running, and nothing after that can end the wait: the name has changed for
+ * good, and a 30s timeout is the only way out. Which is the whole of
+ * e2e/editor_app.spec.ts:1868 failing here and passing on CI - the race is on
+ * CI too, and `retries: 2` there quietly spends a second and third go on it.
+ *
+ * Matching the ticked entry is the honest reading rather than a way round the
+ * race: choosing what is already chosen is a no-op in the control - see
+ * dropdown(), which returns early on it - so the entry in force is a perfectly
+ * good answer to "click the one that says this". The anchors stay because the
+ * labels are not prefix-free: unanchored, "Nomen" also matches "Pronomen,
+ * Person, Name", and those are two entries of the same menu. */
+
+/** The same words, unanchored, for reading an entry that wears its tick -
+ *  where what is being asserted is that this is the one in force, and the
+ *  check is part of what the line says rather than noise to be matched past. */
+const among = (key: string) => new RegExp(spelling(key));
 
 async function pick(page: Page, trigger: string, key: string): Promise<void> {
-  /* Nothing to press where the answer is already the answer.
+  /* Nothing to press where the answer is already the answer - as
+   * `put(page, {label: "ich", wordClass: "pronoun"})` is, once the word class
+   * guesses Pronomen for itself and gets there first.
    *
-   * `entry` reaches an item by its label alone and says why it may: an entry
-   * about to be chosen is by definition not the one in force, and the one in
-   * force wears a tick in its accessible name. That held while every answer in
-   * this file was typed in by a test. It stopped holding when the word class
-   * learned to guess itself - `put(page, {label: "ich", wordClass: "pronoun"})`
-   * now finds Pronomen already chosen, and asks for the one entry `entry`
-   * cannot see.
-   *
-   * Skipping is the honest reading rather than a way round the locator: what
-   * this helper promises its callers is that the answer is in force
-   * afterwards, and choosing what is chosen is a no-op in the control too -
-   * see dropdown(), which returns early on it. */
+   * An optimisation now rather than the thing that makes this work: `entry`
+   * matches the entry in force too, so the open-and-click below would also
+   * come out right. What this saves is opening a menu to change nothing, and
+   * what it does not save anybody from is the race above - the guess can as
+   * easily land after this line as before it, which is exactly when it used to
+   * hang. Either way what this helper promises its callers holds: the answer
+   * is in force when it returns. */
   const now = (await page.locator(trigger).textContent() || "").trim();
   if (label(key).test(now)) return;
   await page.locator(trigger).click();
