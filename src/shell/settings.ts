@@ -23,6 +23,7 @@ import {
 } from "../data/backup.js";
 import { paintBackupFolder, wireBackupFolder } from "./backupFolder.js";
 import type { Sicherung } from "@lautstark/sicherung";
+import { downloadJson } from "@lautstark/werkzeuge/download";
 
 let settings: Settings = { azureKey: { set: false, hint: "" }, azureRegion: "",
                  metacom: { path: "", ok: false, count: 0, keywords: false,
@@ -452,18 +453,9 @@ export function wireData(backup: Sicherung) {
   $<HTMLButtonElement>("dataExport").onclick = async () => {
     $("dataState").textContent = "";
     try {
-      const blob = new Blob([JSON.stringify(await exportEverything(t("ui.data_notice")), null, 2)],
-        { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
       const stamp = new Date().toISOString().slice(0, 10);
-      link.download = `vorlaut-sicherung-${stamp}.json`;
-      link.click();
-      // Revoked later rather than here, for the reason wireBoard records: the
-      // click returns before the browser has opened the URL, and a blob
-      // revoked in that gap is a download that silently never begins.
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      downloadJson(await exportEverything(t("ui.data_notice")),
+                   `vorlaut-sicherung-${stamp}.json`);
       $("dataState").textContent = t("ui.data_exported");
     } catch (error) {
       $("dataState").textContent = t("ui.data_failed", { error: reason(error) });

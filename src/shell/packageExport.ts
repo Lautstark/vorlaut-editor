@@ -45,21 +45,8 @@ import { t } from "../core/texts.js";
 import { exportAppPackage, exportDevicePackage } from "../backend/index.js";
 import type { PackageProgress } from "../backend/local.js";
 import { openTabletSend } from "./tabletSend.js";
-
-/** Hands a finished file to the browser as a download.
- *
- * The revoke is late rather than immediate: the click returns before the
- * browser has opened the URL, and a blob revoked in that gap is a download
- * that silently never begins.
- */
-export function offer(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
+import { download } from "@lautstark/werkzeuge/download";
+import { weighs } from "@lautstark/werkzeuge/bytes";
 
 /** One export, as the sheet needs to know it.
  *
@@ -224,13 +211,6 @@ function openExport(what: Offered): void {
   }
 }
 
-/** How big the file turned out, in the one unit anybody reads it in.
- *
- *  voices.ts weighs a voice model the same way and to the same rounding: this
- *  is a number somebody glances at to see that a package is the size a package
- *  should be, not one they do arithmetic with. */
-const weighs = (bytes: number): string => `${Math.round(bytes / 1e6)} MB`;
-
 /** The Sammlung as the package the Android viewer opens.
  *
  * **Two doors at the end of it, where there used to be none.** The file was
@@ -289,7 +269,7 @@ export function openPackageExport(name: string, stem: string): void {
       gaps.textContent = t("ui.package_gaps", { n: made.missing });
       gaps.hidden = !made.missing;
 
-      const save = () => { offer(made.blob, filename); dismiss(); };
+      const save = () => { download(made.blob, filename); dismiss(); };
 
       const keep = document.createElement("button");
       keep.className = "btn";
@@ -365,7 +345,7 @@ export function openDeviceExport(name: string, stem: string): void {
     // puts is a question because that one has two answers, and there is no
     // tablet at the end of a talker's file for a second door to lead to.
     ending: (made) => {
-      offer(made.blob, `${stem}-device.obz`);
+      download(made.blob, `${stem}-device.obz`);
       const said = document.createElement("p");
       said.textContent = t("ui.device_export_next");
       const link = document.createElement("a");
