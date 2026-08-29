@@ -198,6 +198,8 @@ export function applyTexts() {
   $("dsgHosting").textContent = t("ui.dsg_hosting");
   $("dsgArasaacHead").textContent = t("ui.dsg_arasaac_head");
   $("dsgArasaac").textContent = t("ui.dsg_arasaac");
+  $("dsgShelfHead").textContent = t("ui.dsg_shelf_head");
+  $("dsgShelf").textContent = t("ui.dsg_shelf");
   $("dsgCdnHead").textContent = t("ui.dsg_cdn_head");
   $("dsgCdn").textContent = t("ui.dsg_cdn");
   $("dsgVoicesHead").textContent = t("ui.dsg_voices_head");

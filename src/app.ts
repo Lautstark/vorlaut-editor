@@ -36,6 +36,7 @@
 // found it, twice; that button has gone with the device path, and the rule it
 // taught has not.
 import { reason } from "./core/errors.js";
+import { openNamed } from "./shell/shelf.js";
 import { $, status} from "./shell/dom.js";
 import { t, applyTexts } from "./core/texts.js";
 import { load, wireConflict } from "./core/save.js";
@@ -228,6 +229,13 @@ export function start(): void {
       // Last, so that it is still on the line when the page goes quiet: load()
       // clears the status on its way past, which is right of load().
       .then(sayCarried)
+      /* Last, and after the Sammlungen are drawn: this may add one and open
+       * it, so everything it would otherwise race is already on screen. It
+       * never rejects — see shell/shelf.ts — so the catch below keeps meaning
+       * "the page failed to load". */
+      /* Called, not handed to .then: openNamed takes the address as its first
+       * argument, and .then would pass the previous step's value into it. */
+      .then(() => openNamed())
       .catch((error) => {
         if (offerRescue(error, boot)) return;
         status(t("ui.load_failed", { error: reason(error) }));
