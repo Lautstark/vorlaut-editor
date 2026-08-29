@@ -1914,4 +1914,111 @@ test.describe("with the page in German, which is the language the lexicon is in"
       await showing(page, "#appClass", "ui.wordclass_social");
       await page.keyboard.press("Escape");
     });
+
+  /* And the same rule against the clock, which is the half the test above
+   * cannot reach.
+   *
+   * Above, the guess has always landed by the time anything is pressed. The
+   * answer is fetched, though, so it can just as well land in the middle of
+   * somebody answering the question themselves - and dropdown() builds its
+   * entries when the list is opened, so a write underneath an open list moves
+   * the trigger and leaves the ticks where they were. What that costs is not
+   * the drawing: the press that would put it right is a press on what is by
+   * then already held, and choosing what is chosen calls nobody back, so the
+   * answer somebody gave is not recorded and the next keystroke may guess over
+   * it.
+   *
+   * Held here with the chunk rather than with a wait, so the moment is chosen
+   * rather than hoped for: the tables are one lazy import, and nothing else on
+   * this page asks for a script once it has loaded. */
+  test("a guess that arrives late leaves an open list alone", async ({ page }) => {
+    await standIn(page);
+    await build(page);
+
+    /* A fresh document first. build() has already typed "ich" once, and a
+     * module the browser is holding is not fetched twice - there would be
+     * nothing left to hold back. */
+    await page.reload();
+
+    let typing = false;
+    let release = (): void => {};
+    const held = new Promise<void>((go) => { release = go; });
+    await page.route(/\/assets\/.*\.js$/, async (route) => {
+      // Only what is asked for after the first keystroke, which is the
+      // lexicon and nothing else. Gating the page's own scripts would hang it.
+      if (typing) await held;
+      await route.continue();
+    });
+
+    await hit(page, 7).click();
+    const box = buttonSheet(page);
+    await expect(box).toBeVisible();
+
+    typing = true;
+    await box.locator("#appLabel").fill("ich");
+    // Nothing yet, because the tables are still on the wire.
+    await showing(page, "#appClass", "ui.wordclass_none");
+
+    // Somebody gets there first and opens the question themselves.
+    await page.click("#appClass");
+    const list = page.locator(".menu");
+    await expect(list).toBeVisible();
+    await expect(list.locator('button[aria-checked="true"]'))
+      .toHaveText(among("ui.wordclass_none"));
+
+    /* Closed again with the answer still on the wire.
+     *
+     * This is the ordering that matters and the one nothing here can time by
+     * hand. Released while the list was still open, the assertion below passes
+     * against a guard that only asks whether the list is open at that instant
+     * - and then fails on a loaded machine, where the same answer arrives just
+     * after the Escape. Held until the list is shut, the late arrival is the
+     * case every time rather than sometimes. */
+    await page.keyboard.press("Escape");
+    await expect(list).toBeHidden();
+
+    /* Watched rather than read, because what must not happen would not be
+     * there to see afterwards: the write lands, and the next word overwrites
+     * it a moment later. toHaveText answers on its first look and would call
+     * that clean. So every value the trigger takes from here on is recorded,
+     * and the assertion is made against the whole sequence. */
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      Object.assign(window, { __classSeen: seen });
+      const node = document.querySelector("#appClass");
+      if (!node) throw new Error("no trigger to watch");
+      new MutationObserver(() => seen.push(node.textContent || ""))
+        .observe(node, { childList: true, characterData: true, subtree: true });
+    });
+
+    const arrived = page.waitForResponse((one) => /\/assets\/.*\.js$/.test(one.url()));
+    release();
+    await arrived;
+
+    /* Long enough for the module to run and the answer for "ich" to be handed
+     * back. A plain wait, and it has to be one: what is being asserted is that
+     * nothing happens, and nothing has no event to wait for. It is bounded on
+     * the right side by the response above - the tables are on the machine by
+     * then - and erring long only ever makes this pass, never flake.
+     *
+     * Before the next word, deliberately. Typing again raises `asking`, and a
+     * stale answer is dropped by that alone - which would let this test go on
+     * passing against a guard that had stopped working. */
+    await page.waitForTimeout(600);
+
+    // "ich" was never on the trigger - not for a frame.
+    const seen: string[] = await page.evaluate(
+      () => (window as unknown as { __classSeen: string[] }).__classSeen);
+    expect(seen.filter((one) => among("ui.wordclass_pronoun").test(one))).toEqual([]);
+
+    /* And the field is still nobody's answer, which is the other half of
+     * dropping the guess: opening a list and shutting it again is not an
+     * answer given, so the next word is guessed at exactly as it would have
+     * been. This is also what says the guess above was dropped rather than
+     * broken - the tables answer, when they are asked about a word nobody has
+     * been looking at. */
+    await box.locator("#appLabel").fill("Apfel");
+    await showing(page, "#appClass", "ui.wordclass_noun");
+    await page.keyboard.press("Escape");
+  });
 });
