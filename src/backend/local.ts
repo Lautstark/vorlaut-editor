@@ -49,9 +49,11 @@ import * as symbols from "../data/symbols.js";
 import { DEFAULT_LANGUAGE, HASH_BYTES } from "../device/layout_facts.js";
 import { reason } from "../core/errors.js";
 import {
-  speak, asBlob, shippable, displayName, keyFor, parseVoiceId, usePiperRuntime,
+  asBlob, decodeWav, remember, shippable, displayName, keyFor,
+  parseVoiceId, usePiperRuntime,
   listVoices as catalogueVoices,
   type OnnxModule,
+  type SpokenStore,
   type Voice,
 } from "@lautstark/stimmquelle/browser";
 import { piperRuntime } from "@lautstark/stimmquelle/runtime";
@@ -62,6 +64,30 @@ import { LANGUAGES } from "../core/boot_data.js";
 // asked for, and asked for here because of the MAX98357A. tts.py applies the
 // same two - tests/test_browser_tts.py is what holds them together.
 const VORLAUT = { rate: DEVICE_SAMPLE_RATE, fadeSec: 0.012, padSec: 0.06 };
+
+/* Where a finished recording goes, so that the next ask for it is a read.
+ *
+ * adr/0016. The name is stimmquelle's - keyFor() is CONTRACT.md §3 and this
+ * file no longer assembles it - and the storage is ours, because the two
+ * consumers of that package want different lifetimes for the same bytes and a
+ * package that owned it would have to make one of them wrong. What remember()
+ * needs is a `{ get, put }`, and data/store.ts is what one is.
+ *
+ * Two properties of this that are not obvious from the two lines:
+ *
+ *   * **The ▶ and the talker's export share every entry.** synthesise() and
+ *     exportDevicePackage() both ask with VORLAUT, so they ask under the same
+ *     name, so a carer who has listened to their Sammlung has already paid for
+ *     its export. That is not a coincidence to be preserved by care - it is
+ *     what §3 keying by *the options that decide how it sounds* means, and it
+ *     would stop being true only if the two started asking for different
+ *     audio, at which point they should be two entries.
+ *   * **The app package does not share them**, because it asks at 24 kHz
+ *     without the device's fade and pad - a different recording under a
+ *     different name, correctly. adr/0016 weighs caching one master and
+ *     deriving both instead, and says why that is a worse trade here.
+ */
+const kept: SpokenStore = { get: store.readSpeech, put: store.writeSpeech };
 
 // The package does not drive piper by itself; the consumer says where the
 // pieces are. Driving it directly - rather than through vits-web's predict() -
@@ -504,8 +530,12 @@ export async function synthesise(text, voice) {
     ? { ...VORLAUT, ownsInference: true,
         azure: { key: held.azureSecret, region: held.azureRegion } }
     : { ...VORLAUT, ownsInference: true };
-  const spoken = await speak(text, chosen, options);
-  return asBlob(spoken.wav);
+  // remember() rather than speak(): the same call with a lookup around it, so
+  // that pressing ▶ twice on one key costs one synthesis. On an azure: voice
+  // the second press was a billed round trip and on piper it was the model
+  // again, for audio this browser had already made and thrown away.
+  const { wav } = await remember(kept, text, chosen, options);
+  return asBlob(wav);
 }
 
 // Azure's catalogue, memoised per key and region: one sheet-opening asks for
@@ -757,8 +787,22 @@ export async function exportAppPackage(
     // dismissed dialog. So it is a value rather than a throw, and the caller
     // says "nothing was written" rather than showing an error.
     if (onProgress?.({ done, total: wanted.length, text }) === false) return null;
-    const spoken = await speak(text, voice, options);
-    sounds.set(text, await bakeSound(spoken.samples));
+    const spoken = await remember(kept, text, voice, options);
+    /* The samples out of the WAV rather than off the synthesis.
+     *
+     * speak() hands back `samples` beside `wav` - the same audio before the
+     * 16 bit quantisation - and this line used to encode Opus from those. A
+     * cache hit has no such thing: what was kept is a file. Reading the file
+     * on both paths is the only honest answer, because a cache that returns
+     * different audio from a miss is worse than no cache at all - it would be
+     * a Sammlung whose recordings differ depending on whether somebody had
+     * played them first.
+     *
+     * What it costs is one quantisation to 16 bit before the encoder, and that
+     * is what adr/0008's diagram already draws: the master is *kept*, and a
+     * kept master is a file. 16 bit puts its noise floor around -96 dBFS,
+     * which is some sixty decibels below anything Opus leaves at 24 kbit/s. */
+    sounds.set(text, await bakeSound(decodeWav(spoken.wav).samples));
   }
   onProgress?.({ done: wanted.length, total: wanted.length, text: "" });
 
@@ -928,7 +972,7 @@ export async function exportDevicePackage(
     // dialog. So it is a value rather than a throw, and the caller says
     // "nothing was written" rather than showing an error.
     if (onProgress?.({ done, total: spoken.length, text }) === false) return null;
-    const said = await speak(text, voice, options);
+    const said = await remember(kept, text, voice, options);
     sounds.set(text, {
       name: await audioName(text, voice), bytes: ownBytes(said.wav),
     });

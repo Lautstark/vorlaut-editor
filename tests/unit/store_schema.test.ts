@@ -13,8 +13,8 @@
  * Both versions here kept everything in one `content` store: 2 held a registry
  * under `collections` and a layout per `layout:<id>`, 1 held the one layout
  * there was under `layout`, with no registry and no name for it. So a version 2
- * database crosses two steps to get here and a version 1 database crosses
- * three, which makes this the file that proves the steps compose - a chain
+ * database crosses three steps to get here and a version 1 database crosses
+ * four, which makes this the file that proves the steps compose - a chain
  * replayed from further back is the thing about incremental migrations that
  * nothing else checks.
  *
@@ -145,7 +145,7 @@ describe("opening a database left behind by version 2", () => {
 
   it("says so", async () => {
     await store.readCollections();
-    expect(announced).toEqual([{ from: 2, to: 4, boards: 1 }]);
+    expect(announced).toEqual([{ from: 2, to: 5, boards: 1 }]);
   });
 
   /* And it is an ordinary database afterwards: a second Sammlung is made the
