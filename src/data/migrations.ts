@@ -203,6 +203,29 @@ export const STEPS: readonly Step[] = [
       if (db.objectStoreNames.contains("data")) db.deleteObjectStore("data");
     },
   },
+  {
+    /* 4 -> 5: somewhere to keep audio that has already been paid for.
+     *
+     * One createObjectStore, and no layout is read on the way past either -
+     * the same shape as the step above and for the same reason.
+     *
+     * A store of derived files arriving one version after a store of derived
+     * files left, which is worth saying is not a reversal. `data` was a
+     * *build's* record of a device, and it went because the build did
+     * (adr/0011); this is a cache of what a synthesis cost, keyed by
+     * CONTRACT.md §3 and owned by nothing but itself. adr/0016 argues the
+     * difference at length, because the step to 4 is exactly the commit
+     * somebody will find while wondering whether this one is allowed.
+     *
+     * The index is on `["usedAt", "size"]` rather than on `usedAt` alone so
+     * that the eviction walk can add up what it would free through
+     * openKeyCursor(), without deserialising a WAV to read its length. */
+    to: 5,
+    expects: ["collections", "layouts"],
+    async run(db) {
+      db.createObjectStore("speech").createIndex("usage", ["usedAt", "size"]);
+    },
+  },
 ];
 
 /** The steps between where this database is and where it has to be.

@@ -1,4 +1,4 @@
-/* A database at version 3, opened by code at version 4.
+/* A database at version 3, opened by code at version 5.
  *
  * This is the test adr/0015 exists to make possible, and it is written the one
  * way that proves anything: a database is built here the way version 3 built
@@ -14,9 +14,9 @@
  * and the settings - including the two secrets a Sicherung deliberately drops,
  * which have no reason to be lost inside one browser.
  *
- * The step this exercises is one statement - `deleteObjectStore("data")`, the
- * whole of what 3 to 4 changed - so most of what is asserted below is that
- * nothing else was touched. That is the point rather than a weakness of the
+ * The two steps this exercises are one statement each - `deleteObjectStore`
+ * for the `data` 3 to 4 dropped, `createObjectStore` for the `speech` 4 to 5
+ * added - so most of what is asserted below is that nothing else was touched. That is the point rather than a weakness of the
  * test: the first version of this migration read every record out, dropped
  * every store and wrote it all back, and each of these assertions was a way
  * for that to go wrong. A migration that never opens a layout cannot lose one,
@@ -138,7 +138,7 @@ beforeAll(async () => {
   store.onMigrated((what) => { announced.push(what); });
 });
 
-describe("a version 3 database opened by version 4", () => {
+describe("a version 3 database opened by version 5", () => {
   it("keeps every Sammlung, in the order the sidebar draws", async () => {
     const list = await store.readCollections();
     expect(list.collections.map((one) => one.name)).toEqual(["Bedroom", "Kitchen"]);
@@ -188,15 +188,18 @@ describe("a version 3 database opened by version 4", () => {
      async () => {
        await store.readCollections();
        const seen = await inspect();
-       expect(seen.version).toBe(4);
+       expect(seen.version).toBe(5);
        // `data` is gone with the build that wrote it (adr/0011), and nothing
-       // from version 3's shape survives except its contents.
-       expect(seen.stores).toEqual(["collections", "layouts", "marks", "settings", "symbols"]);
+       // from version 3's shape survives except its contents. `speech` is what
+       // the step to 5 added: a cache of what a synthesis cost, which adr/0016
+       // argues is a different thing from the store that just left.
+       expect(seen.stores)
+         .toEqual(["collections", "layouts", "marks", "settings", "speech", "symbols"]);
      });
 
   it("says so, rather than moving somebody's boards in silence", async () => {
     await store.readCollections();
     expect(announced).toHaveLength(1);
-    expect(announced[0]).toEqual({ from: 3, to: 4, boards: 2 });
+    expect(announced[0]).toEqual({ from: 3, to: 5, boards: 2 });
   });
 });

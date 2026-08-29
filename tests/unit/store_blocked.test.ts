@@ -94,16 +94,19 @@ describe("a database another connection is holding at an older version", () => {
   /* The other end. This connection is now the old one, and a newer version
    * asking for the database must not have to wait on it: blocking() closes it.
    *
-   * Version 4 is a stand-in for whatever DB_VERSION becomes next. If it were
-   * ever to be 4 for real this test would still be asking the right question,
-   * because the version it opens is one the store does not hold. */
+   * The number is a stand-in for whatever DB_VERSION becomes next, and it has
+   * to stay above it: it was 4 while DB_VERSION was 3, and stayed 4 across the
+   * bump to 4, at which point the open no longer needed an upgrade and
+   * `blocked` was false for the wrong reason. adr/0016 took DB_VERSION to 5,
+   * and this goes to 6 - one the store does not hold, which is what makes the
+   * other connection have to let go at all. */
   it("lets go when a newer version needs the database", async () => {
     // Make sure this tab really is holding a connection to let go of.
     await store.readCollections();
 
     let blocked = false;
     const next = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 4);
+      const request = indexedDB.open(DB_NAME, 6);
       request.onblocked = () => { blocked = true; };
       request.onupgradeneeded = () => { /* the shape does not matter here */ };
       request.onerror = () => reject(request.error);
@@ -111,7 +114,7 @@ describe("a database another connection is holding at an older version", () => {
     });
 
     expect(blocked).toBe(false);
-    expect(next.version).toBe(4);
+    expect(next.version).toBe(6);
     next.close();
   });
 });
