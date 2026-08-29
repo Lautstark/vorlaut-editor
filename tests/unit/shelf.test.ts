@@ -70,7 +70,7 @@ describe("opening a Sammlung the address names", () => {
   it("asks the shelf for a well-formed id, and only the shelf", async () => {
     const fetching = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 200 }) as never);
-    adopt.mockResolvedValue({ name: "Erste Wörter", pictures: 13 });
+    adopt.mockResolvedValue({ name: "First words", pictures: 13 });
 
     await openNamed(at(SUBJECT), forget);
 
