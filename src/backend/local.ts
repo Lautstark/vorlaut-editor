@@ -49,8 +49,7 @@ import * as symbols from "../data/symbols.js";
 import { DEFAULT_LANGUAGE, HASH_BYTES } from "../device/layout_facts.js";
 import { reason } from "../core/errors.js";
 import {
-  speak, asBlob, shippable, displayName, parseVoiceId, usePiperRuntime,
-  PIPELINE_VERSION,
+  speak, asBlob, shippable, displayName, keyFor, parseVoiceId, usePiperRuntime,
   listVoices as catalogueVoices,
   type OnnxModule,
   type Voice,
@@ -799,25 +798,23 @@ function ownBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
     : bytes.slice()) as Uint8Array<ArrayBuffer>;
 }
 
-/** The 32 hex characters a name carries: sha256, cut to HASH_BYTES. */
-async function fingerprint(bytes: BufferSource): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, HASH_BYTES * 2);
-}
-
 /**
  * What a spoken sentence's WAV is called.
  *
  * The name is for what goes *into* the synthesis rather than for what comes
- * out: text, voice, and every option that changes how it sounds, the
- * pipeline's own version included, so that a levelling change renames rather
- * than silently reuses. Same rule tts.fingerprint() applies. Neither the Azure
- * key nor ownsInference is in the payload - both say who may ask, not how the
+ * out: text, voice, and every option that changes how it sounds. Neither the
+ * Azure key nor ownsInference is in it - both say who may ask, not how the
  * sentence sounds, and rotating a key must not rename a device's worth of
- * audio.
+ * audio. keyFor() drops them for us, which is one fewer rule kept by hand.
+ *
+ * **The payload is stimmquelle's since 2.8.0, and it was wrong before.**
+ * CONTRACT.md §3 has specified these six inputs since 1.0.0 and this file
+ * assembled them itself, omitting §3.4 - the engine version - entirely. A
+ * change of runtime would have produced audio the old names claimed to
+ * describe, which is exactly the case §3's "Two engines do not share a cache"
+ * is written against. It never bit because nothing here reads a name back;
+ * it would have bitten the day this page grew a cache. mitreden had the
+ * mirror-image error in its own copy. Neither is assembling it any more.
  *
  * It used to matter that this was knowable *before* the synthesis was paid
  * for, because a rebuild looked in the `data` store for a file under this name
@@ -827,12 +824,12 @@ async function fingerprint(bytes: BufferSource): Promise<string> {
  * `a`, which is the only shape layout.bin can carry a name in. The compiler on
  * the other side reads the name out of the package rather than deriving it, so
  * this function is the only opinion about it that exists.
+ *
+ * Cutting to HASH_BYTES is ours to do: §3 makes the length a per-product
+ * choice, on the grounds that no two products share a cache directory.
  */
 async function audioName(text: string, spokenBy: string): Promise<string> {
-  const payload = JSON.stringify({
-    text: text.trim(), voice: spokenBy, pipeline: PIPELINE_VERSION, ...VORLAUT,
-  });
-  return `a${await fingerprint(new TextEncoder().encode(payload))}.wav`;
+  return `a${(await keyFor(text, spokenBy, VORLAUT)).slice(0, HASH_BYTES * 2)}.wav`;
 }
 
 /**
