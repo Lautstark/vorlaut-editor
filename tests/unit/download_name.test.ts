@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { downloadSlug } from "../../src/shell/filename.js";
+import { downloadSlug } from "@lautstark/werkzeuge/filename";
 import { safeName } from "../../src/data/store.js";
 
 /* Two rules for two jobs, and the test is mostly that they are two.
@@ -26,9 +26,13 @@ import { safeName } from "../../src/data/store.js";
 
 /** The table, as mitreden's core/ids.ts holds it, plus the capitals it has no
  *  use for - it lowercases first and a file name keeps the case somebody
- *  typed. Written out here rather than imported so that the day the three
- *  products share one implementation, this is the list the shared one has to
- *  satisfy. */
+ *  typed. Written out here rather than imported.
+ *
+ *  The three products share one implementation now - @lautstark/werkzeuge -
+ *  and its own suite holds this list. It stays here too, and the reason is the
+ *  pairs below: every assertion about the download's rule is worth having
+ *  beside one about safeName(), which is this repository's and must not move.
+ *  A shared rule that drifted would show up here as the pair coming apart. */
 const SPELLED: [string, string][] = [
   ["ä", "ae"], ["ö", "oe"], ["ü", "ue"], ["ß", "ss"],
   ["Ä", "Ae"], ["Ö", "Oe"], ["Ü", "Ue"],

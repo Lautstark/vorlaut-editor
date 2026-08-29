@@ -21,6 +21,7 @@
  */
 
 import { openDialog } from "@lautstark/design/dialog";
+import { downloadJson } from "@lautstark/werkzeuge/download";
 import { reason } from "../core/errors.js";
 import { t } from "../core/texts.js";
 import { isRefusal } from "../data/migrations.js";
@@ -67,17 +68,8 @@ export function offerRescue(error: unknown, again: () => void): boolean {
 }
 
 function download(dump: Dump): void {
-  const blob = new Blob([JSON.stringify(asFile(dump, t("ui.rescue_notice")), null, 2)],
-                        { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `vorlaut-rettung-${new Date().toISOString().slice(0, 10)}.json`;
-  link.click();
-  // Revoked later rather than here, for the reason shell/settings.ts records:
-  // the click returns before the browser has opened the URL, and a blob
-  // revoked in that gap is a download that silently never begins.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  downloadJson(asFile(dump, t("ui.rescue_notice")),
+               `vorlaut-rettung-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 async function show(again: () => void): Promise<void> {

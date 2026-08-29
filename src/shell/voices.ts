@@ -20,6 +20,7 @@
 import type { VoiceList } from "../core/types.js";
 import { $, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
+import { weighs } from "@lautstark/werkzeuge/bytes";
 import { reason } from "../core/errors.js";
 import { listVoices, voiceFetchState, startVoiceFetch } from "../backend/index.js";
 import { LANG, LANGUAGE_NAMES, LANGUAGES, rememberLanguage, setLanguage }
@@ -139,11 +140,6 @@ function speaks(code: string): string {
   } catch {
     return tag;
   }
-}
-
-/** What this voice costs to have before it will speak. */
-function weighs(bytes: number): string {
-  return `${Math.round(bytes / 1e6)} MB`;
 }
 
 /** stimmquelle's rule: `de_DE`, `de-DE` and `de` all compare equal. */

@@ -52,11 +52,12 @@ import * as symbols from "../data/symbols.js";
 import { load, saveNow } from "../core/save.js";
 import { t } from "../core/texts.js";
 // A pure rule about names, not a way out of the page - which is why it comes
-// from the module that owns it rather than through backend/index.ts. It used to
-// be data/store.ts's safeName(), on the reading that a download's file name is
-// an object-store key's question asked about a different destination. It is
-// not: a key is read back and a file name is only ever read. See filename.ts.
-import { downloadSlug } from "./filename.js";
+// from the package that owns it rather than through backend/index.ts. It used
+// to be data/store.ts's safeName(), on the reading that a download's file name
+// is an object-store key's question asked about a different destination. It is
+// not: a key is read back and a file name is only ever read. shell/filename.ts
+// was where that split landed; all three products share the rule now.
+import { downloadSlug } from "@lautstark/werkzeuge/filename";
 import { GRID, LANG, LANGUAGE_NAMES, LANGUAGES } from "../core/boot.js";
 import { isApp } from "../core/types.js";
 import type { CollectionList, GridSize, Layout, Target } from "../core/types.js";
@@ -733,7 +734,7 @@ const currentName = (): string => {
  *  they are allowed to differ about. Somebody who exports the same Sammlung
  *  twice should get two files with one name and two extensions.
  *
- *  filename.ts rather than the store's safeName(), and the difference is a
+ *  downloadSlug() rather than the store's safeName(), and the difference is a
  *  Sammlung with an umlaut in it: this one spells the letter out where that
  *  one punched a `_` through it. */
 const fileStem = (): string => downloadSlug(currentName());
