@@ -96,6 +96,29 @@ export interface Dropdown {
   /** Which answer is in force. Assigning redraws the trigger and calls nobody
    *  back, which is what writing to a select's `.value` did. */
   value: string;
+  /** Whether the list is standing open - which is to say whether somebody is
+   *  looking at this question right now.
+   *
+   *  For the one caller that answers a question on its own: assigning while
+   *  the list is open is the one thing this control cannot make look right.
+   *  The list is built when it is opened, so a later assignment repaints the
+   *  trigger and leaves the entries as they were, and the press that would
+   *  fix that is a press on what is already held - which calls nobody back.
+   *  So the answer is not to draw it better, it is not to write then.
+   *
+   *  Read off the trigger's own aria-expanded rather than tracked here: the
+   *  list is also closed by a press anywhere else on the page, and that press
+   *  never comes back through this module. menu.js owns the attribute on both
+   *  edges - see its close-all, which clears every open trigger on the page. */
+  readonly open: boolean;
+  /** How many times this list has been opened, ever.
+   *
+   *  `open` answers "is somebody looking now", and a question that is answered
+   *  late needs the other one: "has anybody looked since I asked". A count
+   *  answers it without an event to subscribe to - read it when the question
+   *  goes out, compare it when the answer comes back - and it is the shape the
+   *  one caller that needs it already uses for the word it asked about. */
+  readonly opens: number;
 }
 
 /**
@@ -162,7 +185,9 @@ export function dropdown(choices: Choice[], value: string,
   };
   paint();
 
+  let opens = 0;
   button.onclick = () => {
+    opens++;
     menuOn(button, (add) => {
       for (const one of choices) {
         add(one.label, () => {
@@ -180,6 +205,8 @@ export function dropdown(choices: Choice[], value: string,
     anchor, button,
     get value() { return held; },
     set value(next: string) { held = next; paint(); },
+    get open() { return button.getAttribute("aria-expanded") === "true"; },
+    get opens() { return opens; },
   };
 }
 

@@ -1389,6 +1389,38 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
    * The answer arrives late - the tables are fetched on the first word - so
    * the guard is re-read on the way back, and a newer word invalidates an
    * older question the way the search's own token does.
+   *
+   * **And not into a list somebody has open.** Arriving late also means
+   * arriving while the Wortart menu is standing open, and writing then is
+   * worse than writing late. dropdown() builds its entries when the list is
+   * opened, so an assignment underneath one repaints the trigger and leaves
+   * the entries as they were: the trigger reads Pronomen behind a list still
+   * ticking Keine Wortart. The press that ought to settle it cannot, because
+   * choosing what is already held is a no-op in the control - so a press on
+   * Pronomen there calls nobody back, `classChosen` stays false, and the field
+   * somebody just answered is left open to being answered over by the next
+   * keystroke. Somebody with the question open is answering it; the guess is
+   * an offer to somebody who is not.
+   *
+   * Dropped rather than kept until the list closes. Kept, it would land on a
+   * field they had just decided about, at a moment no press of theirs
+   * explains - the same surprise, moved later and made harder to attribute.
+   * Dropping costs a guess only where no further keystroke follows, and where
+   * one does it costs nothing at all: the tables are in the browser's module
+   * map by then, so the next ask answers without a fetch.
+   *
+   * Which is why the list being open *now* is not the whole test. An answer
+   * arriving a moment after the list is closed is the same surprise again and
+   * lands where nobody is looking for it - the first version of this guard
+   * asked only whether the list was open at that instant, and a loaded machine
+   * walked straight through it. So what is asked is whether anybody has had
+   * this question open since it was asked: `opens` when it went out against
+   * `opens` on the way back.
+   *
+   * Counted per ask rather than remembered on the field, which is the
+   * difference between this and treating an open list as an answer given.
+   * Somebody who opens Wortart before typing anything has answered nothing,
+   * and the word they type next is guessed at exactly as it would have been.
    */
   let classChosen = Boolean(draft.wordClass);
   let asking = 0;
@@ -1396,8 +1428,10 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
     if (classChosen) return;
     const word = draft.label;
     const mine = ++asking;
+    const looked = classes.opens;
     void guessWordClass(word, LANG).then((key) => {
       if (mine !== asking || classChosen) return;
+      if (classes.open || classes.opens !== looked) return;
       draft.wordClass = key;
       // Assigning redraws the trigger and calls nobody back - see dropdown() -
       // so this cannot be mistaken for somebody having chosen.
