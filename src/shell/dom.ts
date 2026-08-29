@@ -1,4 +1,5 @@
 // The two things every module reaches for: an element and the status line.
+import { announcer, type Announcer } from "@lautstark/design/toast";
 //
 // The menu that used to sit below them is @lautstark/design/menu now - it was
 // the same file in mitreden, and bildhaft's was the same behaviour in a
@@ -31,23 +32,38 @@ export const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   return found as T;
 };
 
-/* The line in the header, and the one place this page reports anything. The
-   element carries role="status" - see templates/header.ts - so writing to it
-   is also announcing it, which it was not before. */
-export const status = (text: string): void => {
-  const line = $("status");
-  line.textContent = text;
-  /* Anything said cancels a pending rest and wakes the line: a failed write
-     arriving while "saved" was fading must not inherit its fade. This is the
-     one writer of that element, which is what makes cancelling here enough. */
-  line.classList.remove("status--rested");
-  clearTimeout(resting);
-};
-
 /** How long a resting status stays lit. Long enough to be read by somebody who
  *  looked over, short enough to be gone by the next time anything happens. */
 const RESTS_FOR = 4000;
-let resting: ReturnType<typeof setTimeout> | undefined;
+
+/* The line in the header, and the one place this page reports anything.
+ *
+ * The element carries role="status" - see templates/header.ts - so writing to
+ * it is also announcing it, which it was not before. That rule is
+ * @lautstark/design/toast's now: it takes the region this page already mounted
+ * and never adds or removes it, which is the failure mitreden and bildhaft
+ * each had and this repository got right first.
+ *
+ * Cancelling a pending rest on anything said is the module's too, and it is
+ * the half worth naming: a failed write arriving while "saved" was fading must
+ * not inherit its fade.
+ *
+ * Made lazily, because #status arrives with templates/header.ts and this
+ * module is imported before that has run. */
+let line: Announcer | undefined;
+const region = (): Announcer =>
+  (line ??= announcer($("status"), {
+    rest: RESTS_FOR,
+    onRest: (node) => node.classList.add("status--rested"),
+    /* The inverse, and the reason it is not optional here: a fade that has
+       already fired leaves its class behind, so without this the line came
+       back reading "not saved yet" still wearing the fade that belonged to
+       "saved". The e2e for that is editor_app.spec.ts, "the saved status steps
+       back, without taking its words with it". */
+    onWake: (node) => node.classList.remove("status--rested"),
+  }));
+
+export const status = (text: string): void => { region().say(text); };
 
 /**
  * Said, and then allowed to go quiet.
@@ -66,9 +82,7 @@ let resting: ReturnType<typeof setTimeout> | undefined;
  * have made two dozen tests race a timer for a fact that had not changed.
  */
 export function statusRests(text: string): void {
-  status(text);
-  resting = setTimeout(() => { $("status").classList.add("status--rested"); },
-                       RESTS_FOR);
+  region().rests(text);
 }
 
 /**
