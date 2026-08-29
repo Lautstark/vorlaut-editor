@@ -139,14 +139,16 @@ ALLOWED = [
     # Transliteration tables: data, not prose.
     ('("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")', "the umlaut table"),
     ("replacement", "the transliteration table in slugify"),
-    # The editor's own, in TypeScript. src/shell/filename.ts is what a
-    # downloaded file is named by, and the table is mitreden's character for
-    # character so that the three products converge on one spelling rather than
-    # three; its test writes the same pairs out to hold it to them, capitals
-    # included. Both are the letters being spelled, which is input.
-    ('ä: "ae", ö: "oe", ü: "ue", ß: "ss"', "the umlaut table, in TypeScript"),
+    # The editor's own, in TypeScript. What a downloaded file is named by is
+    # @lautstark/werkzeuge/filename now - src/shell/filename.ts was written to
+    # become it and went there with conventions.md §5 #7 - so the table itself
+    # is no longer a file in this repository and no longer needs forgiving.
+    # What stays is the test, which writes the same pairs out rather than
+    # importing them, so that a shared rule drifting shows up here as a red
+    # test rather than as a filename nobody was watching. The letters are the
+    # input being spelled.
     ('["ä", "ae"], ["ö", "oe"], ["ü", "ue"], ["ß", "ss"]',
-     "the same table, as the test writes it"),
+     "the table the download rule has to satisfy, as the test writes it"),
     ('["Ä", "Ae"], ["Ö", "Oe"], ["Ü", "Ue"]',
      "the capitals mitreden has no use for, because it lowercases first"),
     # And the names those two are asked about. A transliteration test made with

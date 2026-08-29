@@ -396,8 +396,9 @@ test("the export entry leads with the talker, and takes no for an answer",
  * data/store.ts's safeName() and that is an object-store key's rule: it maps
  * every letter it cannot keep to `_`, so a key survives a round trip through a
  * Sicherung spelling itself exactly as it went in. A file name has no round
- * trip and does have a reader. shell/filename.ts is the reader's half, and
- * tests/unit/download_name.test.ts is where the rule itself is held.
+ * trip and does have a reader. `@lautstark/werkzeuge/filename` is the reader's
+ * half - shell/filename.ts until conventions.md §5 #7 made it the family's -
+ * and tests/unit/download_name.test.ts is where the pair is still held apart.
  *
  * Here rather than only there because the two halves being right separately is
  * not the claim - the claim is that it is this one the export reaches for, and

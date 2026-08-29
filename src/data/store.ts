@@ -561,17 +561,28 @@ export async function versionOf(text: string): Promise<string> {
  * **It also named the downloads, and it should not have.** This said "or as
  * the file name a download arrives under", and one function answering both
  * questions is why a Sammlung called "haeufige Woerter", spelled with the
- * umlauts somebody types, was offered as `h_ufige_W_rter`. shell/filename.ts
- * is the other half now. Nothing about this one changed in the split, on
- * purpose: a key that spells itself differently after that file exists is a
- * picture the Sicherung it came out of can no longer find.
+ * umlauts somebody types, was offered as `h_ufige_W_rter`.
+ * `@lautstark/werkzeuge/filename` is the other half now - shell/filename.ts
+ * first, which was written to become it and did. Nothing about this one
+ * changed in either move, on purpose: a key that spells itself differently
+ * afterwards is a picture the Sicherung it came out of can no longer find.
  *
- * conventions.md §5 #3 pairs this with `touched()`; mitreden's and bildhaft's
- * are download-filename sanitisers, so it is filename.ts that has to converge
- * with theirs and this that has to stay where it is. Deliberately not their
- * transliterating `slug` - a symbol's key has to survive a round trip through
- * a Sicherung and an .obz unchanged, so it maps what it cannot keep to `_`
- * rather than trying to spell it. */
+ * conventions.md §5 #3 paired this with `touched()` and §5 #7 is where both
+ * actually went. mitreden's and bildhaft's were download-filename sanitisers
+ * too, so all three converged on the spelling rule and this stayed where it
+ * is. Deliberately not their transliterating `slug` - a symbol's key has to
+ * survive a round trip through a Sicherung and an .obz unchanged, so it maps
+ * what it cannot keep to `_` rather than trying to spell it.
+ *
+ * **What the split changed is who can move the other half.** It is a package
+ * now, on a tag this repository bumps. A letter added to its table arrives as
+ * a release somebody cuts and this repository chooses when to take; the same
+ * letter added here renames every picture in every Sicherung on somebody's
+ * disk, with nothing in between. That asymmetry is the whole reason the two
+ * are not one function - and it is why `werkzeuge`'s RELEASING.md calls a
+ * change to `downloadSlug` a major even though nothing reads a file name back.
+ * It is the half that can move at all.
+ * tests/unit/download_name.test.ts holds the pair apart. */
 export const safeName = (name: string): string => name.replace(/[^\w.-]+/g, "_");
 
 /* --- The list ------------------------------------------------------
