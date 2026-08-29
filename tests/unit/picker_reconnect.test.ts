@@ -49,7 +49,9 @@ describe("whether there is a way back into a METACOM folder", () => {
    * open a dialog that changes nothing. */
   it("offers none where the folder cannot be read, though that needs acting on",
     () => {
-      expect(canReconnect({ kind: "error", message: "gone" } as ProviderStatus))
+      // `read-failed` and not a sentence: bildquelle 2.0.0 returns the code
+      // and leaves the wording to whoever knows the language.
+      expect(canReconnect({ kind: "error", code: "read-failed" } as ProviderStatus))
         .toBe(false);
     });
 });
