@@ -39,6 +39,15 @@ import { forgetKey, loadSettings, paintStates, saveSettings } from "./settings.j
    read of a voice below then asks for a property on `never`. This is what
    listVoices() answers with; the literal is only what stands in until it
    has. */
+/** Every panel in the settings sheet, in the order settings_sheet.ts writes
+ *  them. Used to fold them all on open - see openSettings() - and exported so
+ *  tests/unit/settings_panels.test.ts can hold it against the markup, which is
+ *  the drift that made this list necessary. */
+export const PANELS = [
+  "languagePanel", "themePanel", "voicesHerePanel", "azurePanel",
+  "arasaacPanel", "symbolsPanel", "boardPanel", "dataPanel",
+] as const;
+
 let voices: VoiceList = {
   voices: [], active: "", chosen: "", chosenLabel: "", backend: "",
 };
@@ -657,9 +666,14 @@ export async function openSettings() {
   // a single thing in it, not after a preference. The headings say what is
   // inside, so nothing is hidden by folding them - and loadSettings() below
   // unfolds the symbols panel again if what is in there is broken.
-  $<HTMLDetailsElement>("voicesHerePanel").open = false;
-  $<HTMLDetailsElement>("azurePanel").open = false;
-  $<HTMLDetailsElement>("symbolsPanel").open = false;
+  //
+  // Every panel, from the list. Three of the eight were named here and the
+  // other five were not, so the sentence above was true of Stimmen, Azure and
+  // Symbole and false of the rest: opening Erscheinungsbild and closing the
+  // sheet left it open on the next visit, under a comment saying it would not
+  // be. A list beside the markup is the smallest thing that cannot drift from
+  // it the way five names left out of a line could.
+  for (const id of PANELS) $<HTMLDetailsElement>(id).open = false;
   $<HTMLDialogElement>("voices").showModal();
   await Promise.all([loadVoices(), readFetch(), loadSettings()]);
   paintLanguage();

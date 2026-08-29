@@ -81,6 +81,35 @@ test("what is typed survives a reload", async ({ page }) => {
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
+/* Every panel folded on every open, which is what the code says and what it
+   did for only three of the eight. Erscheinungsbild is the case that was
+   broken: not named in the fold, so it stayed open across a close and a
+   reopen - a settings sheet that came up remembering where somebody had been
+   last time, under a comment promising it would not. */
+test("the settings sheet comes up folded, whichever panel was left open",
+  async ({ page }) => {
+    await page.goto("./");
+    await page.locator("#settingsLink").click();
+
+    const theme = page.locator("#themePanel");
+    await expect(theme).not.toHaveAttribute("open", "");
+    await theme.locator("summary").click();
+    await expect(theme).toHaveAttribute("open", "");
+
+    await page.locator("#voiceClose").click();
+    await page.locator("#settingsLink").click();
+    await expect(theme, "reopened folded").not.toHaveAttribute("open", "");
+
+    // And the one that was folded correctly before, so this does not pass by
+    // having stopped folding anything.
+    const symbols = page.locator("#symbolsPanel");
+    await symbols.locator("summary").click();
+    await page.locator("#voiceClose").click();
+    await page.locator("#settingsLink").click();
+    await expect(symbols).not.toHaveAttribute("open", "");
+    await page.locator("#voiceClose").click();
+  });
+
 test("both settings sheets open", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("#device .cell")).toHaveCount(6);
