@@ -22,6 +22,11 @@ vi.mock("../../src/shell/adopt.js", () => ({
 vi.mock("../../src/shell/dom.js", () => ({ status, $: () => undefined }));
 vi.mock("../../src/core/texts.js", () => ({ t: (key: string) => key }));
 vi.mock("../../src/core/errors.js", () => ({ reason: (e: unknown) => String(e) }));
+vi.mock("../../src/data/backup.js", () => ({ BACKUP_FORMAT: "vorlaut-backup" }));
+
+/** A Sicherung of one Sammlung, as the shelf publishes them. */
+const sicherung = (name = "erste-woerter.json") =>
+  new File([JSON.stringify({ format: "vorlaut-backup", version: 2, boards: [] })], name);
 
 const { openNamed } = await import("../../src/shell/shelf.js");
 
@@ -56,7 +61,7 @@ describe("a Sammlung the address named", () => {
   });
 
   it("adopts the file, and falls back to the id for a name", async () => {
-    const file = new File(["{}"], "erste-woerter.json");
+    const file = sicherung();
     wanted.mockResolvedValue({ kind: "file", id: "erste-woerter", file });
     adopt.mockResolvedValue({ name: "First words", pictures: 13 });
 
@@ -69,13 +74,46 @@ describe("a Sammlung the address named", () => {
   /* A file that will not go in is a sentence about the file, not about the
    * link — so it is adopt.ts's refusal and not one of the three above. */
   it("reports a file that will not go in as the import would", async () => {
-    wanted.mockResolvedValue({
-      kind: "file", id: "x", file: new File(["nope"], "x.json"),
-    });
+    wanted.mockResolvedValue({ kind: "file", id: "x", file: sicherung("x.json") });
     adopt.mockRejectedValue(new Error("backup:not-one"));
 
     await openNamed(HERE);
 
     expect(status).toHaveBeenLastCalledWith("refused Error: backup:not-one");
+  });
+});
+
+/* One address shape, four products' entries, and nothing in ?sammlung=<id>
+ * saying which is which. A mitreden link opened here used to succeed: the
+ * talker's OBF reader took a list of sentences for a board and made an empty
+ * five-key set of it. Silent nonsense is the worst answer of the four. */
+describe("a Sammlung that belongs to another program", () => {
+  beforeEach(() => { wanted.mockReset(); adopt.mockReset(); status.mockReset(); });
+
+  it("is refused rather than read as an empty talker set", async () => {
+    wanted.mockResolvedValue({
+      kind: "file",
+      id: "spiegel-und-ei",
+      file: new File([JSON.stringify({ collection: "Spiegel und Ei", sentences: [{ text: "a word" }] })],
+        "spiegel-und-ei.json"),
+    });
+
+    await openNamed(HERE);
+
+    expect(adopt).not.toHaveBeenCalled();
+    expect(status).toHaveBeenLastCalledWith("ui.shelf_elsewhere");
+  });
+
+  it("still takes a zip, which is a talker package and ours", async () => {
+    wanted.mockResolvedValue({
+      kind: "file",
+      id: "morgens",
+      file: new File([new Uint8Array([0x50, 0x4b, 3, 4])], "morgens.obz"),
+    });
+    adopt.mockResolvedValue({ name: "Morgens", pictures: 0 });
+
+    await openNamed(HERE);
+
+    expect(adopt).toHaveBeenCalledOnce();
   });
 });

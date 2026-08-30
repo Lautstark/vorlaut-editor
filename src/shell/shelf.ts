@@ -19,6 +19,33 @@ import { status } from "./dom.js";
 import { adopt, adopted, refusal } from "./adopt.js";
 import { t } from "../core/texts.js";
 import { reason } from "../core/errors.js";
+import { BACKUP_FORMAT } from "../data/backup.js";
+
+/**
+ * Whether this is a file vorlaut can make a Sammlung of at all.
+ *
+ * The shelf holds four products' entries behind one address shape, and nothing
+ * in `?sammlung=<id>` says which product an id belongs to. A link to a mitreden
+ * Sammlung opened here used to *succeed*: importBoard() sends JSON that is not
+ * a Sicherung to the talker's OBF reader, which read a list of sentences as a
+ * board with no buttons and made an empty five-key set out of it. Nonsense, and
+ * silent — the worst pair.
+ *
+ * So the shelf path takes what it knows and nothing else: a Sicherung, or a
+ * zip. That is narrower than the file picker, which must go on reading a bare
+ * .obf written by other AAC software; a link from our own shelf never points at
+ * one of those.
+ */
+async function forUs(file: File): Promise<boolean> {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  // "PK", where every zip starts and no JSON does.
+  if (head[0] === 0x50 && head[1] === 0x4b) return true;
+  try {
+    return (JSON.parse(await file.text()) as { format?: unknown })?.format === BACKUP_FORMAT;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Reads the address, and where it names a Sammlung, puts it on screen.
@@ -40,6 +67,10 @@ export async function openNamed(here?: string): Promise<void> {
       status(t("ui.shelf_offline", { error: reason(asked.error) }));
       return;
     case "file":
+      if (!await forUs(asked.file)) {
+        status(t("ui.shelf_elsewhere"));
+        return;
+      }
       status(t("ui.shelf_fetching"));
       try {
         status(adopted(await adopt(asked.file, asked.id)));
