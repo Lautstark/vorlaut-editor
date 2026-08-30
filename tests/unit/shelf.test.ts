@@ -1,24 +1,23 @@
-/* What ?sammlung= will and will not fetch.
+/* What the editor does with what the address asked for.
  *
- * The id check is the reason this file exists. `?sammlung=` names an entry on
- * one shelf and never an address, so the only thing between a crafted link and
- * a fetch is the shape of that id — and a regex nobody tests is a regex that
- * gets relaxed by somebody who needed one more character through it.
- *
- * The cases below are the ones that would matter: a name that climbs out of the
- * path, an absolute address, a slash hidden inside an id, and capitals no id
- * has. None of them may reach fetch at all.
+ * The id check is not here any more. It is `@lautstark/werkzeuge/sammlung`'s,
+ * along with its own tests, because mitreden and bildhaft read the same links
+ * and a regex nobody tests is a regex somebody relaxes. What is left is the
+ * half that is vorlaut's: four answers, four things to say, and only one of
+ * them touching the store.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const wanted = vi.hoisted(() => vi.fn());
 const adopt = vi.hoisted(() => vi.fn());
 const status = vi.hoisted(() => vi.fn());
 
+vi.mock("@lautstark/werkzeuge/sammlung", () => ({ wanted }));
 vi.mock("../../src/shell/adopt.js", () => ({
   adopt,
-  adopted: () => "adopted",
-  refusal: (error: unknown) => `refused: ${String(error)}`,
+  adopted: ({ name }: { name: string }) => `adopted ${name}`,
+  refusal: (error: unknown) => `refused ${String(error)}`,
 }));
 vi.mock("../../src/shell/dom.js", () => ({ status, $: () => undefined }));
 vi.mock("../../src/core/texts.js", () => ({ t: (key: string) => key }));
@@ -26,90 +25,57 @@ vi.mock("../../src/core/errors.js", () => ({ reason: (e: unknown) => String(e) }
 
 const { openNamed } = await import("../../src/shell/shelf.js");
 
-/** An address carrying the given parameter value, and somewhere to record
- *  what the module asked to be forgotten. */
-let forgotten: URL | null = null;
-const forget = (url: URL) => { forgotten = url; };
+const HERE = "https://editor.lautstark.tech/?sammlung=erste-woerter";
 
-const SUBJECT = "erste-woerter";
-
-function at(sammlung: string | null): string {
-  const url = new URL("https://lautstark.github.io/vorlaut-editor/");
-  if (sammlung !== null) url.searchParams.set("sammlung", sammlung);
-  return url.href;
-}
-
-describe("opening a Sammlung the address names", () => {
+describe("a Sammlung the address named", () => {
   beforeEach(() => {
+    wanted.mockReset();
     adopt.mockReset();
     status.mockReset();
-    vi.restoreAllMocks();
-    forgotten = null;
   });
 
-  it("does nothing at all when the address names none", async () => {
-    const fetching = vi.spyOn(globalThis, "fetch");
-    await openNamed(at(null), forget);
-    expect(fetching).not.toHaveBeenCalled();
+  it("says nothing at all when the address named none", async () => {
+    wanted.mockResolvedValue({ kind: "none" });
+    await openNamed(HERE);
     expect(status).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ["../../etc/passwd", "climbing out of the path"],
-    ["https://example.invalid/board.json", "an absolute address"],
-    ["a/b", "a slash hidden inside an id"],
-    ["Erste-Woerter", "capitals, which no id has"],
-    ["", "nothing at all"],
-  ])("never fetches %j — %s", async (wanted) => {
-    const fetching = vi.spyOn(globalThis, "fetch");
-    await openNamed(at(wanted), forget);
-    expect(fetching).not.toHaveBeenCalled();
     expect(adopt).not.toHaveBeenCalled();
   });
 
-  it("asks the shelf for a well-formed id, and only the shelf", async () => {
-    const fetching = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("{}", { status: 200 }) as never);
+  it("says an entry is not there, and touches nothing", async () => {
+    wanted.mockResolvedValue({ kind: "unknown", id: "weg-damit" });
+    await openNamed(HERE);
+    expect(status).toHaveBeenLastCalledWith("ui.shelf_unknown");
+    expect(adopt).not.toHaveBeenCalled();
+  });
+
+  it("tells a shelf it could not reach apart from an entry that is gone", async () => {
+    wanted.mockResolvedValue({ kind: "offline", id: "x", error: new Error("nope") });
+    await openNamed(HERE);
+    expect(status).toHaveBeenLastCalledWith("ui.shelf_offline");
+    expect(adopt).not.toHaveBeenCalled();
+  });
+
+  it("adopts the file, and falls back to the id for a name", async () => {
+    const file = new File(["{}"], "erste-woerter.json");
+    wanted.mockResolvedValue({ kind: "file", id: "erste-woerter", file });
     adopt.mockResolvedValue({ name: "First words", pictures: 13 });
 
-    await openNamed(at(SUBJECT), forget);
+    await openNamed(HERE);
 
-    expect(fetching).toHaveBeenCalledOnce();
-    expect(String(fetching.mock.calls[0]![0]))
-      .toBe("https://lautstark.tech/sammlungen/download/erste-woerter.json");
-    expect(adopt).toHaveBeenCalledOnce();
-    expect(status).toHaveBeenLastCalledWith("adopted");
+    expect(adopt).toHaveBeenCalledWith(file, "erste-woerter");
+    expect(status).toHaveBeenLastCalledWith("adopted First words");
   });
 
-  it("says an entry is not there rather than showing a status code", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("", { status: 404 }) as never);
+  /* A file that will not go in is a sentence about the file, not about the
+   * link — so it is adopt.ts's refusal and not one of the three above. */
+  it("reports a file that will not go in as the import would", async () => {
+    wanted.mockResolvedValue({
+      kind: "file", id: "x", file: new File(["nope"], "x.json"),
+    });
+    adopt.mockRejectedValue(new Error("backup:not-one"));
 
-    await openNamed(at("weg-damit"), forget);
+    await openNamed(HERE);
 
-    expect(adopt).not.toHaveBeenCalled();
-    expect(status).toHaveBeenLastCalledWith("ui.shelf_unknown");
-  });
-
-  it("tells a shelf it could not reach from a file it could not read", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("offline"));
-
-    await openNamed(at(SUBJECT), forget);
-
-    expect(status).toHaveBeenLastCalledWith("ui.shelf_offline");
-  });
-
-  /* A reload must be a reload. The parameter is taken out of the address as
-   * soon as it is read, or coming back to the tab makes a second copy of a
-   * Sammlung somebody has since edited. */
-  it("takes the parameter out of the address before doing anything with it", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("{}", { status: 200 }) as never);
-    adopt.mockResolvedValue({ name: "x", pictures: 0 });
-
-    await openNamed(at(SUBJECT), forget);
-
-    expect(forgotten).not.toBeNull();
-    expect(forgotten!.searchParams.has("sammlung")).toBe(false);
+    expect(status).toHaveBeenLastCalledWith("refused Error: backup:not-one");
   });
 });

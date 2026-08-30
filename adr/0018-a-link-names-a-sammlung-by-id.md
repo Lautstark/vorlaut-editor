@@ -27,10 +27,18 @@ also the first request the editor makes to a Lautstark host.
 …/vorlaut-editor/?sammlung=erste-woerter
 ```
 
-`shelf.ts` checks the id against `/^[a-z0-9]+(-[a-z0-9]+)*$/` — the shape the
-shelf's own check enforces on a folder name — and fetches
-`https://lautstark.tech/sammlungen/download/<id>.json`. `SHELF` is a constant in
-that module and is not a parameter of anything.
+The id is checked against `/^[a-z0-9]+(-[a-z0-9]+)*$/` — the shape the shelf's
+own check enforces on a folder name — and
+`https://lautstark.tech/sammlungen/download/<id>.json` is fetched. Neither the
+host nor the pattern is a parameter of anything.
+
+**Both of those live in `@lautstark/werkzeuge/sammlung`** as of v1.1.0, because
+mitreden and bildhaft read the same links. What is worth sharing is not the
+thirty lines but the check: a regex nobody tests is one somebody relaxes when
+they need a character through it, in whichever of three repositories they
+happen to be standing in. The package stops at handing back a `File` — what a
+product makes of one, and what it says about it, stay the product's.
+`src/shell/shelf.ts` is now that half alone.
 
 **The alternative was `?von=https://…`, and it was fewer lines.** It is the
 version not to write. It turns a link into "fetch whatever this names and import
