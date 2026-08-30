@@ -111,7 +111,7 @@ describe("a DIY Sammlung as a board package", () => {
     // Off the Sammlung's updatedAt rather than the clock, so that re-exporting
     // an unchanged Sammlung does not look to the viewer like an update.
     expect(manifest.ext_lautstark_modified).toBe("2026-08-24T09:00:00Z");
-    expect(manifest.ext_lautstark_spec_version).toBe("1.2.0");
+    expect(manifest.ext_lautstark_spec_version).toBe("1.3.0");
     expect(manifest.format).toBe("open-board-0.1");
     expect(manifest.root).toBe("boards/set-1.obf");
   });
@@ -578,6 +578,78 @@ describe("a tablet Sammlung as a board package", () => {
     // which is not a column of anything to set apart.
     expect("ext_lautstark_first_column_gap" in buildAppPackage(input()).manifest)
       .toBe(false);
+  });
+
+  it("writes the press timings only where the layout set one", () => {
+    // §4.1 and §7.5: 0 is off and absent means 0, so a Sammlung that never
+    // asked carries neither field rather than two zeroes. A manifest stating
+    // "no hold time" is a package asserting the absence of something it never
+    // had, which is the same argument the gap above is written under.
+    const plain = buildAppPackage(tabletInput()).manifest;
+    expect("ext_lautstark_hold_time_ms" in plain).toBe(false);
+    expect("ext_lautstark_release_time_ms" in plain).toBe(false);
+
+    const layout = tablet();
+    layout.holdTimeMs = 300;
+    layout.releaseTimeMs = 500;
+    const pkg = buildAppPackage(tabletInput({ layout }));
+    expect(pkg.manifest.ext_lautstark_hold_time_ms).toBe(300);
+    expect(pkg.manifest.ext_lautstark_release_time_ms).toBe(500);
+    expect(checkPackage(pkg)).toEqual([]);
+  });
+
+  it("writes one timing without the other", () => {
+    // The two are separate settings because they answer different faults, and
+    // a user commonly needs one and not the other - so a package must be able
+    // to carry a pause with no hold, and the writer must not fill the gap in.
+    const layout = tablet();
+    layout.releaseTimeMs = 1000;
+    const manifest = buildAppPackage(tabletInput({ layout })).manifest;
+    expect("ext_lautstark_hold_time_ms" in manifest).toBe(false);
+    expect(manifest.ext_lautstark_release_time_ms).toBe(1000);
+  });
+
+  it("clamps a press timing to what §7.5 makes a viewer clamp it to", () => {
+    // The one number a builder must never write is one that reads back
+    // differently. §7.5 caps a timing at 2000 ms, so writing 9000 would produce
+    // a manifest that disagrees with every conformant reader of it.
+    const layout = tablet();
+    layout.holdTimeMs = 9000;
+    expect(buildAppPackage(tabletInput({ layout }))
+      .manifest.ext_lautstark_hold_time_ms).toBe(2000);
+  });
+
+  it("treats a nonsense press timing as off rather than as an error", () => {
+    // §7.5 asks a reader to degrade rather than fail, and the writer degrades
+    // the same way. A negative or a fraction reaches here only through a stored
+    // layout somebody has edited by hand, and refusing to export the whole
+    // Sammlung over one is the wrong size of response.
+    const layout = tablet();
+    layout.holdTimeMs = -50;
+    layout.releaseTimeMs = 0.4;
+    const manifest = buildAppPackage(tabletInput({ layout })).manifest;
+    expect("ext_lautstark_hold_time_ms" in manifest).toBe(false);
+    expect("ext_lautstark_release_time_ms" in manifest).toBe(false);
+  });
+
+  it("changes nothing but the manifest when a timing is asked for", () => {
+    // Like the gap: an importer that has never heard of these produces the same
+    // boards and the same files, which is what makes 1.3.0 a minor version.
+    const layout = tablet();
+    layout.holdTimeMs = 500;
+    layout.releaseTimeMs = 300;
+    const timed = buildAppPackage(tabletInput({ layout }));
+    const without = buildAppPackage(tabletInput());
+    expect(timed.boards).toEqual(without.boards);
+    expect([...timed.files.keys()]).toEqual([...without.files.keys()]);
+  });
+
+  it("never writes a press timing on a talker Sammlung", () => {
+    // The device runs its own firmware and reads no manifest, so a timing
+    // written there would be a field with nothing downstream of it.
+    const manifest = buildAppPackage(input()).manifest;
+    expect("ext_lautstark_hold_time_ms" in manifest).toBe(false);
+    expect("ext_lautstark_release_time_ms" in manifest).toBe(false);
   });
 
 /* The first column, when the Sammlung owns it.

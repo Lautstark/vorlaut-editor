@@ -5,7 +5,7 @@ viewer, plus the fixtures an importer is checked against.
 
 | | |
 |---|---|
-| [`SPEC.md`](SPEC.md) | The specification. Version 1.2.0, **draft**. |
+| [`SPEC.md`](SPEC.md) | The specification. Version 1.3.0, **draft**. |
 | [`fixtures/`](fixtures/) | The `.obz` packages, each with an `.expected.json`. |
 | [`fixtures/index.json`](fixtures/index.json) | Machine-readable list of them. |
 | [`fixtures/source/`](fixtures/source/) | German fixture content, kept out of the generator. |
@@ -29,7 +29,7 @@ than a branch.
 Tags are named `exchange-vMAJOR.MINOR.PATCH` and track `SPEC.md`'s version.
 
 > **No tag exists yet.** The spec is a draft and stays one until a real board
-> round-trips to a tablet, so `exchange-v1.2.0` is not cut. Pin a **commit
+> round-trips to a tablet, so `exchange-v1.3.0` is not cut. Pin a **commit
 > SHA** in the meantime, and expect the fixtures to move under you.
 
 > **This directory changed repository on 2026-08-27**, when the editor left
@@ -43,7 +43,7 @@ Tags are named `exchange-vMAJOR.MINOR.PATCH` and track `SPEC.md`'s version.
 > resolving. What it cannot do is move forward. This repository's history is a
 > **filtered copy**, so its ids are not translations of the old ones, and
 > re-pointing a pin here is a fresh pin rather than a bump. The cheapest moment
-> to do it is when `exchange-v1.2.0` is cut, which is what ends SHA-pinning
+> to do it is when `exchange-v1.3.0` is cut, which is what ends SHA-pinning
 > anyway.
 
 ### As a submodule
@@ -53,7 +53,7 @@ git submodule add https://github.com/Lautstark/vorlaut-editor.git third_party/vo
 ```
 
 ```bash
-git -C third_party/vorlaut checkout exchange-v1.2.0
+git -C third_party/vorlaut checkout exchange-v1.3.0
 ```
 
 Only `exchange/` is of interest; the rest of the repository comes along and can
@@ -65,7 +65,7 @@ change with a test run attached — never as a routine bump.
 If a submodule is unwelcome, fetch the tag and verify what arrived:
 
 ```bash
-curl -sSL https://github.com/Lautstark/vorlaut-editor/archive/refs/tags/exchange-v1.2.0.tar.gz -o exchange.tar.gz
+curl -sSL https://github.com/Lautstark/vorlaut-editor/archive/refs/tags/exchange-v1.3.0.tar.gz -o exchange.tar.gz
 ```
 
 ```bash
@@ -107,7 +107,7 @@ states no count, because one restated here drifts from the directory.
 {
   "fixture": "minimal",
   "file": "minimal.obz",
-  "spec_version": "1.2.0",
+  "spec_version": "1.3.0",
   "summary": "…",
 
   "outcome": "accepted",        // or "rejected"
@@ -261,6 +261,7 @@ repository's code-language check for this reason; the generator is not.
 | `identity-a-v2` | accepted | Same id, newer timestamp — must replace |
 | `first-column-gap` | accepted | The §4.1 layout hint, and the repeated column it marks |
 | `navigate-and-append` | accepted | §7.3's append-on-navigate, on `load_board` and on `:home` |
+| `press-timings` | accepted | §7.5's hold and release times, holding different values |
 
 ## What they do not cover
 

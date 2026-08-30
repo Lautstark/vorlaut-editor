@@ -706,14 +706,26 @@ export async function openSettings() {
  * Registered by an editor's wire() and taken back by its teardown, for the
  * reason collectionMenuExtras() gives: the shell outlives every editor, and a
  * panel left behind would offer a talker Sammlung a grid to resize.
+ *
+ * A list rather than one, since 1.3.0 gave the tablet a second thing to say
+ * about a whole Sammlung - how long a press has to be held - and it does not
+ * belong under the grid's heading. The panels are built here rather than
+ * declared in the sheet's markup because the shell cannot know how many an
+ * editor has; `name` is what their ids are made from, so a panel keeps one
+ * name across the markup, the tests and this file.
  */
-let panel: ((body: HTMLElement,
-             heading: (section: string, state: string) => void) => void) | null = null;
+export interface SheetPanel {
+  /** Base for this panel's four ids: `<name>Panel`, `<name>Section`,
+   *  `<name>State`, `<name>Body`. */
+  name: string;
+  build: (body: HTMLElement,
+          heading: (section: string, state: string) => void) => void;
+}
 
-export function collectionSheetPanel(
-  build: ((body: HTMLElement,
-           heading: (section: string, state: string) => void) => void) | null): void {
-  panel = build;
+let panels: SheetPanel[] = [];
+
+export function collectionSheetPanel(list: SheetPanel[] | null): void {
+  panels = list ?? [];
 }
 
 /** The sheet behind the ⋯ beside the Sammlung's name: what is a fact about
@@ -831,24 +843,51 @@ export async function openCollectionSettings() {
   $<HTMLInputElement>("voiceQuery").value = "";
   const language = $<HTMLDetailsElement>("collectionLanguagePanel");
   language.hidden = isApp(state.layout);
-  const extra = $<HTMLDetailsElement>("collectionEditorPanel");
-  extra.hidden = !panel;
+  // Built from scratch on every open rather than emptied and refilled: an
+  // editor may have been swapped since the last one, and a panel belonging to
+  // the editor that is gone would otherwise still be standing here.
+  const symbols = $<HTMLDetailsElement>("symbolPanel");
+  for (const old of symbols.parentElement?.querySelectorAll("details.panel--editor") ?? []) {
+    old.remove();
+  }
   // Filled before it is unfolded, so the heading it states is the one the
   // panel opens with rather than one written a frame later.
-  $("collectionEditorBody").replaceChildren();
-  panel?.($("collectionEditorBody"), (section, line) => {
-    $("collectionEditorSection").textContent = section;
-    $("collectionEditorState").textContent = line;
+  const built = panels.map((one) => {
+    const details = document.createElement("details");
+    details.className = "panel panel--editor";
+    // The accordion is by name, and these join the one the markup declares -
+    // so opening a generated panel still folds the Sprache above it.
+    details.setAttribute("name", "collection");
+    details.id = `${one.name}Panel`;
+    const section = document.createElement("span");
+    section.className = "section";
+    section.id = `${one.name}Section`;
+    const line = document.createElement("span");
+    line.className = "state";
+    line.id = `${one.name}State`;
+    const summary = document.createElement("summary");
+    summary.append(section, line);
+    const body = document.createElement("div");
+    body.className = "setting";
+    body.id = `${one.name}Body`;
+    details.append(summary, body);
+    // Before the symbols, which is where the one hard-coded editor panel used
+    // to sit: the panels that are this target's, then the ones both have.
+    symbols.before(details);
+    one.build(body, (heading, state) => {
+      section.textContent = heading;
+      line.textContent = state;
+    });
+    return details;
   });
   // The first one that is there, whichever that is. Assigning `open` down the
   // list would do it too, but only because the accordion closes the previous
   // one - which is the browser undoing something this line should not have
   // said in the first place.
   paintSymbolSource();
-  const panels = [language, extra, $<HTMLDetailsElement>("symbolPanel"),
-                  $<HTMLDetailsElement>("voicePanel")];
-  const first = panels.find((one) => !one.hidden);
-  for (const one of panels) one.open = one === first;
+  const shown = [language, ...built, symbols, $<HTMLDetailsElement>("voicePanel")];
+  const first = shown.find((one) => !one.hidden);
+  for (const one of shown) one.open = one === first;
   $<HTMLDialogElement>("collectionSheet").showModal();
   await Promise.all([loadVoices(), readFetch()]);
   // Read off the layout rather than out of LANG. It is deliberately not in

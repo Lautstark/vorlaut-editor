@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "..", "fixtures");
 const ASSETS = join(HERE, "..", "assets");
-const SPEC_VERSION = "1.2.0";
+const SPEC_VERSION = "1.3.0";
 
 /** German fixture content, kept in fixtures/source/ so this file stays English
  *  like the rest of the code. See the note in that file. */
@@ -278,12 +278,20 @@ function coherent(name, members, expected, deliberate) {
       ["redistributable", "ext_lautstark_redistributable"],
       ["tts_voice", "ext_lautstark_tts_voice"],
       ["first_column_gap", "ext_lautstark_first_column_gap"],
+      ["hold_time_ms", "ext_lautstark_hold_time_ms"],
+      ["release_time_ms", "ext_lautstark_release_time_ms"],
     ];
     // SPEC.md 4.1 gives first_column_gap a default, so an expectation may state
     // `false` where the manifest says nothing at all - which is the assertion
     // that pins the default rather than the field. Written as a table so that
     // the next defaulted field is a line here and not a special case.
-    const DEFAULTS = { ext_lautstark_first_column_gap: false };
+    const DEFAULTS = {
+      ext_lautstark_first_column_gap: false,
+      // SPEC.md 7.5: absent is 0 and 0 is off, so an expectation stating 0 is
+      // an assertion about the default rather than about a written field.
+      ext_lautstark_hold_time_ms: 0,
+      ext_lautstark_release_time_ms: 0,
+    };
     for (const [field, key] of pairs) {
       const said = expected.package?.[field];
       const wrote = manifest[key] ?? DEFAULTS[key];
@@ -391,7 +399,8 @@ function fixture({ name, summary, members, corrupt, expected, deliberate = [] })
 /** The manifest every well-formed fixture starts from. */
 function manifest({ id, modified, packageName, root, boards, images = {}, sounds = {},
                     symbolSource = "arasaac", redistributable = true, voice = "en_GB-alba-medium",
-                    firstColumnGap = false, extra = {} }) {
+                    firstColumnGap = false, holdTimeMs = 0, releaseTimeMs = 0,
+                    extra = {} }) {
   return {
     format: "open-board-0.1",
     root,
@@ -407,6 +416,12 @@ function manifest({ id, modified, packageName, root, boards, images = {}, sounds
     // package asks for the gap. Every other fixture leaves it out, which is what
     // makes minimal's `first_column_gap: false` an assertion about the default.
     ...(firstColumnGap ? { ext_lautstark_first_column_gap: true } : {}),
+    // SPEC.md 7.5: 0 is off and is what absent means, so the timings are
+    // written only where a package asks for one. Every other fixture leaves
+    // them out, which is what makes an expectation stating 0 an assertion
+    // about the default rather than about a field somebody wrote.
+    ...(holdTimeMs ? { ext_lautstark_hold_time_ms: holdTimeMs } : {}),
+    ...(releaseTimeMs ? { ext_lautstark_release_time_ms: releaseTimeMs } : {}),
     ...extra,
   };
 }
@@ -1391,6 +1406,69 @@ fixture({
         "An importer written against 1.1.0 ignores the field under SPEC.md 10.3 and treats c1 as c2 and e2 as e3. That is the intended degradation and it is not conformant at 1.2.0 - it is what a viewer that has not been updated does, and what the minor bump promises it may do.",
         "c3 is the shape SPEC.md 7.3 calls meaningless: the flag with nothing to navigate to. It must be ignored in silence. A warning here would put a line in front of a caregiver about a button that behaves exactly as its author would expect.",
         "Nothing in this package needs an image or a sound file. The buttons that speak fall back to synthesis, which is what audio: tts means, and it keeps the fixture about the one field it is named after.",
+      ],
+    },
+  });
+}
+
+// =============================================================================
+// 13. press-timings - SPEC.md 4.1 and 7.5, how a press is recognised.
+// =============================================================================
+
+{
+  // The smallest package that can carry the two timings, and deliberately so.
+  // What is being asserted is that two numbers arrive on the model; a board with
+  // navigation, colours or recordings on it would give an importer more ways to
+  // fail this fixture than the one it is named for.
+  //
+  // Both fields at once, holding *different* numbers. A fixture setting them to
+  // the same value passes for an importer that reads one field and writes it to
+  // both, which is a real mistake to make with two adjacent integers of the same
+  // type and unit - and the kind a conformance suite exists to catch.
+  fixture({
+    name: "press-timings",
+    summary: "ext_lautstark_hold_time_ms and ext_lautstark_release_time_ms on a package, holding different values.",
+    members: [
+      { name: "manifest.json", data: json(manifest({
+          id: "1f0a5c2e-0000-4000-8000-00000000000f",
+          modified: "2026-08-30T09:00:00Z",
+          packageName: "Slow hands",
+          root: "boards/start.obf",
+          boards: { start: "boards/start.obf" },
+          images: {}, sounds: {},
+          symbolSource: "none",
+          holdTimeMs: 300,
+          releaseTimeMs: 500,
+        })) },
+      { name: "boards/start.obf", data: json({
+          format: "open-board-0.1", id: "start", locale: "en", name: "Start",
+          buttons: [
+            { id: "b1", label: "yes", vocalization: "yes" },
+            { id: "b2", label: "no", vocalization: "no" },
+          ],
+          grid: { rows: 1, columns: 2, order: [["b1", "b2"]] },
+        }) },
+    ],
+    expected: {
+      outcome: "accepted",
+      package: { id: "1f0a5c2e-0000-4000-8000-00000000000f", name: "Slow hands",
+                 modified: "2026-08-30T09:00:00Z", symbol_source: "none",
+                 redistributable: true, root_board: "start",
+                 hold_time_ms: 300, release_time_ms: 500 },
+      boards: [
+        { id: "start", name: "Start", locale: "en", rows: 1, columns: 2 },
+      ],
+      buttons: [
+        { board: "start", id: "b1", label: "yes", vocalization: "yes", on_activate: "append", audio: "tts", state: "normal" },
+        { board: "start", id: "b2", label: "no", vocalization: "no", on_activate: "append", audio: "tts", state: "normal" },
+      ],
+      warnings: [],
+      notes: [
+        "Two numbers on the package and nothing else. Both buttons are ordinary appending buttons: the timings say when a press counts, never what it does, so every rule in SPEC.md 7.3 and 7.4 applies to this board unchanged.",
+        "The two values differ on purpose. An importer that reads one field and writes it to both passes a fixture where they agree, and two adjacent integers of the same type and unit are exactly where that mistake gets made.",
+        "An importer written against 1.2.0 ignores both fields under SPEC.md 10.3, activates on contact, and produces this same model with the same warnings. That is the intended degradation and it is not conformant at 1.3.0 - reading the fields is this fixture's whole job.",
+        "Nothing here asserts the clamp or the feedback rule of SPEC.md 7.5. The clamp needs a package no builder writes, and feedback is rendering, which no fixture covers - see the README. What is asserted is that two in-range numbers arrive on the model.",
+        "No image and no sound. A button with neither falls back to synthesis, which is what audio: tts means, and it keeps the fixture about the fields it is named after.",
       ],
     },
   });

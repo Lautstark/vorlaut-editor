@@ -1,7 +1,7 @@
 {
   "fixture": "navigate-and-append",
   "file": "navigate-and-append.obz",
-  "spec_version": "1.2.0",
+  "spec_version": "1.3.0",
   "summary": "ext_lautstark_append_on_navigate on a load_board button and on a :home button, each beside a plain navigation to the same place.",
   "outcome": "accepted",
   "package": {

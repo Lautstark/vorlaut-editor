@@ -84,21 +84,15 @@ export const markup = `
     </div>
   </details>
 
-  <!-- What the editor on screen has to say about the Sammlung as a whole: on
-       a tablet the grid, which is that target's in the way the language above
-       is the talker's. Empty and hidden until an editor fills it - see
-       collectionSheetPanel() in shell/voices.ts. Before the voice, so that
-       both targets read the same way: the one panel that is this target's,
-       then the one both of them have. -->
-  <details class="panel" name="collection" id="collectionEditorPanel" hidden>
-    <summary>
-      <span class="section" id="collectionEditorSection"></span>
-      <span class="state" id="collectionEditorState"></span>
-    </summary>
-    <!-- .setting for the padding every other panel body has; what goes in it
-         is the editor's, down to the button that applies it. -->
-    <div class="setting" id="collectionEditorBody"></div>
-  </details>
+  <!-- What the editor on screen has to say about the Sammlung as a whole goes
+       here, and is not in this file: on a tablet that is the grid and the press
+       timings, which are that target's in the way the language above is the
+       talker's. openCollectionSettings() builds one details.panel--editor per
+       panel an editor registered through collectionSheetPanel() in
+       shell/voices.ts and inserts them immediately before the symbols below -
+       so this markup declares none, and an editor with two of them costs no
+       edit here. Their ids are made from each panel's "name", which is how
+       #collectionEditorPanel and the rest still exist to be looked up. -->
 
   <!-- Which symbol collection this Sammlung's pictures come from. Both targets
        have it, because both have pictures - unlike the language above, which

@@ -265,6 +265,41 @@ export interface AppLayout {
    *  AsTeRICS Grid carries `colorSchemesActivated` beside a `colorMode` of
    *  background, border or both. */
   wordColor?: WordColor;
+  /** How long a press must rest on a button before the tablet counts it, in
+   *  milliseconds. Written out as exchange/SPEC.md §4.1's
+   *  ext_lautstark_hold_time_ms.
+   *
+   *  Absent counts as 0, which is off: the button activates on contact, the
+   *  way every board did before this field existed. So nothing has to be
+   *  migrated and no Sammlung changes behaviour by being opened.
+   *
+   *  This and [releaseTimeMs] are the only two things on a Sammlung that
+   *  describe the *user* rather than the board - every other field here says
+   *  what is on the page. They are stored per Sammlung anyway, because the
+   *  person who authored a board is the person who knows who it was authored
+   *  for, and a tablet that behaves correctly the first time it is handed over
+   *  is worth more than one that has to be tuned before it can be used.
+   *
+   *  What it is *not* is the last word. SPEC.md §4.1 says a viewer with its own
+   *  setting should let that win, so this is a default travelling with the
+   *  package rather than a decision imposed on the tablet - a child's motor
+   *  needs change with fatigue and illness, and the person holding the tablet
+   *  on a bad afternoon is not going to re-export a Sammlung. */
+  holdTimeMs?: number;
+  /** How long after a press the tablet ignores the next one, in milliseconds.
+   *  exchange/SPEC.md §4.1's ext_lautstark_release_time_ms.
+   *
+   *  Absent counts as 0, as above.
+   *
+   *  Deliberately separate from [holdTimeMs] rather than one "sensitivity"
+   *  number, because the two catch different faults and a user commonly needs
+   *  one and not the other. The hold rejects a press that was never meant - a
+   *  hand resting on the board on the way to a word. This rejects the second
+   *  copy of a press that was - a tremor, or a finger bouncing on release,
+   *  arriving as three presses. One number would make every user take both
+   *  treatments to get the one they need, and a hold time costs a delay on
+   *  every word the user says. */
+  releaseTimeMs?: number;
   /** The page the tablet opens on, and what a `:home` button goes to. It
    *  becomes `manifest.root`.
    *
