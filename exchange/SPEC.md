@@ -1,8 +1,8 @@
 # Lautstark Board Package — exchange format specification
 
-**Version 1.2.0** · status: **draft, not ratified** · 2026-08-26
+**Version 1.3.0** · status: **draft, not ratified** · 2026-08-30
 
-> No `exchange-v1.2.0` tag is cut, and none will be, until a real board has
+> No `exchange-v1.3.0` tag is cut, and none will be, until a real board has
 > been built, exported, and opened on a tablet. Until then this document is a
 > proposal with fixtures attached: pin a commit if you need to build against
 > it, and expect it to move.
@@ -117,14 +117,16 @@ hand these to each other, and where a builder should say so.
     "images": { "img-food": "images/food.png" },
     "sounds": { "snd-food": "sounds/food.opus" }
   },
-  "ext_lautstark_spec_version": "1.2.0",
+  "ext_lautstark_spec_version": "1.3.0",
   "ext_lautstark_package_id": "1f0a5c2e-0000-4000-8000-000000000001",
   "ext_lautstark_package_name": "Home",
   "ext_lautstark_modified": "2026-08-24T09:00:00Z",
   "ext_lautstark_symbol_source": "arasaac",
   "ext_lautstark_redistributable": true,
   "ext_lautstark_tts_voice": "en_GB-alba-medium",
-  "ext_lautstark_first_column_gap": true
+  "ext_lautstark_first_column_gap": true,
+  "ext_lautstark_hold_time_ms": 300,
+  "ext_lautstark_release_time_ms": 500
 }
 ```
 
@@ -144,7 +146,7 @@ and `paths.images` disagree, the importer MUST use `paths`, and SHOULD warn
 
 ## 4. Extension fields
 
-OBF has no room for eight things this format needs. Each is prefixed
+OBF has no room for thirteen things this format needs. Each is prefixed
 `ext_lautstark_`, which is the OBF-sanctioned way to add a field, and each is
 listed below with the reason it cannot be expressed in plain OBF.
 
@@ -160,6 +162,16 @@ listed below with the reason it cannot be expressed in plain OBF.
 | `ext_lautstark_redistributable` | boolean | yes | Whether the package may be passed on. OBF's per-image `license` block describes a licence but carries no instruction, and the METACOM case needs one. See §5.2. |
 | `ext_lautstark_tts_voice` | string | no | Preferred voice for synthesised speech. OBF has no voice concept — it assumes recorded audio or the platform default. A hint only: the importer falls back to the platform default when the voice is unavailable, and MUST NOT fail. |
 | `ext_lautstark_first_column_gap` | boolean | no, default `false` | When true the viewer draws extra space between the first column and the second, on every board. **OBF has no gutter of its own**, and the one implementation that comes closest — AsTeRICS Grid — has a single `elementMargin` applied uniformly, so a gap in one place cannot be asked for. What the gap says is that the leftmost column is always reachable: MetaTalk sets that column apart because its buttons stay put while the pages behind them change. The persistence itself needs no field — a builder repeats those buttons on every board — but a repeated column that looks like every other column reads as four boards that happen to start the same way. A hint, like the voice above: an importer that ignores it renders a correct board with the wrong emphasis, and MUST NOT fail. A value that is not a boolean MUST be treated as absent. |
+| `ext_lautstark_hold_time_ms` | integer | no, default `0` | How long a press must rest on a button before it counts, in milliseconds. `0` is off, which is what absent means. **OBF describes what a button does and never how a press is recognised** — it has no access model at all, because it was drawn up as an interchange format for vocabularies rather than for the motor profile of the person using one. Every talker with a touch access panel has this setting and no two agree on the name: Grid 3 calls it hold time, Proloquo2Go hold duration, TD Snap acceptance time. It is the setting for a user who rests a hand on the board on the way to a word, or whose reach lands on two cells before settling on one — the press that does not linger is not a press. See §7.5 for what a viewer must do with it. |
+| `ext_lautstark_release_time_ms` | integer | no, default `0` | How long after one activation the board ignores further presses, in milliseconds. `0` is off, which is what absent means. Grid 3's release time; elsewhere a post-activation delay, a cooldown, or a debounce. Separate from the hold above because the two answer different faults and a user commonly needs one and not the other: the hold rejects a press that was never meant, and this rejects the *second* copy of a press that was. It is the setting for a tremor, or for a finger that bounces on release, where one intended press arrives as three. See §7.5. |
+
+Both timings are properties of the person holding the tablet rather than of the
+vocabulary, so a viewer that offers its own setting for either SHOULD let it
+override the package. What the package carries is the builder's default — the
+person who authored the board knows the user it was authored for, and a tablet
+that behaves correctly when it is first handed over is worth more than one that
+has to be tuned before it can be used. A viewer with no such setting simply
+takes what it is given.
 
 ### 4.2 Board extensions
 
@@ -174,7 +186,7 @@ listed below with the reason it cannot be expressed in plain OBF.
 | `ext_lautstark_speak_immediately` | boolean | no, default `false` | When true the button speaks at once instead of appending to the message bar. **OBF cannot express this.** Its model is that a button either appends or performs an action, with no "speak this now and leave the bar alone". Interjections need it: `Ouch!`, `stop that`, a greeting. Composing those into a sentence first defeats their purpose. |
 | `ext_lautstark_append_on_navigate` | boolean | no, default `false` | When true a navigating button appends its entry to the message bar before it navigates. **OBF cannot express this either.** `load_board` is the whole of a button's behaviour there rather than one of two things it does, and no OBF action appends a button's own text — `+text` is spelling, which §7.4 puts out of scope for v1. The carrier phrase needs it: a button reading `I want …` that opens the food board with the sentence already begun. See §7.3. |
 
-That is the whole list. Eleven fields, eight of them in the manifest. Anything
+That is the whole list. Thirteen fields, ten of them in the manifest. Anything
 else beginning `ext_lautstark_` is not part of v1 and MUST be ignored.
 
 ---
@@ -502,6 +514,45 @@ Spelling is out of scope for v1 rather than undefined. A future version adding i
 will bump the minor version and older importers will keep disabling those
 buttons, which is the correct behaviour for a viewer that cannot spell.
 
+### 7.5 How a press is recognised
+
+`ext_lautstark_hold_time_ms` and `ext_lautstark_release_time_ms` (§4.1) change
+when a press counts, never what it does. Everything in §7.3 and §7.4 happens
+exactly as written once a press counts.
+
+Both are integers in milliseconds. A value that is absent, negative, or not an
+integer MUST be treated as `0`, and `0` means the timing is off. A viewer MUST
+clamp a value above `2000` to `2000`: a package is authored on one device and
+read on another, and a hold time of a minute is a board nobody can use — the
+format should not be able to express a package that bricks the tablet it lands
+on.
+
+**Hold time.** A press activates a button only once the pointer has rested on
+that button continuously for the given time. A press that lifts early, or that
+moves off the button before the time is up, activates nothing. The count starts
+when the pointer goes down on the button; a pointer that slides in from another
+cell starts the count where it enters.
+
+**Release time.** After a button activates, the viewer ignores every press that
+begins within the given time. It does not queue them — a press swallowed here
+is dropped, not deferred, because a queued press arrives after the user has
+already given up on it and reads as the board acting on its own.
+
+**A viewer that implements a hold time MUST show it while it is counting.** Any
+visible change on the button will do — this format does not say which — but
+something MUST happen on pointer-down, before the button activates. The reason
+is §7.4's, one step earlier: a button that takes a press and shows nothing
+teaches the user the device is ignoring them, and a hold time with no feedback
+is indistinguishable from a broken button for exactly as long as it lasts. That
+is also the failure this setting is usually reached for in the first place — a
+user pressing again because nothing happened is one of the two things a release
+time is there to absorb.
+
+An importer that ignores both fields is still conformant. It renders a correct
+board that activates on contact, which is what every viewer did before this
+version — the wrong access model for the user the package was tuned for, but
+not a wrong board. Neither field may cause an import to fail.
+
 ---
 
 ## 8. Package identity and re-import
@@ -747,7 +798,7 @@ A builder MUST write the version it targets, not the version it happens to fit.
 
 ## 13. Conformance
 
-An importer is conformant at v1.2.0 when it produces, for **every** fixture
+An importer is conformant at v1.3.0 when it produces, for **every** fixture
 listed in [`fixtures/index.json`](fixtures/index.json), the outcome in the
 matching `.expected.json`. That index is the authoritative list; no count
 appears in this document, because a number restated in prose drifts from the
@@ -760,6 +811,46 @@ disagreement is a bug in this document. Report it.
 ---
 
 ## 14. Changelog
+
+### 1.3.0 — 2026-08-30
+
+Adds `ext_lautstark_hold_time_ms` and `ext_lautstark_release_time_ms` (§4.1,
+§7.5): how long a press must rest on a button before it counts, and how long
+after an activation the board ignores further presses. Minor, per §12 — an
+importer written against 1.2.0 ignores both under §10.3 and activates on
+contact, which is what every viewer did before this version.
+
+**The first thing in this format that is about the user rather than the
+vocabulary.** Everything else here describes what is on the board: which words,
+which pictures, what a press does. These two describe the hand pressing it. They
+are in the format at all because a package is authored on one machine by
+somebody who knows the user and opened on another that has never met them, and a
+tablet that behaves correctly the first time it is handed over is worth more
+than one that has to be tuned before it can be used. §4.1 says outright that a
+viewer with its own setting SHOULD let it win, which is the other half of the
+same argument: the package carries the author's default, not a decision.
+
+**Two fields rather than one**, because they fix different faults and a user
+commonly needs one and not the other. A hold time rejects the press that was
+never meant — a hand resting on the board on the way to a word, a reach that
+lands on two cells before settling. A release time rejects the second copy of a
+press that *was* meant — a tremor, or a finger bouncing on release, turning one
+press into three. Collapsing them into a single "sensitivity" number would make
+every user take both treatments to get the one they need, and a hold time is not
+free: it is a delay on every word the user says.
+
+**Milliseconds, clamped, and off by default.** The clamp in §7.5 is there
+because the format should not be able to express a package that bricks the
+tablet it lands on — a hold time of a minute is a board nobody can use, and the
+device it arrives on may not be the device it was tested on. Absent means off,
+so no existing package changes meaning and nothing has to be migrated.
+
+**Feedback is required rather than suggested**, which is the one MUST in §7.5
+that is not about parsing. A hold time with no visible response is
+indistinguishable from a dead button for as long as it lasts, and §7.4 already
+says what a button that takes a press and does nothing teaches the person
+pressing it. It is also self-defeating: a user pressing again because nothing
+happened is one of the two faults the release time exists to absorb.
 
 ### 1.2.0 — 2026-08-26
 

@@ -494,7 +494,7 @@ test("a tablet Sammlung leaves as a package, and it passes the spec's own checks
 
     expect(checkPackage(pkg)).toEqual([]);
     expect(pkg.manifest.format).toBe("open-board-0.1");
-    expect(pkg.manifest.ext_lautstark_spec_version).toBe("1.2.0");
+    expect(pkg.manifest.ext_lautstark_spec_version).toBe("1.3.0");
     expect(pkg.manifest.ext_lautstark_tts_voice).toBe("de-DE-KatjaNeural");
 
     // Two pages, two boards, and the root is the page the layout calls home.
@@ -711,6 +711,17 @@ async function openGrid(page: Page) {
   return card;
 }
 
+/** Bedienung: the second panel this editor puts in that sheet, holding the two
+ *  press timings of exchange/SPEC.md §7.5. Its own panel and not part of the
+ *  grid's, so it is opened the same way and separately. */
+async function openAccess(page: Page) {
+  await openCollectionSettings(page);
+  await openPanel(page, "#collectionAccessPanel");
+  const card = page.locator("#collectionAccessPanel");
+  await expect(card).toBeVisible();
+  return card;
+}
+
 /** Out of the Sammlung's sheet, back to the board behind it. The sheet is
  *  modal, so anything on the page under it is inert until this runs - and the
  *  grid panel no longer closes it, because applying a panel is not leaving a
@@ -731,6 +742,103 @@ const size = (card: Locator, rows: number, columns: number) =>
  * it. A rule across the panel and the button at its far end is the same shape
  * the sheet's own foot uses one level up.
  */
+/* The two press timings, from the panel that collects them to the manifest that
+ * carries them.
+ *
+ * The whole point of the feature is that a caregiver sets this once in the
+ * editor and the tablet arrives behaving correctly, so the test that matters is
+ * the one that crosses that boundary rather than either half of it. Both halves
+ * have unit tests; neither of them would notice a panel that wrote to a field
+ * the writer does not read.
+ */
+test("a press timing set in Bedienung reaches the package", async ({ page }) => {
+  await standIn(page);
+  await build(page);
+
+  const card = await openAccess(page);
+  // Nothing is set on a new Sammlung, and the folded line says so with the one
+  // word rather than with two zeroes.
+  const stated = page.locator("#collectionAccessState");
+  await expect(stated).toHaveText(label("ui.app_press_off"));
+
+  // Applied on touch: no apply button in this panel, because neither setting
+  // destroys anything and the sheet's default is that a choice takes effect
+  // where it is made.
+  await expect(card.locator(".row--apply")).toHaveCount(0);
+  /* Each step picked inside its own group, by the group's name. The two step
+   * lists overlap - 500 is offered for both - so reaching for the number alone
+   * finds the hold's copy of it twice and silently leaves the pause unset. */
+  const group = (name: string) =>
+    card.getByRole("group", { name: label(name) });
+  await group("ui.app_press_hold").locator("button", { hasText: /^300 ms$/ })
+    .click();
+  await group("ui.app_press_release").locator("button", { hasText: /^1000 ms$/ })
+    .click();
+  // The chip says it is the one in force, the way a size chip does.
+  await expect(group("ui.app_press_hold")
+    .locator("button", { hasText: /^300 ms$/ }))
+    .toHaveAttribute("aria-pressed", "true");
+  // The heading follows immediately, which is what says the choice took.
+  await expect(stated).toHaveText("300 ms · 1000 ms");
+
+  await page.locator("#collectionSheetClose").click();
+  await expect(page.locator("#collectionSheet")).toBeHidden();
+
+  await exportPackage(page);
+  const asked = sheet(page, "ui.package_title");
+  await expect(asked).toBeVisible();
+  const download = await savePackage(asked);
+  const path = await download.path();
+  const { pkg } = readPackage(new Uint8Array(readFileSync(path!)));
+
+  expect(checkPackage(pkg)).toEqual([]);
+  expect(pkg.manifest.ext_lautstark_hold_time_ms).toBe(300);
+  expect(pkg.manifest.ext_lautstark_release_time_ms).toBe(1000);
+});
+
+test("a Sammlung nobody has set a timing on carries neither field",
+  async ({ page }) => {
+    // §4.1: 0 is off and absent means 0, so an untouched Sammlung must not
+    // export two zeroes - a package asserting the absence of something it never
+    // had is a package that has an opinion it was never given.
+    await standIn(page);
+    await build(page);
+
+    await exportPackage(page);
+    const asked = sheet(page, "ui.package_title");
+    await expect(asked).toBeVisible();
+    const download = await savePackage(asked);
+    const path = await download.path();
+    const { pkg } = readPackage(new Uint8Array(readFileSync(path!)));
+
+    expect("ext_lautstark_hold_time_ms" in pkg.manifest).toBe(false);
+    expect("ext_lautstark_release_time_ms" in pkg.manifest).toBe(false);
+  });
+
+test("Bedienung and the grid are two panels, not one", async ({ page }) => {
+  // The reason the hook widened to a list. A motor-access setting filed under
+  // a heading that says "Raster" and states a grid size is filed where nobody
+  // looking for it would look, and it would inherit that panel's apply button.
+  await standIn(page);
+  await build(page);
+  await openCollectionSettings(page);
+
+  const grid = page.locator("#collectionEditorPanel");
+  const access = page.locator("#collectionAccessPanel");
+  await expect(grid).toHaveCount(1);
+  await expect(access).toHaveCount(1);
+  await expect(page.locator("#collectionEditorSection"))
+    .toHaveText(label("ui.app_grid"));
+  await expect(page.locator("#collectionAccessSection"))
+    .toHaveText(label("ui.app_press"));
+
+  // One accordion: opening the second folds the first, which is what says they
+  // are siblings in the sheet rather than one panel inside another.
+  await openPanel(page, "#collectionAccessPanel");
+  await expect(access).toHaveAttribute("open", "");
+  await expect(grid).not.toHaveAttribute("open", "");
+});
+
 test("the press that applies the grid panel is drawn as its foot",
   async ({ page }) => {
     await standIn(page);

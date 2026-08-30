@@ -1917,6 +1917,142 @@ function gridPanel(into: HTMLElement,
   draw();
 }
 
+/** The steps each timing is offered in, in milliseconds, 0 first and meaning
+ *  off.
+ *
+ * A short list rather than a number field or a slider, because nobody tuning
+ * this knows the answer in advance - it is found by trying one and watching,
+ * and five named steps are something a caregiver can walk down in order. A
+ * slider invites the belief that 340 differs from 300, which it does not for
+ * any hand this is for.
+ *
+ * The two lists are not the same, because the two settings are not measuring
+ * the same thing. A hold has to stay short: it is a delay on every word the
+ * user says, and past about half a second the board starts to feel like it is
+ * refusing rather than waiting. A pause after a press costs nothing until the
+ * *next* word, so it can afford to run longer - a tremor that produces three
+ * presses can spread them over a second easily.
+ *
+ * Both lists stay inside MAX_PRESS_TIMING_MS, which is where SPEC.md §7.5
+ * clamps; nothing here can produce a package a viewer would have to correct.
+ */
+const HOLD_STEPS = [0, 100, 300, 500, 800];
+const RELEASE_STEPS = [0, 300, 500, 1000, 1500];
+
+/**
+ * Bedienung: how long a press has to be held, and how long the board is deaf
+ * afterwards. exchange/SPEC.md §4.1 and §7.5, written into the package as
+ * ext_lautstark_hold_time_ms and ext_lautstark_release_time_ms.
+ *
+ * **Its own panel rather than a third block under Raster**, which was the
+ * cheaper option and the wrong one. That panel's heading is "Raster" and its
+ * state line is a grid size, so a motor-access setting filed under it is filed
+ * where nobody looking for it would look. It also holds its changes behind an
+ * apply button, which exists there because resizing a grid throws buttons away
+ * - these two destroy nothing, so they apply on touch like every other setting
+ * on this sheet, and inheriting a confirmation they do not need would have
+ * taught that the button means less than it does.
+ *
+ * Nothing here is trialled or counted first, for the same reason: the worst a
+ * wrong number does is make the tablet feel wrong until it is changed back, and
+ * it is changed back from this same list.
+ */
+function accessPanel(into: HTMLElement,
+                     heading: (section: string, state: string) => void): void {
+  const layout = board();
+
+  /** What a step reads as: the number with its unit, or the word for off. */
+  const spoken = (ms: number): string =>
+    ms === 0 ? t("ui.app_press_off") : t("ui.app_press_ms", { n: ms });
+
+  const draw = (): void => {
+    const why = document.createElement("p");
+    why.className = "note";
+    why.textContent = t("ui.app_press_tablet_only");
+    const body: HTMLElement[] = [why];
+
+    /* One group per setting, drawn as the size picker above is drawn: a wrapping
+     * row of chips, each saying whether it is the one in force with
+     * aria-pressed.
+     *
+     * Not the bordered .opts rows the word colour and the first-column switches
+     * use, though they were the first thing tried. Those carry a note under each
+     * choice and are full width because of it; five bare numbers in that shape
+     * made a panel two screens tall whose first question had scrolled off before
+     * the second was reachable. Five short values with nothing to explain per
+     * value is what .sizes is already for, one card up - which is also why this
+     * is that component rather than a third one that looks like it. */
+    const group = (key: string, said: string, steps: readonly number[],
+                   now: number, set: (ms: number) => void): void => {
+      const what = document.createElement("span");
+      what.className = "lbl";
+      what.textContent = t(key);
+      /* The note arrives already looked up rather than as `${key}_note`.
+       * tests/test_texts_used.py reads this file for literal keys, and a key
+       * assembled from a variable is a key nothing can find - the same rule the
+       * first-column switches above are written under. */
+      const note = document.createElement("p");
+      note.className = "note";
+      note.textContent = said;
+      const choices = document.createElement("div");
+      choices.className = "sizes";
+      choices.setAttribute("role", "group");
+      choices.setAttribute("aria-label", t(key));
+      for (const ms of steps) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "size";
+        chip.setAttribute("aria-pressed", ms === now ? "true" : "false");
+        const head = document.createElement("b");
+        head.textContent = spoken(ms);
+        chip.appendChild(head);
+        chip.onclick = () => {
+          set(ms);
+          commit();
+          // Redrawn rather than the pressed state moved by hand, so the state
+          // line in the summary agrees with the chip that has just been pressed.
+          draw();
+        };
+        choices.appendChild(chip);
+      }
+      body.push(what, note, choices);
+    };
+
+    group("ui.app_press_hold", t("ui.app_press_hold_note"), HOLD_STEPS,
+          layout.holdTimeMs ?? 0, (ms) => {
+            // Absent rather than 0, so a Sammlung that never asked for a hold
+            // stays a Sammlung with no such field - which is what
+            // data/app_package.ts reads when it decides whether to write the
+            // manifest entry at all.
+            if (ms) layout.holdTimeMs = ms;
+            else delete layout.holdTimeMs;
+          });
+
+    const rule = document.createElement("hr");
+    rule.className = "cardrule";
+    body.push(rule);
+
+    group("ui.app_press_release", t("ui.app_press_release_note"),
+          RELEASE_STEPS, layout.releaseTimeMs ?? 0, (ms) => {
+            if (ms) layout.releaseTimeMs = ms;
+            else delete layout.releaseTimeMs;
+          });
+
+    into.replaceChildren(...body);
+
+    /* Both numbers, in the order the panel asks them, so the folded line says
+     * which is which by position. Where neither is set it is the word for off
+     * once, rather than that word twice with a dot between, which reads as a
+     * fault rather than as a setting nobody has reached for. */
+    const hold = layout.holdTimeMs ?? 0;
+    const release = layout.releaseTimeMs ?? 0;
+    heading(t("ui.app_press"),
+            hold || release ? `${spoken(hold)} · ${spoken(release)}`
+                            : t("ui.app_press_off"));
+  };
+  draw();
+}
+
 export function wireEditor(): () => void {
   /* The page's name is the field that renames it, the way the Sammlung's is
    * one floor up. Typed straight into the page, saved on the debounce that
@@ -1965,11 +2101,18 @@ export function wireEditor(): () => void {
    * Target, which is what core/editor.ts's registry is keyed by, and
    * tests/unit/layers.test.ts still holds the arrow pointing one way. */
 
-  /* The grid is a panel in the sheet behind that same ⋯, and unchanged by any
-   * of this. Taken back with the rest when this editor leaves the page: the
-   * shell outlives it, and a talker Sammlung must not be offered a grid to
-   * resize. */
-  collectionSheetPanel(gridPanel);
+  /* The grid and the press timings are panels in the sheet behind that same ⋯,
+   * and unchanged by any of this. Taken back with the rest when this editor
+   * leaves the page: the shell outlives it, and a talker Sammlung must not be
+   * offered a grid to resize - nor a hold time, which is the tablet viewer's
+   * to honour and no part of the device's firmware.
+   *
+   * In the order they are drawn, the grid first: it is what somebody opens this
+   * sheet for, and Bedienung is set once for a user and then left alone. */
+  collectionSheetPanel([
+    { name: "collectionEditor", build: gridPanel },
+    { name: "collectionAccess", build: accessPanel },
+  ]);
   return () => {
     collectionPages(null);
     collectionSheetPanel(null);

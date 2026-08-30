@@ -90,7 +90,17 @@ import type {
  *
  * §12: a builder writes the version it targets, not the version it happens to
  * fit. Bumping this is a decision about having read the changelog. */
-export const SPEC_VERSION = "1.2.0";
+export const SPEC_VERSION = "1.3.0";
+
+/** SPEC.md §7.5's ceiling on a press timing, in milliseconds.
+ *
+ * The spec makes a viewer clamp to this rather than honour whatever it is
+ * given, because a package is authored on one machine and opened on another: a
+ * hold time of a minute is a board nobody can use, and the format should not be
+ * able to express a package that bricks the tablet it lands on. Here so that
+ * the writer and the panel that collects the number agree with the reader
+ * about where the edge is. */
+export const MAX_PRESS_TIMING_MS = 2000;
 
 export const FORMAT = "open-board-0.1";
 const MANIFEST = "manifest.json";
@@ -177,6 +187,8 @@ export interface PackageManifest {
   ext_lautstark_redistributable: boolean;
   ext_lautstark_tts_voice?: string;
   ext_lautstark_first_column_gap?: boolean;
+  ext_lautstark_hold_time_ms?: number;
+  ext_lautstark_release_time_ms?: number;
 }
 
 /** §5.1: one source for the whole package, and mixing is not representable. */
@@ -657,8 +669,32 @@ export function buildAppPackage(input: PackageInput): AppPackage {
   if (layout.target === "app" && layout.firstColumnGap === true) {
     manifest.ext_lautstark_first_column_gap = true;
   }
+  // §4.1 and §7.5: 0 is off and is what absent means, so the fields are
+  // written only where a timing was actually asked for. A talker Sammlung never
+  // asks - the device has its own firmware and reads none of this.
+  //
+  // Clamped on the way out as well as on the way in. §7.5 makes the viewer
+  // clamp, so writing an out-of-range number would produce a package whose
+  // manifest disagrees with what any conformant reader does with it - and the
+  // one number a builder must never write is one that reads back differently.
+  if (layout.target === "app") {
+    const hold = pressTiming(layout.holdTimeMs);
+    if (hold) manifest.ext_lautstark_hold_time_ms = hold;
+    const release = pressTiming(layout.releaseTimeMs);
+    if (release) manifest.ext_lautstark_release_time_ms = release;
+  }
 
   return { manifest, boards, files };
+}
+
+/** SPEC.md §7.5's rule for a press timing, applied at the writing end: a whole
+ *  number of milliseconds from 0 to [MAX_PRESS_TIMING_MS], where 0 is off and
+ *  absent means 0. Anything else - a negative, a fraction, a NaN out of a
+ *  parsed input box - is off rather than an error, which is the same
+ *  degradation §7.5 asks a reader for. */
+function pressTiming(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.min(Math.max(Math.round(value), 0), MAX_PRESS_TIMING_MS);
 }
 
 /** Putting a picture and a recording into the archive and onto one board.

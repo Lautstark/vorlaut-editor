@@ -1,0 +1,54 @@
+{
+  "fixture": "press-timings",
+  "file": "press-timings.obz",
+  "spec_version": "1.3.0",
+  "summary": "ext_lautstark_hold_time_ms and ext_lautstark_release_time_ms on a package, holding different values.",
+  "outcome": "accepted",
+  "package": {
+    "id": "1f0a5c2e-0000-4000-8000-00000000000f",
+    "name": "Slow hands",
+    "modified": "2026-08-30T09:00:00Z",
+    "symbol_source": "none",
+    "redistributable": true,
+    "root_board": "start",
+    "hold_time_ms": 300,
+    "release_time_ms": 500
+  },
+  "boards": [
+    {
+      "id": "start",
+      "name": "Start",
+      "locale": "en",
+      "rows": 1,
+      "columns": 2
+    }
+  ],
+  "buttons": [
+    {
+      "board": "start",
+      "id": "b1",
+      "label": "yes",
+      "vocalization": "yes",
+      "on_activate": "append",
+      "audio": "tts",
+      "state": "normal"
+    },
+    {
+      "board": "start",
+      "id": "b2",
+      "label": "no",
+      "vocalization": "no",
+      "on_activate": "append",
+      "audio": "tts",
+      "state": "normal"
+    }
+  ],
+  "warnings": [],
+  "notes": [
+    "Two numbers on the package and nothing else. Both buttons are ordinary appending buttons: the timings say when a press counts, never what it does, so every rule in SPEC.md 7.3 and 7.4 applies to this board unchanged.",
+    "The two values differ on purpose. An importer that reads one field and writes it to both passes a fixture where they agree, and two adjacent integers of the same type and unit are exactly where that mistake gets made.",
+    "An importer written against 1.2.0 ignores both fields under SPEC.md 10.3, activates on contact, and produces this same model with the same warnings. That is the intended degradation and it is not conformant at 1.3.0 - reading the fields is this fixture's whole job.",
+    "Nothing here asserts the clamp or the feedback rule of SPEC.md 7.5. The clamp needs a package no builder writes, and feedback is rendering, which no fixture covers - see the README. What is asserted is that two in-range numbers arrive on the model.",
+    "No image and no sound. A button with neither falls back to synthesis, which is what audio: tts means, and it keeps the fixture about the fields it is named after."
+  ]
+}
