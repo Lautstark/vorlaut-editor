@@ -27,8 +27,34 @@ const BASE = "/";
  * gets a port of its own. */
 const PORT = Number(process.env.E2E_PORT || 8802);
 
+/* What one test is allowed to take, said out loud because the default is
+ * smaller than what this suite's own helpers ask for.
+ *
+ * Playwright's 30s applies to the whole test, not to one action inside it, and
+ * two helpers in e2e/sheets.ts already wait longer than that on their own:
+ * exportForTalker() gives the download 45s and savePackage() gives the save
+ * button 45s. Both were unreachable - the test died at 30s first, and whatever
+ * call happened to be in flight when it did was reported as the failure. So a
+ * timeout written in a spec meant nothing above 30s, which is worse than a
+ * wrong number: it reads as a decision that was never in force.
+ *
+ * 90s rather than 45s because the wait is not the test. editor_app.spec.ts
+ * builds a whole Sammlung through the controls before it exports one - two
+ * pages, seven buttons, a grid reset and a voice, every one of them a real
+ * press - so the 45s the export asks for starts from whatever that cost. On a
+ * loaded machine the build alone measured 29.5s and the slowest test in the
+ * file 52.7s, which is the spread this number is picked to clear rather than
+ * a figure to hold anything to.
+ *
+ * A ceiling only bills what it stops, so this costs nothing where the suite is
+ * already fast: CI runs the whole job in about three minutes and none of it
+ * comes near this. What it buys is a machine under load finishing rather than
+ * reporting a click that never landed - the failure this number was written
+ * for looked like a hit-target check failing in a sheet, and was the clock.
+ */
 export default defineConfig({
   testDir: "./e2e",
+  timeout: 90_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
