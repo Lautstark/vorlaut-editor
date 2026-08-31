@@ -111,7 +111,7 @@ describe("a DIY Sammlung as a board package", () => {
     // Off the Sammlung's updatedAt rather than the clock, so that re-exporting
     // an unchanged Sammlung does not look to the viewer like an update.
     expect(manifest.ext_lautstark_modified).toBe("2026-08-24T09:00:00Z");
-    expect(manifest.ext_lautstark_spec_version).toBe("1.3.0");
+    expect(manifest.ext_lautstark_spec_version).toBe("1.4.0");
     expect(manifest.format).toBe("open-board-0.1");
     expect(manifest.root).toBe("boards/set-1.obf");
   });
@@ -154,6 +154,90 @@ describe("a DIY Sammlung as a board package", () => {
     // The set key navigates, and §7.3 says navigation must not touch the bar,
     // so it carries no speak flag at all.
     expect(button(pkg, "set-1", "set-1-set").ext_lautstark_speak_immediately).toBeUndefined();
+  });
+
+  it("maps each of the talker's three press modes to what §7.3 makes it", () => {
+    /* The three the five-key editor offers - Wort, Wort & weiter, weiter -
+     * against the three shapes §7.3 gives them. A key with no act at all is the
+     * fourth case and the important one: it is every key in every Sammlung
+     * written before SlotAct existed, and it has to come out as the speaking
+     * key it has always been. */
+    const held = layout();
+    const spielen = held.sets[1]!;
+    spielen.id = "1f0a5c2e-0000-4000-8000-0000000000aa";
+    const essen = held.sets[0]!;
+    // Wort & weiter: says its word, then switches page. The game key.
+    essen.slots[1]!.act = { kind: "goto", set: spielen.id, alsoSpeak: true };
+    // weiter: switches and says nothing.
+    essen.slots[3]!.act = { kind: "goto", set: spielen.id };
+    // Wort, written out where the key above it leaves it absent.
+    spielen.slots[0]!.act = { kind: "speak" };
+
+    const pkg = buildAppPackage(input({ layout: held }));
+    expect(checkPackage(pkg)).toEqual([]);
+    const at = (id: string) => button(pkg, "set-1", id);
+
+    // Absent counts as `speak`: key 1 was never given an act.
+    expect(at("set-1-key-1").ext_lautstark_speak_immediately).toBe(true);
+    expect(at("set-1-key-1").load_board).toBeUndefined();
+    expect(button(pkg, "set-2", "set-2-key-1").ext_lautstark_speak_immediately)
+      .toBe(true);
+
+    // Wort & weiter. The navigation resolves to the *board* id rather than to
+    // the set's own UUID, which is the same indirection a tablet `goto` makes.
+    expect(at("set-1-key-2").load_board)
+      .toEqual({ id: "set-2", name: "Spielen", path: "boards/set-2.obf" });
+    expect(at("set-1-key-2").ext_lautstark_speak_on_navigate).toBe(true);
+    // And no speak_immediately beside it. §7.3's table is exclusive and
+    // load_board wins, so writing it would be a field the viewer must ignore.
+    expect(at("set-1-key-2").ext_lautstark_speak_immediately).toBeUndefined();
+
+    // weiter. Absent rather than false on the flag, so a navigating key that
+    // says nothing is written exactly as one written before the field existed.
+    expect(at("set-1-key-4").load_board?.id).toBe("set-2");
+    expect(at("set-1-key-4").ext_lautstark_speak_on_navigate).toBeUndefined();
+    expect(at("set-1-key-4").ext_lautstark_speak_immediately).toBeUndefined();
+    // The word stays on the button: §7.2's label is what a button *shows*, and
+    // a key that leads onward still shows one.
+    expect(at("set-1-key-4").label).toBe("Mehr bitte");
+  });
+
+  it("bakes no recording for a key that says nothing", () => {
+    /* A clip for a key that only navigates is a member of the archive nothing
+     * will ever decode, and on a phone that is download and decode budget spent
+     * on silence. The two halves have to agree about which keys those are:
+     * spokenTexts() decides what gets recorded and diyBoards() decides what
+     * gets a sound_id, and a text recorded but not written is wasted work while
+     * one written but not recorded is a button with no audio. */
+    const held = layout();
+    held.sets[1]!.id = "1f0a5c2e-0000-4000-8000-0000000000aa";
+    held.sets[0]!.slots[0]!.act = { kind: "goto", set: held.sets[1]!.id };
+
+    expect(spokenTexts(held)).not.toContain("Ich habe Hunger");
+    const pkg = buildAppPackage(input({ layout: held }));
+    expect(button(pkg, "set-1", "set-1-key-1").sound_id).toBeUndefined();
+    // The one beside it still has its recording, so this is a statement about
+    // the act rather than about the set.
+    expect(button(pkg, "set-1", "set-1-key-2").sound_id).toBeDefined();
+  });
+
+  it("leaves a key speaking when the page it named has been deleted", () => {
+    /* Nothing in the editor stops a page being deleted out from under a key
+     * that leads to it, and this change is not the one that adds that check -
+     * dead ends are somebody else's task. What the export must not do is
+     * refuse: a Sammlung that cannot be exported at all is a worse answer than
+     * a key that says its word, and §7.3 has no way to write "navigate to
+     * nowhere" anyway. */
+    const held = layout();
+    held.sets[0]!.slots[0]!.act =
+      { kind: "goto", set: "1f0a5c2e-0000-4000-8000-00000000dead", alsoSpeak: true };
+    const pkg = buildAppPackage(input({ layout: held }));
+    expect(checkPackage(pkg)).toEqual([]);
+    expect(button(pkg, "set-1", "set-1-key-1").load_board).toBeUndefined();
+    expect(button(pkg, "set-1", "set-1-key-1").ext_lautstark_speak_on_navigate)
+      .toBeUndefined();
+    expect(button(pkg, "set-1", "set-1-key-1").ext_lautstark_speak_immediately)
+      .toBe(true);
   });
 
   it("cycles the sets the way the device does", () => {

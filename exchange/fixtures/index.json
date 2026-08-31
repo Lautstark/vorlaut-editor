@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.3.0",
+  "spec_version": "1.4.0",
   "generated_by": "exchange/tools/make_fixtures.mjs",
   "fixtures": [
     {
@@ -113,6 +113,13 @@
       "expected": "press-timings.expected.json",
       "outcome": "accepted",
       "summary": "ext_lautstark_hold_time_ms and ext_lautstark_release_time_ms on a package, holding different values."
+    },
+    {
+      "fixture": "navigate-and-speak",
+      "file": "navigate-and-speak.obz",
+      "expected": "navigate-and-speak.expected.json",
+      "outcome": "accepted",
+      "summary": "ext_lautstark_speak_on_navigate on a load_board button, beside a plain navigation to the same place, a button that only speaks, and the two shapes the flag is ignored on."
     }
   ]
 }

@@ -853,7 +853,7 @@ function cell(on: AppPage, row: number, col: number): HTMLElement {
       follow.type = "button";
       follow.className = "cell__follow";
       follow.textContent = "\u203a";
-      follow.title = t("ui.app_page_follow", { name: pageName(to) });
+      follow.title = t("ui.page_follow", { name: pageName(to) });
       follow.setAttribute("aria-label", follow.title);
       follow.onclick = (event) => {
         event.stopPropagation();
@@ -1243,7 +1243,7 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
    * where all three are readable while somebody is choosing between them
    * instead of one at a time afterwards. That needs a second line on
    * @lautstark/design's menu items, which `AddItem` has no room for today. */
-  const actRow = formRow(t("ui.app_button_act"), does.anchor, "", does.button);
+  const actRow = formRow(t("ui.button_act"), does.anchor, "", does.button);
   actRow.classList.add("form__row--caption");
   actRow.appendChild(note);
   rows.push(actRow);
@@ -1287,7 +1287,7 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
       draft.act = leadsTo();
     });
   targets.button.id = "appGoto";
-  const targetRow = formRow(t("ui.app_goto_page"), targets.anchor, "", targets.button);
+  const targetRow = formRow(t("ui.goto_page"), targets.anchor, "", targets.button);
   rows.push(targetRow);
 
   const spoken = textField(draft.vocalization, (value) => {

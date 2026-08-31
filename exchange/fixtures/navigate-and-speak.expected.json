@@ -1,0 +1,144 @@
+{
+  "fixture": "navigate-and-speak",
+  "file": "navigate-and-speak.obz",
+  "spec_version": "1.4.0",
+  "summary": "ext_lautstark_speak_on_navigate on a load_board button, beside a plain navigation to the same place, a button that only speaks, and the two shapes the flag is ignored on.",
+  "outcome": "accepted",
+  "package": {
+    "id": "1f0a5c2e-0000-4000-8000-000000000010",
+    "name": "Satzanfang",
+    "modified": "2026-08-31T09:00:00Z",
+    "symbol_source": "none",
+    "tts_voice": "de_DE-thorsten-medium",
+    "root_board": "start",
+    "first_column_gap": false
+  },
+  "boards": [
+    {
+      "id": "start",
+      "name": "Satzanfang",
+      "locale": "de",
+      "rows": 1,
+      "columns": 4
+    },
+    {
+      "id": "essen",
+      "name": "Essen",
+      "locale": "de",
+      "rows": 1,
+      "columns": 3
+    }
+  ],
+  "buttons": [
+    {
+      "board": "start",
+      "id": "k1",
+      "label": "Ich will",
+      "vocalization": "ich will",
+      "on_activate": "speak+navigate:essen",
+      "audio": "tts",
+      "state": "normal"
+    },
+    {
+      "board": "start",
+      "id": "k2",
+      "label": "Essen",
+      "on_activate": "navigate:essen",
+      "state": "normal"
+    },
+    {
+      "board": "start",
+      "id": "k3",
+      "label": "Aua!",
+      "vocalization": "Aua!",
+      "on_activate": "speak_immediately",
+      "audio": "tts",
+      "state": "normal"
+    },
+    {
+      "board": "start",
+      "id": "k4",
+      "label": "Fußball",
+      "vocalization": "Fußball",
+      "on_activate": "speak_immediately",
+      "audio": "tts",
+      "state": "normal",
+      "reason": "the flag rides on navigation, and this button does not navigate"
+    },
+    {
+      "board": "essen",
+      "id": "e1",
+      "label": "Apfel",
+      "vocalization": "einen Apfel",
+      "on_activate": "speak_immediately",
+      "audio": "tts",
+      "state": "normal"
+    },
+    {
+      "board": "essen",
+      "id": "e2",
+      "label": "bitte",
+      "vocalization": "bitte",
+      "on_activate": "home",
+      "state": "normal",
+      "reason": "the flag rides on load_board only, and this button navigates by action"
+    },
+    {
+      "board": "essen",
+      "id": "e3",
+      "label": "Zurück",
+      "action": ":home",
+      "on_activate": "home",
+      "state": "normal"
+    }
+  ],
+  "warnings": [],
+  "scenario": [
+    {
+      "step": "activate k1",
+      "board": "essen",
+      "spoken": "ich will",
+      "bar": [],
+      "note": "One press, both halves: the sentence is said and the board is the one k1 names. The bar is untouched, which is the difference from navigate-and-append's c1 - this modifier speaks, and says nothing about the bar."
+    },
+    {
+      "step": "activate e1",
+      "board": "essen",
+      "spoken": "einen Apfel",
+      "bar": []
+    },
+    {
+      "step": "activate e2",
+      "board": "start",
+      "bar": [],
+      "note": "The flag beside an action: ignored. This button navigates home and speaks nothing, exactly as e3 does."
+    },
+    {
+      "step": "activate k2",
+      "board": "essen",
+      "bar": [],
+      "note": "The same load_board target as k1 and no flag. Nothing is said."
+    },
+    {
+      "step": "activate e3",
+      "board": "start",
+      "bar": [],
+      "note": "The same :home as e2 and no flag. The two are indistinguishable, which is what SPEC.md 7.3's narrowing comes to."
+    },
+    {
+      "step": "activate k4",
+      "board": "start",
+      "spoken": "Fußball",
+      "bar": [],
+      "note": "The flag on a button that does not navigate changes nothing, and warns about nothing."
+    }
+  ],
+  "notes": [
+    "The twin of navigate-and-append, and worth reading beside it. Same two boards, same words, same flagged-against-unflagged pair at the same target. What differs is which modifier rides along, and therefore whether one press leaves a word in the bar or says one out loud.",
+    "The bar is empty at every step. Nothing on either board appends, because this is the board model the field exists for: the five-key talker, where a key is a whole sentence and there is no bar to compose in. An importer that appends anywhere in this scenario has read the wrong modifier.",
+    "k1 and k2 lead to the same board. The only difference between them is the flag, which is what makes this fixture an assertion about the flag rather than about navigation.",
+    "e2 and e3 are the narrowing, and they are a pair for the same reason: the flag beside an action must be ignored, and the only way to check that something is ignored is to put the button that does not carry it next to it.",
+    "An importer written against 1.3.0 ignores the field under SPEC.md 10.3 and treats k1 as k2 - it navigates in silence. That is the intended degradation and it is not conformant at 1.4.0.",
+    "Nothing in this package needs an image or a sound file. The buttons that speak fall back to synthesis, which is what audio: tts means, and it keeps the fixture about the one field it is named after."
+  ]
+}
