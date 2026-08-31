@@ -5,7 +5,7 @@ viewer, plus the fixtures an importer is checked against.
 
 | | |
 |---|---|
-| [`SPEC.md`](SPEC.md) | The specification. Version 1.4.0, **draft**. |
+| [`SPEC.md`](SPEC.md) | The specification. Version 1.5.0, **draft**. |
 | [`fixtures/`](fixtures/) | The `.obz` packages, each with an `.expected.json`. |
 | [`fixtures/index.json`](fixtures/index.json) | Machine-readable list of them. |
 | [`fixtures/source/`](fixtures/source/) | German fixture content, kept out of the generator. |
@@ -29,7 +29,7 @@ than a branch.
 Tags are named `exchange-vMAJOR.MINOR.PATCH` and track `SPEC.md`'s version.
 
 > **No tag exists yet.** The spec is a draft and stays one until a real board
-> round-trips to a tablet, so `exchange-v1.4.0` is not cut. Pin a **commit
+> round-trips to a tablet, so `exchange-v1.5.0` is not cut. Pin a **commit
 > SHA** in the meantime, and expect the fixtures to move under you.
 
 > **This directory changed repository on 2026-08-27**, when the editor left
@@ -43,7 +43,7 @@ Tags are named `exchange-vMAJOR.MINOR.PATCH` and track `SPEC.md`'s version.
 > resolving. What it cannot do is move forward. This repository's history is a
 > **filtered copy**, so its ids are not translations of the old ones, and
 > re-pointing a pin here is a fresh pin rather than a bump. The cheapest moment
-> to do it is when `exchange-v1.4.0` is cut, which is what ends SHA-pinning
+> to do it is when `exchange-v1.5.0` is cut, which is what ends SHA-pinning
 > anyway.
 
 ### As a submodule
@@ -53,7 +53,7 @@ git submodule add https://github.com/Lautstark/vorlaut-editor.git third_party/vo
 ```
 
 ```bash
-git -C third_party/vorlaut checkout exchange-v1.4.0
+git -C third_party/vorlaut checkout exchange-v1.5.0
 ```
 
 Only `exchange/` is of interest; the rest of the repository comes along and can
@@ -65,7 +65,7 @@ change with a test run attached — never as a routine bump.
 If a submodule is unwelcome, fetch the tag and verify what arrived:
 
 ```bash
-curl -sSL https://github.com/Lautstark/vorlaut-editor/archive/refs/tags/exchange-v1.4.0.tar.gz -o exchange.tar.gz
+curl -sSL https://github.com/Lautstark/vorlaut-editor/archive/refs/tags/exchange-v1.5.0.tar.gz -o exchange.tar.gz
 ```
 
 ```bash
@@ -107,7 +107,7 @@ states no count, because one restated here drifts from the directory.
 {
   "fixture": "minimal",
   "file": "minimal.obz",
-  "spec_version": "1.4.0",
+  "spec_version": "1.5.0",
   "summary": "…",
 
   "outcome": "accepted",        // or "rejected"
@@ -128,9 +128,11 @@ states no count, because one restated here drifts from the directory.
 ```
 
 `on_activate` is one of `append`, `speak_immediately`, `speak_bar`, `clear`,
-`backspace`, `home`, `navigate:<board id>`, `disabled` — and the two compound
-ones SPEC.md §7.3's append-on-navigate produces, `append+navigate:<board id>`
-and `append+home`, which are one press doing both in that order.
+`backspace`, `home`, `navigate:<board id>`, `disabled` — and the four compound
+ones SPEC.md §7.3's two navigation modifiers produce, `append+navigate:<board
+id>` and `append+home` for the appending one, `speak+navigate:<board id>` and
+`speak+home` for the speaking one. Each is one press doing both halves in that
+order.
 
 `state` is `normal`, `degraded` or `disabled`.
 
@@ -141,7 +143,7 @@ Four fields appear only where they apply:
 
 | Field | In | Meaning |
 |---|---|---|
-| `scenario` | `message-bar`, `navigate-and-append` | An ordered walk through button presses with the bar contents after each, and the board standing after it where the walk navigates. |
+| `scenario` | `message-bar`, `navigate-and-append`, `navigate-and-speak` | An ordered walk through button presses with the bar contents after each, and the board standing after it where the walk navigates. |
 | `ignored` | `unknown-ext` | Fields that must be parsed past with no effect and no warning. |
 | `after_importing` | `identity-*` | Which packages must be on the device after a stated import sequence. |
 | `reimport` | `identity-a-v2` | Which stored package this matches and how it must resolve. |
@@ -262,7 +264,7 @@ repository's code-language check for this reason; the generator is not.
 | `first-column-gap` | accepted | The §4.1 layout hint, and the repeated column it marks |
 | `navigate-and-append` | accepted | §7.3's append-on-navigate, on `load_board` and on `:home` |
 | `press-timings` | accepted | §7.5's hold and release times, holding different values |
-| `navigate-and-speak` | accepted | §7.3's speak-on-navigate, and the two shapes it is ignored on |
+| `navigate-and-speak` | accepted | §7.3's speak-on-navigate, on `load_board` and on `:home` |
 
 ## What they do not cover
 

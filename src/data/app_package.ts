@@ -104,8 +104,14 @@ import type {
 /** The version of exchange/SPEC.md this builder targets.
  *
  * §12: a builder writes the version it targets, not the version it happens to
- * fit. Bumping this is a decision about having read the changelog. */
-export const SPEC_VERSION = "1.4.0";
+ * fit. Bumping this is a decision about having read the changelog.
+ *
+ * 1.5.0 widened `ext_lautstark_speak_on_navigate` to `action: ":home"`, and
+ * neither mapping below writes that shape: the talker has no `:home` at all,
+ * and the tablet's home button only ever appends. This moves anyway, for the
+ * reason the paragraph above gives - the version targeted is not the lowest
+ * version the output happens to fit. */
+export const SPEC_VERSION = "1.5.0";
 
 /** SPEC.md §7.5's ceiling on a press timing, in milliseconds.
  *
@@ -173,7 +179,9 @@ export interface PackageButton {
    *  a package checkPackage() is held against. */
   ext_lautstark_append_on_navigate?: boolean;
   /** §7.3. True on a navigating button that speaks its own audio on the way
-   *  through, and written only beside a `load_board`.
+   *  through. Written here only beside a `load_board`, though §7.3 carries it
+   *  on `action: ":home"` too: the talker has no `:home`, and no tablet button
+   *  this file writes asks to speak on the way home.
    *
    *  The sibling of the flag above and the same modifier one product along:
    *  *append on the way through* is what a board with a message bar wants, and

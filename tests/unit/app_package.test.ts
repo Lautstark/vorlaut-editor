@@ -111,7 +111,7 @@ describe("a DIY Sammlung as a board package", () => {
     // Off the Sammlung's updatedAt rather than the clock, so that re-exporting
     // an unchanged Sammlung does not look to the viewer like an update.
     expect(manifest.ext_lautstark_modified).toBe("2026-08-24T09:00:00Z");
-    expect(manifest.ext_lautstark_spec_version).toBe("1.4.0");
+    expect(manifest.ext_lautstark_spec_version).toBe("1.5.0");
     expect(manifest.format).toBe("open-board-0.1");
     expect(manifest.root).toBe("boards/set-1.obf");
   });

@@ -1,8 +1,8 @@
 {
   "fixture": "navigate-and-speak",
   "file": "navigate-and-speak.obz",
-  "spec_version": "1.4.0",
-  "summary": "ext_lautstark_speak_on_navigate on a load_board button, beside a plain navigation to the same place, a button that only speaks, and the two shapes the flag is ignored on.",
+  "spec_version": "1.5.0",
+  "summary": "ext_lautstark_speak_on_navigate on a load_board button and on a :home button, each beside a plain navigation to the same place, plus a button that only speaks and the one shape the flag is ignored on.",
   "outcome": "accepted",
   "package": {
     "id": "1f0a5c2e-0000-4000-8000-000000000010",
@@ -79,9 +79,9 @@
       "id": "e2",
       "label": "bitte",
       "vocalization": "bitte",
-      "on_activate": "home",
-      "state": "normal",
-      "reason": "the flag rides on load_board only, and this button navigates by action"
+      "on_activate": "speak+home",
+      "audio": "tts",
+      "state": "normal"
     },
     {
       "board": "essen",
@@ -110,8 +110,9 @@
     {
       "step": "activate e2",
       "board": "start",
+      "spoken": "bitte",
       "bar": [],
-      "note": "The flag beside an action: ignored. This button navigates home and speaks nothing, exactly as e3 does."
+      "note": ":home carrying the flag: the word is said and the board goes back to manifest.root. The bar is untouched here too."
     },
     {
       "step": "activate k2",
@@ -123,7 +124,7 @@
       "step": "activate e3",
       "board": "start",
       "bar": [],
-      "note": "The same :home as e2 and no flag. The two are indistinguishable, which is what SPEC.md 7.3's narrowing comes to."
+      "note": "The same :home as e2 and no flag. Nothing is said."
     },
     {
       "step": "activate k4",
@@ -135,10 +136,10 @@
   ],
   "notes": [
     "The twin of navigate-and-append, and worth reading beside it. Same two boards, same words, same flagged-against-unflagged pair at the same target. What differs is which modifier rides along, and therefore whether one press leaves a word in the bar or says one out loud.",
-    "The bar is empty at every step. Nothing on either board appends, because this is the board model the field exists for: the five-key talker, where a key is a whole sentence and there is no bar to compose in. An importer that appends anywhere in this scenario has read the wrong modifier.",
+    "The bar is empty at every step. Nothing on either board appends, because this package is written on a board model with no bar - the five-key talker's is the plainest of them, where a key is a whole sentence and there is nothing to compose in. An importer that appends anywhere in this scenario has read the wrong modifier.",
     "k1 and k2 lead to the same board. The only difference between them is the flag, which is what makes this fixture an assertion about the flag rather than about navigation.",
-    "e2 and e3 are the narrowing, and they are a pair for the same reason: the flag beside an action must be ignored, and the only way to check that something is ignored is to put the button that does not carry it next to it.",
-    "An importer written against 1.3.0 ignores the field under SPEC.md 10.3 and treats k1 as k2 - it navigates in silence. That is the intended degradation and it is not conformant at 1.4.0.",
+    "e2 and e3 are the same pair on the other navigating form, and they are what navigate-and-append asserts at its own e2 and e3. A modifier that rode on load_board and not on :home would be two rules where the format has one.",
+    "An importer written against 1.3.0 ignores the field under SPEC.md 10.3 and treats k1 as k2 and e2 as e3 - it navigates in silence. One written against 1.4.0 speaks on k1 and still treats e2 as e3, because that version had the flag riding on load_board alone. Both are the intended degradation and neither is conformant at 1.5.0.",
     "Nothing in this package needs an image or a sound file. The buttons that speak fall back to synthesis, which is what audio: tts means, and it keeps the fixture about the one field it is named after."
   ]
 }
