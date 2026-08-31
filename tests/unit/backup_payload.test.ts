@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { diy } from "./layout.js";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BACKUP_FORMAT, exportEverything, importBackup, isBackup, stripSecrets, TOO_NEW,
 } from "../../src/data/backup.js";
@@ -65,7 +65,30 @@ async function seed(): Promise<void> {
   } as unknown as Settings);
 }
 
+/* Board ids, handed out in order rather than minted at random.
+ *
+ * The licensing checks below read the whole serialised document for a string
+ * that must not be anywhere in it, and reading all of it is the point: a
+ * count that reached a field nobody thought of is exactly the leak worth
+ * catching. But a crypto.randomUUID() is thirty-two hex digits, so now and
+ * then one of them contains the four characters a check is looking for and
+ * fails a test about METACOM for no reason - on 2026-08-31 that was
+ * "75c41284-b4b9-48ee-9c24-2501cf880b98" against "1284", and "f8a2" is a
+ * hex string in the same position a line above.
+ *
+ * So the ids here carry no digit at all, which makes a collision with any of
+ * those impossible rather than merely unlikely, and leaves the assertions
+ * reading the document they are meant to read. */
+let minted = 0;
+type Uuid = `${string}-${string}-${string}-${string}-${string}`;
+const nextId = (): Uuid => {
+  const tail = (++minted).toString(6).replace(/\d/g, (digit) => "abcdef"[Number(digit)]!);
+  return `deadbeef-dead-4eef-8eef-${tail.padStart(12, "a")}`;
+};
+vi.spyOn(crypto, "randomUUID").mockImplementation(nextId);
+
 beforeEach(async () => {
+  minted = 0;
   await store.empty("symbols");
   await store.writeSettings({} as Settings);
 });
@@ -111,7 +134,10 @@ describe("what the standing backup is handed", () => {
     expect(json).not.toContain(LICENSED);
     expect(json).not.toMatch(/[A-Za-z]:\\|\/Users\/|\/home\//);
     // The count is a fact about what is in that folder, which is an index by
-    // another name.
+    // another name. Read against the whole document rather than against
+    // settings alone, because a leak that mattered would be one somebody put
+    // somewhere this test does not know to look; the ids above are what makes
+    // reading all of it safe.
     expect(json).not.toContain("1284");
   });
 
