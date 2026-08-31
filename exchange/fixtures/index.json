@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.4.0",
+  "spec_version": "1.5.0",
   "generated_by": "exchange/tools/make_fixtures.mjs",
   "fixtures": [
     {
@@ -119,7 +119,7 @@
       "file": "navigate-and-speak.obz",
       "expected": "navigate-and-speak.expected.json",
       "outcome": "accepted",
-      "summary": "ext_lautstark_speak_on_navigate on a load_board button, beside a plain navigation to the same place, a button that only speaks, and the two shapes the flag is ignored on."
+      "summary": "ext_lautstark_speak_on_navigate on a load_board button and on a :home button, each beside a plain navigation to the same place, plus a button that only speaks and the one shape the flag is ignored on."
     }
   ]
 }

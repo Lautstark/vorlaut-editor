@@ -1,8 +1,8 @@
 # Lautstark Board Package — exchange format specification
 
-**Version 1.4.0** · status: **draft, not ratified** · 2026-08-31
+**Version 1.5.0** · status: **draft, not ratified** · 2026-08-31
 
-> No `exchange-v1.4.0` tag is cut, and none will be, until a real board has
+> No `exchange-v1.5.0` tag is cut, and none will be, until a real board has
 > been built, exported, and opened on a tablet. Until then this document is a
 > proposal with fixtures attached: pin a commit if you need to build against
 > it, and expect it to move.
@@ -117,7 +117,7 @@ hand these to each other, and where a builder should say so.
     "images": { "img-food": "images/food.png" },
     "sounds": { "snd-food": "sounds/food.opus" }
   },
-  "ext_lautstark_spec_version": "1.4.0",
+  "ext_lautstark_spec_version": "1.5.0",
   "ext_lautstark_package_id": "1f0a5c2e-0000-4000-8000-000000000001",
   "ext_lautstark_package_name": "Home",
   "ext_lautstark_modified": "2026-08-24T09:00:00Z",
@@ -185,7 +185,7 @@ takes what it is given.
 |---|---|---|---|
 | `ext_lautstark_speak_immediately` | boolean | no, default `false` | When true the button speaks at once instead of appending to the message bar. **OBF cannot express this.** Its model is that a button either appends or performs an action, with no "speak this now and leave the bar alone". Interjections need it: `Ouch!`, `stop that`, a greeting. Composing those into a sentence first defeats their purpose. |
 | `ext_lautstark_append_on_navigate` | boolean | no, default `false` | When true a navigating button appends its entry to the message bar before it navigates. **OBF cannot express this either.** `load_board` is the whole of a button's behaviour there rather than one of two things it does, and no OBF action appends a button's own text — `+text` is spelling, which §7.4 puts out of scope for v1. The carrier phrase needs it: a button reading `I want …` that opens the food board with the sentence already begun. See §7.3. |
-| `ext_lautstark_speak_on_navigate` | boolean | no, default `false` | When true a navigating button speaks its own audio before it navigates. **OBF cannot express this either**, and for the same reason as the row above: `load_board` is the whole of a button's behaviour there. It is that row's sibling one board model along. A board with a message bar wants the entry *appended* on the way through; a board without one — the five-key talker's four keys, where a key is a whole sentence and there is nothing to compose — wants it *spoken* on the way through, because there is nothing for it to join. Without this field such a button cannot be written down at all: §7.3's table lets `load_board` beat `ext_lautstark_speak_immediately` outright, so the two together say only *navigate*. See §7.3. |
+| `ext_lautstark_speak_on_navigate` | boolean | no, default `false` | When true a navigating button speaks its own audio before it navigates. **OBF cannot express this either**, and for the same reason as the row above: `load_board` is the whole of a button's behaviour there. It is that row's sibling: where the appending modifier puts the button's entry into the message bar on the way through, this one says the button's own audio on the way through. What chooses between them is what the button is for and not which product wrote it — a button that answers and then leads onward wants its answer *said*. The five-key talker's four keys are the plainest case, a key there being a whole sentence with nothing to compose it from; a tablet board's `Bye`, which says itself and goes back to the root board, is the same button. Without this field neither can be written down at all: §7.3's table lets a navigating button beat `ext_lautstark_speak_immediately` outright, so the two together say only *navigate*. See §7.3. |
 
 That is the whole list. Fourteen fields, ten of them in the manifest. Anything
 else beginning `ext_lautstark_` is not part of v1 and MUST be ignored.
@@ -476,24 +476,25 @@ boards, and the second of them has to be found after leaving the page that named
 it.
 
 **Speaking on the way through.** `ext_lautstark_speak_on_navigate: true` on a
-button carrying `load_board` means: speak the button's own audio exactly as
-`ext_lautstark_speak_immediately` does, **then** navigate. Both from one press,
-and in that order. The bar is not touched — this is the *speaking* modifier, not
-the appending one, and it says nothing about the bar at all.
+button that navigates — one carrying `load_board`, or `action: ":home"` — means:
+speak the button's own audio exactly as `ext_lautstark_speak_immediately` does,
+**then** navigate. Both from one press, and in that order. The bar is not
+touched — this is the *speaking* modifier, not the appending one, and it says
+nothing about the bar at all.
 
-The same modifier as the one above, for a board that has no bar to append to.
-The keys of the five-key talker are whole sentences rather than words to compose
-from — one key, one thing said — so what a page-leading key there needs is not
-that its entry joins a sentence but that its sentence is said before the page
-changes. Fixture `navigate-and-speak` is the pair.
+The same modifier as the one above, for a button whose word is meant to be said
+rather than composed with. The keys of the five-key talker are the plainest
+case: whole sentences rather than words to compose from — one key, one thing
+said — so what a page-leading key there needs is not that its entry joins a
+sentence but that its sentence is said before the page changes. They are not the
+only case. A `Bye` that says itself and returns to the root board is the same
+button with `:home` under it. Fixture `navigate-and-speak` is the pair.
 
-**It rides on `load_board` only.** Unlike the appending modifier it is not
-extended to `action: ":home"`, and beside `:home` it MUST be ignored — that
-button navigates home and speaks nothing. The narrowing is on purpose rather
-than an omission: the modifier exists for one authoring model, a key naming the
-page it leads to, and a board model with no message bar has no start page
-either — its pages are a ring the page key cycles. A future minor version may
-widen it if a board model turns up that wants both.
+**It rides on both navigating forms**, `load_board` and `action: ":home"` alike,
+exactly as the appending modifier does. Which product wrote the package is not
+what decides this: the five-key talker will never write the flag beside `:home`
+because it has no `:home` to write, and that is a fact about one export rather
+than a rule this format states.
 
 **On a button that does not navigate, the flag is ignored** — no warning, no
 fault — exactly as the appending flag is, and for the reason given there. A
@@ -516,7 +517,7 @@ An importer MUST implement exactly these:
 | `:clear` | Empty the bar. Speak nothing. |
 | `:backspace` | Remove the **last entry**, not the last character. |
 | `:speak` | Speak the whole bar. Leave it standing — `:speak` does not clear. |
-| `:home` | Navigate to the board named by `manifest.root`. MUST NOT touch the bar — the one exception is `ext_lautstark_append_on_navigate` (§7.3), which appends before this action navigates. |
+| `:home` | Navigate to the board named by `manifest.root`. MUST NOT touch the bar, and MUST NOT speak — unless the button also carries `ext_lautstark_append_on_navigate` or `ext_lautstark_speak_on_navigate` (§7.3), which append and speak respectively before this action navigates. |
 
 Navigation between boards is `load_board`, not an action:
 
@@ -831,7 +832,7 @@ A builder MUST write the version it targets, not the version it happens to fit.
 
 ## 13. Conformance
 
-An importer is conformant at v1.4.0 when it produces, for **every** fixture
+An importer is conformant at v1.5.0 when it produces, for **every** fixture
 listed in [`fixtures/index.json`](fixtures/index.json), the outcome in the
 matching `.expected.json`. That index is the authoritative list; no count
 appears in this document, because a number restated in prose drifts from the
@@ -844,6 +845,43 @@ disagreement is a bug in this document. Report it.
 ---
 
 ## 14. Changelog
+
+### 1.5.0 — 2026-08-31
+
+Widens `ext_lautstark_speak_on_navigate` (§4.3, §7.3, §7.4) to `action: ":home"`,
+which 1.4.0 made a viewer ignore. The flag now rides on both navigating forms,
+exactly as `ext_lautstark_append_on_navigate` has since 1.2.0. Minor, per §12 —
+an importer written against 1.4.0 ignores the field beside `:home` under §10.3
+and navigates in silence, which is what 1.4.0 required of it and the same
+degradation that version described for a 1.3.0 reader.
+
+**The narrowing was a fact about one product, written as a rule for every
+product.** What 1.4.0 argued was that a board model with no message bar has no
+start page either — its pages are a ring the page key cycles — and that is true
+of the five-key talker. But `ext_lautstark_*` is the cross-product namespace
+([`adr/0001`](https://github.com/Lautstark/vorlaut-diy-talker/blob/main/adr/0001-two-ext-namespaces.md)),
+and what puts a field there rather than in `ext_vorlaut_*` is what the field
+describes, not who implements it. One device's limit written as a MUST in a
+shared field is the category error the two namespaces exist to prevent.
+
+**The other board model has a start page, and an ordinary shape that uses it.**
+A `Bye` that says itself and returns to the root board is this modifier on
+`:home` rather than on `load_board`. The sibling field is already read there —
+the tablet viewer's `SpecRulesTest` asserts `ext_lautstark_append_on_navigate`
+beside `[":home"]` — so a pair of modifiers split across the two navigating
+forms was the anomaly, not the symmetry.
+
+**What the talker writes is settled by its export, not by this document.** It
+will never put the flag beside `:home`, because it has no `:home` to put it
+beside. That needs no rule here: this format says what a viewer must do with a
+package it is handed, and a builder that cannot produce a shape does not need
+the format to forbid it.
+
+**Absent still means off**, so no package that exists changes meaning and
+nothing has to be migrated. The one thing that changes is a fixture:
+`navigate-and-speak`'s `e2` carried the flag beside `:home` to pin that it was
+ignored, and now pins that it is honoured — which is what its twin
+`navigate-and-append` has asserted at the same button since 1.2.0.
 
 ### 1.4.0 — 2026-08-31
 

@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "..", "fixtures");
 const ASSETS = join(HERE, "..", "assets");
-const SPEC_VERSION = "1.4.0";
+const SPEC_VERSION = "1.5.0";
 
 /** German fixture content, kept in fixtures/source/ so this file stays English
  *  like the rest of the code. See the note in that file. */
@@ -1484,14 +1484,15 @@ fixture({
   // button against an unflagged one at the same target. What differs is the
   // flag and therefore what one press does, which is the whole assertion.
   //
-  // The board it describes is the five-key talker's, where a key is a whole
-  // sentence said on the press and there is no bar for anything to join. So
-  // every speaking button here carries speak_immediately rather than appending,
-  // and the bar stays empty through the entire scenario - which is the second
-  // thing this fixture pins: the speaking modifier says nothing about the bar.
+  // The board it describes is one with no message bar - the five-key talker's
+  // is the plainest of them, a key being a whole sentence said on the press
+  // with nothing for it to join. So every speaking button here carries
+  // speak_immediately rather than appending, and the bar stays empty through
+  // the entire scenario - which is the second thing this fixture pins: the
+  // speaking modifier says nothing about the bar.
   fixture({
     name: "navigate-and-speak",
-    summary: "ext_lautstark_speak_on_navigate on a load_board button, beside a plain navigation to the same place, a button that only speaks, and the two shapes the flag is ignored on.",
+    summary: "ext_lautstark_speak_on_navigate on a load_board button and on a :home button, each beside a plain navigation to the same place, plus a button that only speaks and the one shape the flag is ignored on.",
     members: [
       { name: "manifest.json", data: json(manifest({
           id: "1f0a5c2e-0000-4000-8000-000000000010",
@@ -1532,10 +1533,11 @@ fixture({
           buttons: [
             { id: "e1", label: de.apple_label, vocalization: de.apple_spoken,
               ext_lautstark_speak_immediately: true },
-            // The narrowing SPEC.md 7.3 states: this modifier rides on
-            // load_board and is ignored beside an action, where its sibling is
-            // not. e3 is the same button without the flag, and the two behave
-            // alike - which is what "ignored" has to mean to be checkable.
+            // The second navigating form, which SPEC.md 7.3 carries this
+            // modifier on exactly as it carries the appending one: the key says
+            // its word and the board goes back to manifest.root. e3 is the same
+            // button without the flag, and the pair is what makes this an
+            // assertion about the flag rather than about :home.
             { id: "e2", label: de.please, vocalization: de.please,
               action: ":home", ext_lautstark_speak_on_navigate: true },
             { id: "e3", label: de.back, action: ":home" },
@@ -1566,8 +1568,7 @@ fixture({
         { board: "essen", id: "e1", label: de.apple_label, vocalization: de.apple_spoken,
           on_activate: "speak_immediately", audio: "tts", state: "normal" },
         { board: "essen", id: "e2", label: de.please, vocalization: de.please,
-          on_activate: "home", state: "normal",
-          reason: "the flag rides on load_board only, and this button navigates by action" },
+          on_activate: "speak+home", audio: "tts", state: "normal" },
         { board: "essen", id: "e3", label: de.back, action: ":home", on_activate: "home", state: "normal" },
       ],
       warnings: [],
@@ -1575,21 +1576,21 @@ fixture({
         { step: "activate k1", board: "essen", spoken: de.starter_spoken, bar: [],
           note: "One press, both halves: the sentence is said and the board is the one k1 names. The bar is untouched, which is the difference from navigate-and-append's c1 - this modifier speaks, and says nothing about the bar." },
         { step: "activate e1", board: "essen", spoken: de.apple_spoken, bar: [] },
-        { step: "activate e2", board: "start", bar: [],
-          note: "The flag beside an action: ignored. This button navigates home and speaks nothing, exactly as e3 does." },
+        { step: "activate e2", board: "start", spoken: de.please, bar: [],
+          note: ":home carrying the flag: the word is said and the board goes back to manifest.root. The bar is untouched here too." },
         { step: "activate k2", board: "essen", bar: [],
           note: "The same load_board target as k1 and no flag. Nothing is said." },
         { step: "activate e3", board: "start", bar: [],
-          note: "The same :home as e2 and no flag. The two are indistinguishable, which is what SPEC.md 7.3's narrowing comes to." },
+          note: "The same :home as e2 and no flag. Nothing is said." },
         { step: "activate k4", board: "start", spoken: de.football, bar: [],
           note: "The flag on a button that does not navigate changes nothing, and warns about nothing." },
       ],
       notes: [
         "The twin of navigate-and-append, and worth reading beside it. Same two boards, same words, same flagged-against-unflagged pair at the same target. What differs is which modifier rides along, and therefore whether one press leaves a word in the bar or says one out loud.",
-        "The bar is empty at every step. Nothing on either board appends, because this is the board model the field exists for: the five-key talker, where a key is a whole sentence and there is no bar to compose in. An importer that appends anywhere in this scenario has read the wrong modifier.",
+        "The bar is empty at every step. Nothing on either board appends, because this package is written on a board model with no bar - the five-key talker's is the plainest of them, where a key is a whole sentence and there is nothing to compose in. An importer that appends anywhere in this scenario has read the wrong modifier.",
         "k1 and k2 lead to the same board. The only difference between them is the flag, which is what makes this fixture an assertion about the flag rather than about navigation.",
-        "e2 and e3 are the narrowing, and they are a pair for the same reason: the flag beside an action must be ignored, and the only way to check that something is ignored is to put the button that does not carry it next to it.",
-        "An importer written against 1.3.0 ignores the field under SPEC.md 10.3 and treats k1 as k2 - it navigates in silence. That is the intended degradation and it is not conformant at 1.4.0.",
+        "e2 and e3 are the same pair on the other navigating form, and they are what navigate-and-append asserts at its own e2 and e3. A modifier that rode on load_board and not on :home would be two rules where the format has one.",
+        "An importer written against 1.3.0 ignores the field under SPEC.md 10.3 and treats k1 as k2 and e2 as e3 - it navigates in silence. One written against 1.4.0 speaks on k1 and still treats e2 as e3, because that version had the flag riding on load_board alone. Both are the intended degradation and neither is conformant at 1.5.0.",
         "Nothing in this package needs an image or a sound file. The buttons that speak fall back to synthesis, which is what audio: tts means, and it keeps the fixture about the one field it is named after.",
       ],
     },
