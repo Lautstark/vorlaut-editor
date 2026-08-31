@@ -715,3 +715,65 @@ test("a key can say its word, lead onward, or do both", async ({ page }) => {
   await expectSaid(page, 0, "Ich will");
   await expect(cells(page).nth(KEY_CELL[0]!).locator(".cell__follow")).toHaveCount(1);
 });
+
+test("a Sammlung of two dozen pages leaves the board on screen", async ({ page }) => {
+  /* The regression the cap's move to sixty-four could have shipped.
+   *
+   * The strip was a plain wrapping row, which was the whole answer while the
+   * device held five sets. The collection that started this holds twenty-four,
+   * and twenty-four tabs wrapping freely is four rows of chrome standing
+   * between the work head and the board - at sixty-four it is ten. So the
+   * strip is bounded and scrolls (see `.tabs` in src/styles/ui.css), and what
+   * is asserted here is the property that bound is for rather than the number
+   * it was set to: every page is still reachable, and the board is still
+   * whole and above the fold with the strip as full as this Sammlung makes it.
+   *
+   * Twenty-four presses rather than sixty-four. It is the number off the real
+   * file, it already overflows the strip twice over, and the cap itself is
+   * held by tests/unit/collection_cap.test.ts, which does not need a browser.
+   */
+  await openBoard(page);
+  const tabs = page.locator("#tabs .tab:not(.add)");
+  for (let made = 1; made < 24; made++) {
+    await page.locator("#tabs .tab.add").click();
+    await expect(tabs).toHaveCount(made + 1);
+  }
+
+  const strip = page.locator("#tabs");
+  const box = await strip.evaluate((el) => ({
+    shown: el.clientHeight, held: el.scrollHeight,
+  }));
+  // It overflows - otherwise the rest of this test proves nothing - and what
+  // it shows is a small part of what it holds rather than all of it.
+  expect(box.held).toBeGreaterThan(box.shown);
+  expect(box.shown).toBeLessThan(200);
+
+  /* The board, whole and in the window. `main` scrolls, so a strip that grew
+   * without a ceiling would not push the board off the page - it would push it
+   * below the fold, which is the same thing to somebody who has just opened
+   * their Sammlung and cannot see what is on it. */
+  const board = (await page.locator("#device").boundingBox())!;
+  const window_ = page.viewportSize()!;
+  expect(board.y + board.height).toBeLessThanOrEqual(window_.height);
+
+  /* Every page still reachable. Adding the twenty-fourth scrolled the strip
+   * past the first tab, and pressing that tab both opens its page and brings
+   * it back into view - which is the property, rather than a scrollTop of
+   * zero: the strip carries 2px of padding for the focus ring, so "scrolled
+   * home" lands at 2 and an equality against 0 would be asserting the
+   * padding. */
+  expect(await strip.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  await tabs.first().click();
+  await expect(tabs.first()).toHaveClass(/active/);
+  const home = await strip.evaluate((el) => {
+    const first = el.firstElementChild as HTMLElement;
+    return { at: el.scrollTop, shown: el.clientHeight,
+             top: first.offsetTop, height: first.offsetHeight };
+  });
+  expect(home.top).toBeGreaterThanOrEqual(home.at);
+  expect(home.top + home.height).toBeLessThanOrEqual(home.at + home.shown);
+
+  // And the line under it counts pages rather than places left, which is what
+  // it said while five of them was the whole device.
+  await expect(page.locator("#slots")).toHaveText(label("ui.sets_count", { used: 24 }));
+});

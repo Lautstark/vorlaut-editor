@@ -2,8 +2,8 @@
 // lays it out, and the two sheets a press opens - one for a speech key, one
 // for the set.
 //
-// This is the device-specific half. Four keys to a set, at most five sets on
-// the device at once, a hole where the speaker is: none of that is
+// This is the device-specific half. Four keys to a set, a hole where the
+// speaker is, and a cap on the sets that is the device's own: none of that is
 // true of AAC in general and all of it is true of this hardware, which is why
 // it sits under editor-diy/ and why nothing in the shell may import it. The
 // shell reaches it through core/editor.ts instead, and `diy` at the foot of
@@ -162,8 +162,8 @@ const chosenAs = (act: SlotAct): Does =>
 
 /** An id for a set, minted when a key first names one. crypto.randomUUID() for
  *  store.ts's reason at its own: two of them made in two tabs must not collide,
- *  and nothing about a set - not its name, which may be empty on five of them
- *  at once - is unique enough to derive one from. */
+ *  and nothing about a set - not its name, which may be empty on every one of
+ *  them at once - is unique enough to derive one from. */
 const mint = (): string => crypto.randomUUID();
 
 /** The set a `goto` names, or undefined where it names one that has been
@@ -497,7 +497,7 @@ function drawTabs(): void {
     // written on the element: it was the set's own colour on the border, with
     // a square of the same colour beside the name. Both went with the colour,
     // and the square would have been the worse thing to keep - the same value
-    // on all five tabs, saying only that a set is a set.
+    // on every tab, saying only that a set is a set.
     tab.className = "tab" + (index === current ? " active" : "");
     const name = document.createElement("span");
     name.textContent = setName(entry, index);
@@ -611,6 +611,23 @@ function drawTabs(): void {
     };
     tabs.appendChild(add);
   }
+
+  /* The open tab, kept in view.
+   *
+   * The strip is bounded and scrolls now - see `.tabs` in ui.css - so the tab
+   * that is open can be outside it after a redraw that nobody scrolled for:
+   * opening a Sammlung of twenty-four pages, following a key to a page thirty
+   * tabs down, deleting the page above the one that takes its place. `block:
+   * "nearest"` scrolls the strip and nothing else, so the page does not jump,
+   * and on a strip short enough not to scroll it has nothing to do.
+   *
+   * Guarded rather than called outright: scrollIntoView is a layout call and
+   * not every environment this module is loaded in has one, and nothing about
+   * the strip depends on it having happened. */
+  const showing = tabs.children[current] as HTMLElement | undefined;
+  if (typeof showing?.scrollIntoView === "function") {
+    showing.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
 }
 
 export function render(): void {
@@ -620,10 +637,26 @@ export function render(): void {
   dragSlot = null;
   drawTabs();
 
-  // How full the Sammlung is. There is nothing to warn about any more: every
-  // set it holds goes onto the device, and it cannot hold more than fit.
-  $("slots").textContent =
-    t("ui.slots_used", { used: board().sets.length, max: limits.maxSets });
+  /* How many pages there are, and the cap only where it bites.
+   *
+   * This read "{used} of {max} places on the device taken" while the cap was
+   * five, and at five that was the useful sentence: the last page was in
+   * sight from the first, so the count and the room left were one number worth
+   * watching. At sixty-four it is a meter that never moves, repeating a
+   * figure nothing on this screen can act on and, worse, implying scarcity
+   * where there is none - somebody counting places would stop adding pages
+   * long before the device would.
+   *
+   * So the line says how many pages there are, and the cap turns up only on
+   * the press that would have made one too many, where "+ Neue Seite" is no
+   * longer in the strip. That absence was self-explanatory at five, because a
+   * full strip was five tabs anybody could see at once. At sixty-four the
+   * button just stops being there, and a sentence is what is left to say why.
+   */
+  const used = board().sets.length;
+  $("slots").textContent = used < limits.maxSets
+    ? t("ui.sets_count", { used })
+    : t("ui.sets_full", { used });
 
   const device = $("device");
   device.innerHTML = "";
@@ -717,10 +750,9 @@ function openKeySheet(index: number): Promise<Left> {
   /* Which page a key leads to.
    *
    * Every set in the Sammlung and nothing else. There is no "Neue Seite …"
-   * entry the way the tablet's list has one: a page here is four keys on a
-   * ring of at most five, so making one is a press on the strip that is
-   * already on screen behind this sheet, and an entry that could be greyed out
-   * on the sixth is worse than no entry.
+   * entry the way the tablet's list has one: making a page is a press on the
+   * strip that is already on screen behind this sheet, and an entry that could
+   * be greyed out on the page past the cap is worse than no entry.
    *
    * Where the key already leads is where the list stands. Where it leads
    * nowhere - a page deleted since, which nothing in this change prevents -

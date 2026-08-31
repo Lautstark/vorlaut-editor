@@ -195,9 +195,9 @@ export interface DiyLayout {
    *  editor is one of these, and there is no migration - the flag arrived
    *  after boards already existed. */
   target?: "diy";
-  /** Every one of them goes onto the device, in this order, at most five of
-   *  them. A Sammlung is the selection: there is no second flag deciding
-   *  which of its sets ship. */
+  /** Every one of them goes onto the device, in this order, up to the cap in
+   *  LIMITS.maxSets - the device's own MAX_SETS. A Sammlung is the selection:
+   *  there is no second flag deciding which of its sets ship. */
   sets: BoardSet[];
   /** Which language the device's own menu speaks. */
   language?: string;

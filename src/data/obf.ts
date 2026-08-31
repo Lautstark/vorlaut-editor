@@ -618,10 +618,16 @@ export function localeToLanguage(locale) {
 // table rather than a second copy to keep level. The palette was read from
 // there too, for the colour a set with none was given; both are gone.
 //
-// The cap is five now rather than twenty-five, and it is the only one: a
-// Sammlung is what goes onto the device, so how many sets it may hold and how
-// many the device has room for stopped being two questions. A document with
-// more boards than that is refused rather than imported and half-shown.
+// The cap is sixty-four, and it is the only one: a Sammlung is what goes onto
+// the device, so how many sets it may hold and how many the device has room
+// for stopped being two questions. A document with more boards than that is
+// refused rather than imported and half-shown.
+//
+// It was twenty-five and a separate five, then five, and it is the device's
+// MAX_SETS each time - see the note on LIMITS for where the sixty-four comes
+// from and for what does not check it. Nothing here is written for a
+// particular size of cap; what the number changes is which documents get
+// through, and a real Sammlung of twenty-four pages is now one of them.
 export const MAX_SETS = LIMITS.maxSets;
 // layout.py's DEFAULT_SLEEP_TIMEOUT. It used to be the one number in neither
 // table, written 600 here and 600 again in vorlaut.ino's idle check, agreeing
