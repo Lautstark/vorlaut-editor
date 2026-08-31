@@ -36,6 +36,19 @@
 //
 // **The device.** layout.bin stays exactly what layout_format.js writes. This
 // replaces the document somebody edits, not the file that gets flashed.
+//
+// **What a press does.** Slot.act arrived after this file and does not travel
+// through it: a key that leads onward is written here as the speaking key it
+// used to be, and comes back as one. That is a real loss on a round trip and
+// it is named rather than hidden - this door and the device package next to it
+// are the two the talker's own acts have not been taken through, because both
+// are read by something outside this repository. The loader compiles the
+// device package and the firmware runs what it compiles, so a speech key that
+// switches page is a device behaviour rather than a field, and adding the
+// field on this side first would write a file the other half cannot honour -
+// which is the shape CLAUDE.md's rule about the device format exists to stop.
+// data/app_package.ts is where the acts do reach a running product: a talker
+// Sammlung opened on a tablet, against exchange/SPEC.md 7.3.
 
 import { LIMITS } from "../core/boot_data.js";
 import { reason } from "../core/errors.js";

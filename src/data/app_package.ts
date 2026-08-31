@@ -45,6 +45,20 @@
 // key is a whole sentence, not a word to build one out of. A DIY Sammlung with
 // its keys appending to a bar would be a different thing wearing its labels.
 //
+// A speech key may also lead onward, which is the second thing this mapping
+// gained and the reason SPEC_VERSION below moved:
+//
+//   a `speak` key  -> ext_lautstark_speak_immediately, as above
+//   a `goto` key   -> load_board, at the set it names
+//   `alsoSpeak`    -> the same load_board, plus ext_lautstark_speak_on_navigate
+//
+// The last of those is the tablet's carrier phrase one product along. A board
+// with a message bar wants its word *appended* on the way through; a board
+// without one wants it *said*, because there is nothing for it to join. Both
+// are the same modifier riding on the same navigation, and §7.3 needed the
+// second for the reason it needed the first: `load_board` beats speaking
+// outright, so a key that does both cannot otherwise be written down.
+//
 // ---------------------------------------------------------------------------
 // What a tablet Sammlung becomes
 //
@@ -82,6 +96,7 @@ import { LANGUAGE_CODES, DEFAULT_LANGUAGE } from "../device/layout_facts.js";
 import { encodeOpus, ENCODER_RATE, type OpusClip } from "./opus.js";
 import { zipBytes, type ZipMember } from "./zip.js";
 import { WORD_CLASSES } from "../core/boot_data.js";
+import { actOf, says } from "../core/types.js";
 import type {
   Act, AppButton, AppLayout, CollectionRef, DiyLayout, Layout, WordColor,
 } from "../core/types.js";
@@ -90,7 +105,7 @@ import type {
  *
  * §12: a builder writes the version it targets, not the version it happens to
  * fit. Bumping this is a decision about having read the changelog. */
-export const SPEC_VERSION = "1.3.0";
+export const SPEC_VERSION = "1.4.0";
 
 /** SPEC.md §7.5's ceiling on a press timing, in milliseconds.
  *
@@ -157,6 +172,22 @@ export interface PackageButton {
    *  `navigate-and-append` pins exactly that, on a button of its own, which is
    *  a package checkPackage() is held against. */
   ext_lautstark_append_on_navigate?: boolean;
+  /** §7.3. True on a navigating button that speaks its own audio on the way
+   *  through, and written only beside a `load_board`.
+   *
+   *  The sibling of the flag above and the same modifier one product along:
+   *  *append on the way through* is what a board with a message bar wants, and
+   *  *speak on the way through* is what a board without one wants, because
+   *  there is nothing for its word to join. It is the five-key talker's
+   *  **Wort & weiter** - see SlotAct in core/types.ts - and without it that key
+   *  cannot be written down at all, since §7.3's table lets `load_board` beat
+   *  speaking outright.
+   *
+   *  No check for it in checkPackage() either, for the reason the note above
+   *  gives: it is written inside the one branch that navigates and nowhere
+   *  else, and the shape a check would catch is one §7.3 makes a viewer ignore
+   *  in silence. Fixture `navigate-and-speak` pins that. */
+  ext_lautstark_speak_on_navigate?: boolean;
 }
 
 export interface PackageBoard {
@@ -528,6 +559,13 @@ export function spokenTexts(layout: Layout): string[] {
   }
   for (const set of layout.sets ?? []) {
     for (const slot of set.slots ?? []) {
+      // The same question one board model along, and the same reason: a key
+      // that only leads onward says nothing when it is pressed, so recording
+      // its word is a clip nothing will ever play. diyBoards() asks says() at
+      // the moment it writes the button, and the two have to agree - a text
+      // recorded and not written is wasted work, and one written and not
+      // recorded is a button with no audio.
+      if (!says(actOf(slot))) continue;
       const text = String(slot.text ?? "").trim();
       if (text) out.push(text);
     }
@@ -747,6 +785,15 @@ function diyBoards(
     throw new Error("There is nothing in this Sammlung to export yet.");
   }
   const ids = sets.map((_, index) => `set-${index + 1}`);
+  /** Which board a `goto` key names, by the id its set carries.
+   *
+   *  A set is given an id only once a key names it - see BoardSet.id - so this
+   *  is nearly always empty, and a Sammlung nobody has used the three press
+   *  modes on writes exactly the file it wrote before they existed. */
+  const boardOf = new Map<string, number>();
+  for (const [index, set] of sets.entries()) {
+    if (set.id) boardOf.set(set.id, index);
+  }
   const boards: PackageBoard[] = [];
 
   for (const [index, set] of sets.entries()) {
@@ -769,6 +816,34 @@ function diyBoards(
       // has to reach the same answer - see the note on that function.
       if (slotIsEmpty(slot)) { present[at] = false; continue; }
       present[at] = true;
+      /* What one press does, as §7.3 writes it down.
+       *
+       * Three shapes, and the union in core/types.ts is what makes them three
+       * rather than a pair of flags that could disagree:
+       *
+       *   speak            ext_lautstark_speak_immediately
+       *   goto             load_board
+       *   goto+alsoSpeak   load_board, ext_lautstark_speak_on_navigate
+       *
+       * Absent counts as `speak`, which is what every key on this device did
+       * before there was anything else it could do - so a Sammlung written
+       * before SlotAct existed writes the file it wrote then, byte for byte.
+       *
+       * `speak_immediately` is deliberately not written beside a `load_board`.
+       * §7.3's table is exclusive and load_board wins outright, so the flag
+       * there would be a field saying something the viewer must ignore - which
+       * is how a reader comes to believe a button does two things. The one
+       * field that genuinely rides along is the new one, and that is the whole
+       * reason it exists. */
+      const act = actOf(slot ?? { text: "", symbol: "" });
+      const leadsTo = act.kind === "goto" ? boardOf.get(act.set) : undefined;
+      /* A key that leads onward to a set that is not here any more leads
+       * nowhere, and what it becomes is an ordinary speaking key. Not a
+       * refusal: nothing in the editor stops a page being deleted out from
+       * under a key that named it, this change is not the one that adds that
+       * check, and a package that cannot be exported at all is a worse answer
+       * than a key that says its word. */
+      const navigates = leadsTo !== undefined;
       const button: PackageButton = {
         id: `${boardId}-key-${at + 1}`,
         label: String(slot?.text ?? ""),
@@ -776,9 +851,18 @@ function diyBoards(
         // OBF has nowhere to put a colour that belongs to a board; the set has
         // no colour now. §7.2's field stays optional and stays defined - a
         // word class still writes one, on the tablet's half.
-        // The device speaks on press and has no bar to compose in. §4.3.
-        ext_lautstark_speak_immediately: true,
       };
+      if (navigates) {
+        const to = ids[leadsTo]!;
+        button.load_board =
+          { id: to, name: String(sets[leadsTo]!.name ?? ""), path: boardPath(to) };
+        if (act.kind === "goto" && act.alsoSpeak) {
+          button.ext_lautstark_speak_on_navigate = true;
+        }
+      } else {
+        // The device speaks on press and has no bar to compose in. §4.3.
+        button.ext_lautstark_speak_immediately = true;
+      }
       // Both, and the same text, exactly as the talker export writes them: the
       // label is what the button shows, the vocalization is what it says, and
       // §7.3 puts the vocalization in the message bar. Saying it twice keeps
@@ -786,7 +870,14 @@ function diyBoards(
       if (button.label) button.vocalization = button.label;
       const picture = put.image(reference, Boolean(slot?.negated));
       if (picture) button.image_id = picture;
-      const recording = put.sound(text);
+      /* The recording, where there is anything to play it.
+       *
+       * A key that only leads onward says nothing when it is pressed, so an
+       * Opus clip for it is a file in the archive that the viewer will never
+       * decode - and on a phone that is a download and a decode budget spent
+       * on silence. The word itself stays on the button, because §7.2's label
+       * is what the button *shows* and a navigation key still shows one. */
+      const recording = says(act) ? put.sound(text) : undefined;
       if (recording) button.sound_id = recording;
       buttons.push(button);
     }

@@ -95,6 +95,16 @@
 // images[].path, sounds[].path - and §1 of SPEC.md puts the talker's .obz out
 // of its scope entirely, so none of §5.3's PNG-and-1024 rules reach here.
 //
+// It also does not need one for Slot.act, and that is a boundary rather than an
+// omission. The three press modes the five-key editor offers - say it, say it
+// and lead onward, lead onward - are two behaviours the firmware does not have:
+// a speech key that switches set, and speaking before it does. Writing either
+// here would put a package in front of loader/'s compileDevice() that it has
+// never been asked to read, and what a talker did with it would be decided by
+// whichever half was updated second. So the field waits for the other half, and
+// a Sammlung using it compiles to the board it was before - every key speaking.
+// data/app_package.ts is the door those acts do go through today.
+//
 // A marker field saying "this one is compilable" was considered and left out.
 // readDevicePackage() refuses a package it cannot compile by looking at what is
 // actually there - an image entry with no bytes behind it, a sound that is not

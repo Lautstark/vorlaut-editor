@@ -31,23 +31,52 @@
 // draws for both. The scaffolding is shell/sheet.ts's - an editor may not
 // import out of another editor, so what the two share lives one floor down -
 // and what is left here is the rows, which are the part that is genuinely this
-// device's. There is one of them on a key: no word class, because the device
-// draws no colour at all - the five displays carry the picture and nothing
-// round it - and no row for what a press does, because there is no sentence
-// bar for a key to put anything into.
+// device's. There is one fewer of them on a key than on a tablet button: no
+// word class, because the device draws no colour at all - the five displays
+// carry the picture and nothing round it.
+//
+// ## What a press does, on a device with no sentence bar
+//
+// The row for that is here, and it asks the same question editor-app asks in
+// the same place with the same control. What differs is the answers, and the
+// difference is one fact about the hardware: there is no sentence bar, so
+// nothing composes. `append`, `clear`, `backspace` and `sayBar` are four of
+// Act's seven and all four are about a bar; `home` is the fifth and belongs to
+// the start page a ring of sets does not have. What is left is saying the key
+// and leading onward, which is three answers once the two are allowed to
+// happen on one press:
+//
+//   Wort            say it, and stay on this page
+//   Wort & weiter   say it, then switch to the page the key names
+//   weiter          switch, and say nothing
+//
+// SlotAct in core/types.ts is the shape, and the middle one is why the wire
+// needed a field: exchange/SPEC.md §7.3 lets `load_board` beat speaking, so a
+// key that does both cannot be written without saying so. It is written as
+// `ext_lautstark_speak_on_navigate`, the sibling of the flag the tablet's
+// carrier phrase already rides on - *speak on the way through* where a tablet
+// *appends on the way through*.
+//
+// The marks on the cell are editor-app's, not new ones. A key that leads
+// onward wears the corner arrow that follows it, a key that speaks wears the
+// play control that auditions it, and one that does both wears both - which is
+// the same table a tablet cell reads, with the rows this device has. Nothing
+// lands in `.cell__act`: that badge is for the acts with no better mark of
+// their own, and neither of these is one.
 import { $, negationCross } from "../shell/dom.js";
 import { symbolInto } from "../backend/index.js";
 import { state } from "../core/state.js";
 import type { Editor } from "../core/editor.js";
-import { isDiy } from "../core/types.js";
-import type { BoardSet, DiyLayout, Layout } from "../core/types.js";
+import { actOf, isDiy, says } from "../core/types.js";
+import type { BoardSet, DiyLayout, Layout, SlotAct } from "../core/types.js";
 import { LANG, limits } from "../core/boot.js";
 import { t } from "../core/texts.js";
 import { save } from "../core/save.js";
 import { paintOpenCollection } from "../shell/collections.js";
 import { speak } from "../shell/speech.js";
-import { formRow, missing, openSheet, textField } from "../shell/sheet.js";
-import type { Left } from "../shell/sheet.js";
+import { dropdown, formRow, hint, missing, openSheet, textField }
+  from "../shell/sheet.js";
+import type { Choice, Left } from "../shell/sheet.js";
 import { confirmDialog } from "@lautstark/design/dialog";
 
 let dragSet: number | null = null;    // index of the dragged set
@@ -119,6 +148,34 @@ const CELLS: (null | "set" | number)[] = [null, 0, 1, "set", 2, 3];
 
 /** Which cell in the grid holds a speech slot. */
 const cellOf = (slot: number): number => CELLS.indexOf(slot);
+
+/** The three answers a key's sheet offers, in the words on its list: **Wort**,
+ *  **Wort & weiter**, **weiter**. Two members of SlotAct and the modifier on
+ *  one of them, which is where the union puts them and why - see there. */
+type Does = "word" | "carry" | "goto";
+
+/** Which of the three an act reads as. Total, unlike editor-app's, because
+ *  every act this device can hold is one of the three: there is no bar control
+ *  a key could have been given before the list stopped offering it. */
+const chosenAs = (act: SlotAct): Does =>
+  act.kind === "speak" ? "word" : act.alsoSpeak ? "carry" : "goto";
+
+/** An id for a set, minted when a key first names one. crypto.randomUUID() for
+ *  store.ts's reason at its own: two of them made in two tabs must not collide,
+ *  and nothing about a set - not its name, which may be empty on five of them
+ *  at once - is unique enough to derive one from. */
+const mint = (): string => crypto.randomUUID();
+
+/** The set a `goto` names, or undefined where it names one that has been
+ *  deleted since. */
+const setById = (layout: DiyLayout, id: string): BoardSet | undefined =>
+  (layout.sets ?? []).find((one) => one.id === id);
+
+/** What a set is called in a list, which is its name until somebody gives it
+ *  one. The tab, the set key and the delete question all say this; so do the
+ *  target list and the corner that follows it. */
+const setName = (entry: BoardSet, index: number): string =>
+  entry.name || t("ui.set_n", { n: index + 1 });
 
 function clearDragMarks(): void {
   for (const one of document.querySelectorAll(".dragover")) {
@@ -274,7 +331,7 @@ function setCell(entry: BoardSet): HTMLElement {
   const box = document.createElement("div");
   box.className = "cell cell--setkey";
 
-  const name = entry.name || t("ui.set_n", { n: current + 1 });
+  const name = setName(entry, current);
   const hit = opener(t("ui.set_more"));
   const open = () => { void openSetSheet(); };
   hit.onclick = open;
@@ -302,6 +359,7 @@ function setCell(entry: BoardSet): HTMLElement {
 function keyCell(entry: BoardSet, index: number): HTMLElement {
   const slot = entry.slots[index]!;
   const said = (slot.text || "").trim();
+  const act = actOf(slot);
   const box = document.createElement("div");
   box.className = "cell";
 
@@ -341,7 +399,46 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
     word.textContent = said;
     box.appendChild(word);
   }
-  if (said) box.appendChild(playButton(said));
+  /* Only where there is something to hear. A key that leads onward and says
+   * nothing has nothing to audition, and offering to play it would be offering
+   * silence - editor-app's cell() makes the same reading of the same fact.
+   *
+   * No ring on it, and that is the one place the two editors' cells differ on
+   * purpose. `.cell__play--now` marks the tablet's exception, the button that
+   * speaks at once instead of feeding the sentence bar; here that is what every
+   * speaking key does, and a mark on all of them is a mark on none. */
+  if (said && says(act)) box.appendChild(playButton(said));
+
+  /* And the corner that follows a key which leads onward.
+   *
+   * editor-app's `.cell__follow`, in the seat that stylesheet fixes for it -
+   * top right, with the play control top left, so a key that speaks *and*
+   * leads wears both without either standing aside. The two are drawn from one
+   * rule for both editors, which is why neither the class nor the geometry is
+   * restated here.
+   *
+   * The press switches the strip to that page rather than opening the key's
+   * own sheet, exactly as it opens a page on a tablet. The cell behind it still
+   * opens the sheet, for templates/board.ts's reason: a key that navigated when
+   * pressed would be the one key on the board nobody could ever edit. */
+  if (act.kind === "goto") {
+    const to = setById(board(), act.set);
+    if (to) {
+      const at = board().sets.indexOf(to);
+      const follow = document.createElement("button");
+      follow.type = "button";
+      follow.className = "cell__follow";
+      follow.textContent = "›";
+      follow.title = t("ui.page_follow", { name: setName(to, at) });
+      follow.setAttribute("aria-label", follow.title);
+      follow.onclick = (event) => {
+        event.stopPropagation();
+        current = at;
+        render();
+      };
+      box.appendChild(follow);
+    }
+  }
 
   const open = () => { void editKey(index); };
   hit.onclick = open;
@@ -403,7 +500,7 @@ function drawTabs(): void {
     // on all five tabs, saying only that a set is a set.
     tab.className = "tab" + (index === current ? " active" : "");
     const name = document.createElement("span");
-    name.textContent = entry.name || t("ui.set_n", { n: index + 1 });
+    name.textContent = setName(entry, index);
     tab.appendChild(name);
     const open = () => { current = index; render(); };
     tab.onclick = open;
@@ -566,8 +663,11 @@ export function render(): void {
  * was written.
  */
 function openKeySheet(index: number): Promise<Left> {
+  const layout = board();
+  const sets = layout.sets;
   const entry = set();
   const slot = entry.slots[index]!;
+  const held = actOf(slot);
   const draft = { text: slot.text, symbol: slot.symbol, negated: Boolean(slot.negated) };
 
   const spoken = textField(draft.text, (value) => { draft.text = value; });
@@ -585,6 +685,94 @@ function openKeySheet(index: number): Promise<Left> {
   const withPlay = document.createElement("div");
   withPlay.className = "form__withplay";
   withPlay.append(spoken, play);
+  const spokenRow = formRow(t("ui.text_placeholder"), withPlay,
+                            t("ui.diy_key_spoken_note"), spoken.id);
+
+  /* --- what a press does, and the two rows that follow from it -----------
+   *
+   * Asked first, above the field it governs, which is editor-app's order and
+   * its argument: a key that only leads onward says nothing, so its Was gesagt
+   * wird field is a dead control - and asked last it was dead in silence, with
+   * nothing on screen saying why typing into it changes nothing.
+   *
+   * The same dropdown that editor draws, and each answer's own sentence
+   * following it as a hint. Three boxed options with their notes under them
+   * would be most of this sheet's height, and the distinction between the
+   * first two is exactly the thing a bare list of three words gets wrong.
+   */
+  const kinds: Choice[] = (["word", "carry", "goto"] as const)
+    .map((kind) => ({ value: kind, label: t(`ui.diy_does_${kind}`) }));
+  const note = hint();
+  note.id = "diyDoesNote";
+  const does = dropdown(kinds, chosenAs(held), () => { follow(); });
+  does.button.id = "diyDoes";
+  /* Named to the trigger by hand, because this row's sentence is rewritten on
+   * every choice and so cannot be handed to formRow() once. "Wort" on its own
+   * does not say what a word does. */
+  does.button.setAttribute("aria-describedby", note.id);
+  const actRow = formRow(t("ui.button_act"), does.anchor, "", does.button);
+  actRow.classList.add("form__row--caption");
+  actRow.appendChild(note);
+
+  /* Which page a key leads to.
+   *
+   * Every set in the Sammlung and nothing else. There is no "Neue Seite …"
+   * entry the way the tablet's list has one: a page here is four keys on a
+   * ring of at most five, so making one is a press on the strip that is
+   * already on screen behind this sheet, and an entry that could be greyed out
+   * on the sixth is worse than no entry.
+   *
+   * Where the key already leads is where the list stands. Where it leads
+   * nowhere - a page deleted since, which nothing in this change prevents -
+   * the list stands on the page the key is on, and Fertig writes that. It is
+   * the fallback editor-app states for a `goto` with no target: a navigating
+   * key is never left pointing at nothing, because that exports as a key which
+   * does not navigate at all, and the list said otherwise.
+   */
+  const where: Choice[] = sets.map((one, at) =>
+    ({ value: String(at), label: setName(one, at) }));
+  const leadsTo = held.kind === "goto"
+    ? sets.findIndex((one) => one.id === held.set) : -1;
+  const targets = dropdown(where, String(leadsTo < 0 ? current : leadsTo),
+                           () => {});
+  targets.button.id = "diyGoto";
+  const targetRow = formRow(t("ui.goto_page"), targets.anchor, "",
+                            targets.button);
+
+  /** The rows that depend on the answer above them, and the note under it.
+   *
+   * Hidden rather than disabled, editor-app's reading: the question is not
+   * whether somebody may type into this field, it is whether the key says
+   * anything at all, and a greyed field still reads as one they have failed to
+   * reach.
+   *
+   * Nothing is cleared on a change of answer. The draft reaches the slot on
+   * Fertig, so a sentence typed before somebody changed their mind is still
+   * there if they change it back.
+   */
+  function follow(): void {
+    note.textContent = t(`ui.diy_does_${does.value}_note`);
+    targetRow.hidden = does.value === "word";
+    spokenRow.hidden = does.value === "goto";
+  }
+  follow();
+
+  /** What the two lists come to, as an act.
+   *
+   *  The one place a set is given an id, and it happens on the press that
+   *  writes the key which needed it - so a sheet somebody closes another way
+   *  leaves the Sammlung exactly as they found it, ids included. See
+   *  BoardSet.id. */
+  const chosen = (): SlotAct => {
+    if (does.value === "word") return { kind: "speak" };
+    const to = sets[Number(targets.value)] ?? entry;
+    to.id ??= mint();
+    // Absent rather than false where the key only leads onward - SlotAct's own
+    // note, and what keeps a key written before this existed byte-identical.
+    return does.value === "carry"
+      ? { kind: "goto", set: to.id, alsoSpeak: true }
+      : { kind: "goto", set: to.id };
+  };
 
   const keep = () => {
     slot.text = draft.text;
@@ -594,6 +782,12 @@ function openKeySheet(index: number): Promise<Left> {
     // that has never been crossed out looks changed to changed.ts.
     if (draft.negated) slot.negated = true;
     else delete slot.negated;
+    // The same rule one field along, and the reason is the same one: absent is
+    // what `speak` means, so a key nobody has given a second job to is written
+    // as it always was.
+    const act = chosen();
+    if (act.kind === "speak") delete slot.act;
+    else slot.act = act;
     commit();
   };
 
@@ -623,15 +817,14 @@ function openKeySheet(index: number): Promise<Left> {
       },
       onNegate: (negated) => { draft.negated = negated; },
     },
-    rows: [formRow(t("ui.text_placeholder"), withPlay,
-                   t("ui.diy_key_spoken_note"), spoken.id)],
+    rows: [actRow, targetRow, spokenRow],
     /* Emptied and not deleted, and only where there is something to empty.
      * A slot is one of a fixed four and cannot go; what the button does is put
      * it back the way an untouched key is, which is why its label says so - see
      * ui.diy_key_clear. No question in front of it, for editor-app's reason:
      * what goes is one key on the set somebody is looking at, and putting it
      * back is one press in the cell it came from. */
-    ...((slot.text || slot.symbol) ? {
+    ...((slot.text || slot.symbol || slot.act) ? {
       remove: {
         label: t("ui.diy_key_clear"),
         onPress: (settle: () => void) => {
@@ -642,6 +835,11 @@ function openKeySheet(index: number): Promise<Left> {
           // invisible - there is no picture under it - and comes back the
           // moment somebody picks the next picture.
           delete slot.negated;
+          // An untouched key says its word, which is what no act at all means.
+          // A key left leading onward with nothing on it is the one shape this
+          // board can hold that nobody can see: no picture, no sentence, and a
+          // press that changes the page.
+          delete slot.act;
           settle();
           commit();
         },
@@ -764,7 +962,7 @@ async function askDelete(): Promise<boolean> {
   const sets = board().sets;
   if (!sets.length) return false;
   const entry = sets[current]!;
-  const name = entry.name || t("ui.set_n", { n: current + 1 });
+  const name = setName(entry, current);
   const n = (entry.slots || []).filter(
     (slot) => (slot.text || "").trim() || (slot.symbol || "").trim()).length;
 

@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
-  KEY_CELL, cells, expectSaid, key, keySheet, label, nameSet, openBoard, press, within,
-  put, search, searchNote, setCard, setKey, word,
+  KEY_CELL, cells, choose, chooseNamed, expectSaid, key, keySheet, label, nameSet,
+  openBoard, press, within, put, search, searchNote, setCard, setKey, word,
 } from "./diy.js";
 import { exportForTalker, openSettings, openVoices } from "./sheets.js";
 
@@ -634,4 +634,84 @@ test("the sheet says what is owed for the pictures it shows", async ({ page }) =
   const box = keySheet(page);
   await expect(box.locator(".pick__credits")).not.toBeEmpty();
   await expect(box.locator(".pick__credits")).toContainText("ARASAAC");
+});
+
+test("a key can say its word, lead onward, or do both", async ({ page }) => {
+  /* The three answers the key sheet offers, driven the way a person drives
+   * them - which is the whole reason this goes through the sheet rather than
+   * writing a layout into the store. The exclusivity lives in that control:
+   * `weiter` is a key that says nothing, and a test setting fields directly
+   * would never exercise the thing that keeps a board to what a file can hold.
+   *
+   * The board it builds is the smallest real use of this: a page asking
+   * something, and one key of four that is the way on. What the assertions are
+   * about is which marks each answer puts on its cell - the play control for a
+   * key with something to hear, the corner arrow for one that leads somewhere
+   * - because those are what somebody reads the board by.
+   */
+  await openBoard(page);
+  await put(page, 0, "Ich will");
+
+  // Somewhere to lead to, with a name, because the target list is read by it.
+  await page.locator("#tabs .tab.add").click();
+  const tabs = page.locator("#tabs .tab:not(.add)");
+  await expect(tabs).toHaveCount(2);
+  await nameSet(page, "Essen");
+  await tabs.first().click();
+
+  // Wort & weiter: says itself, then switches page. One press for both.
+  await key(page, 0).click();
+  const box = keySheet(page);
+  await expect(box).toBeVisible();
+  await choose(page, "#diyDoes", "ui.diy_does_carry");
+  await chooseNamed(page, "#diyGoto", "Essen");
+  // Both rows are drawn for this answer, and it is the only one that draws
+  // both: it leads somewhere and it has something to say on the way.
+  await expect(box.locator("#diyGoto")).toBeVisible();
+  await expect(box.locator("#diyKeyText")).toBeVisible();
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
+
+  const carrying = cells(page).nth(KEY_CELL[0]!);
+  await expect(carrying.locator(".cell__play")).toHaveCount(1);
+  await expect(carrying.locator(".cell__follow")).toHaveCount(1);
+
+  // The corner follows it, which is what it is for: the strip lands on the
+  // page the key names, without the sheet being opened to find out which.
+  await carrying.locator(".cell__follow").click();
+  await expect(tabs.nth(1)).toHaveClass(/active/);
+  await tabs.first().click();
+
+  // weiter: the same navigation with nothing said, so the field it would be
+  // said in is not drawn at all - hidden rather than greyed, because the
+  // question is not whether somebody may type there.
+  await key(page, 1).click();
+  await expect(box).toBeVisible();
+  await choose(page, "#diyDoes", "ui.diy_does_goto");
+  await chooseNamed(page, "#diyGoto", "Essen");
+  await expect(box.locator("#diyKeyText")).toBeHidden();
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
+
+  const leading = cells(page).nth(KEY_CELL[1]!);
+  await expect(leading.locator(".cell__follow")).toHaveCount(1);
+  await expect(leading.locator(".cell__play")).toHaveCount(0);
+
+  // And Wort, which is what a key with no answer chosen has always been: the
+  // target list goes away with it, and the word comes back.
+  await key(page, 1).click();
+  await expect(box).toBeVisible();
+  await choose(page, "#diyDoes", "ui.diy_does_word");
+  await expect(box.locator("#diyGoto")).toBeHidden();
+  await expect(box.locator("#diyKeyText")).toBeVisible();
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
+  await expect(cells(page).nth(KEY_CELL[1]!).locator(".cell__follow")).toHaveCount(0);
+
+  // Key 1 kept its answer across every press above, which is the assertion
+  // that it was written rather than merely drawn.
+  await page.reload();
+  await expect(cells(page)).toHaveCount(6);
+  await expectSaid(page, 0, "Ich will");
+  await expect(cells(page).nth(KEY_CELL[0]!).locator(".cell__follow")).toHaveCount(1);
 });

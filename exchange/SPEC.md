@@ -1,8 +1,8 @@
 # Lautstark Board Package — exchange format specification
 
-**Version 1.3.0** · status: **draft, not ratified** · 2026-08-30
+**Version 1.4.0** · status: **draft, not ratified** · 2026-08-31
 
-> No `exchange-v1.3.0` tag is cut, and none will be, until a real board has
+> No `exchange-v1.4.0` tag is cut, and none will be, until a real board has
 > been built, exported, and opened on a tablet. Until then this document is a
 > proposal with fixtures attached: pin a commit if you need to build against
 > it, and expect it to move.
@@ -117,7 +117,7 @@ hand these to each other, and where a builder should say so.
     "images": { "img-food": "images/food.png" },
     "sounds": { "snd-food": "sounds/food.opus" }
   },
-  "ext_lautstark_spec_version": "1.3.0",
+  "ext_lautstark_spec_version": "1.4.0",
   "ext_lautstark_package_id": "1f0a5c2e-0000-4000-8000-000000000001",
   "ext_lautstark_package_name": "Home",
   "ext_lautstark_modified": "2026-08-24T09:00:00Z",
@@ -146,7 +146,7 @@ and `paths.images` disagree, the importer MUST use `paths`, and SHOULD warn
 
 ## 4. Extension fields
 
-OBF has no room for thirteen things this format needs. Each is prefixed
+OBF has no room for fourteen things this format needs. Each is prefixed
 `ext_lautstark_`, which is the OBF-sanctioned way to add a field, and each is
 listed below with the reason it cannot be expressed in plain OBF.
 
@@ -185,8 +185,9 @@ takes what it is given.
 |---|---|---|---|
 | `ext_lautstark_speak_immediately` | boolean | no, default `false` | When true the button speaks at once instead of appending to the message bar. **OBF cannot express this.** Its model is that a button either appends or performs an action, with no "speak this now and leave the bar alone". Interjections need it: `Ouch!`, `stop that`, a greeting. Composing those into a sentence first defeats their purpose. |
 | `ext_lautstark_append_on_navigate` | boolean | no, default `false` | When true a navigating button appends its entry to the message bar before it navigates. **OBF cannot express this either.** `load_board` is the whole of a button's behaviour there rather than one of two things it does, and no OBF action appends a button's own text — `+text` is spelling, which §7.4 puts out of scope for v1. The carrier phrase needs it: a button reading `I want …` that opens the food board with the sentence already begun. See §7.3. |
+| `ext_lautstark_speak_on_navigate` | boolean | no, default `false` | When true a navigating button speaks its own audio before it navigates. **OBF cannot express this either**, and for the same reason as the row above: `load_board` is the whole of a button's behaviour there. It is that row's sibling one board model along. A board with a message bar wants the entry *appended* on the way through; a board without one — the five-key talker's four keys, where a key is a whole sentence and there is nothing to compose — wants it *spoken* on the way through, because there is nothing for it to join. Without this field such a button cannot be written down at all: §7.3's table lets `load_board` beat `ext_lautstark_speak_immediately` outright, so the two together say only *navigate*. See §7.3. |
 
-That is the whole list. Thirteen fields, ten of them in the manifest. Anything
+That is the whole list. Fourteen fields, ten of them in the manifest. Anything
 else beginning `ext_lautstark_` is not part of v1 and MUST be ignored.
 
 ---
@@ -443,7 +444,7 @@ Activating a button:
 
 | Condition | Behaviour |
 |---|---|
-| `load_board` present | Navigate. MUST NOT touch the bar — unless the button also carries `ext_lautstark_append_on_navigate`, below. |
+| `load_board` present | Navigate. MUST NOT touch the bar, and MUST NOT speak — unless the button also carries `ext_lautstark_append_on_navigate` or `ext_lautstark_speak_on_navigate`, below. |
 | `action` or `actions` present | §7.4. |
 | `ext_lautstark_speak_immediately: true` | Speak the button's own audio at once. MUST NOT touch the bar. |
 | otherwise | Append one entry to the bar. This is the default and the common case. |
@@ -473,6 +474,38 @@ builds the same way: `I want …` puts the opening of the sentence in the bar an
 opens the board the next word is on. Without it that is two presses on two
 boards, and the second of them has to be found after leaving the page that named
 it.
+
+**Speaking on the way through.** `ext_lautstark_speak_on_navigate: true` on a
+button carrying `load_board` means: speak the button's own audio exactly as
+`ext_lautstark_speak_immediately` does, **then** navigate. Both from one press,
+and in that order. The bar is not touched — this is the *speaking* modifier, not
+the appending one, and it says nothing about the bar at all.
+
+The same modifier as the one above, for a board that has no bar to append to.
+The keys of the five-key talker are whole sentences rather than words to compose
+from — one key, one thing said — so what a page-leading key there needs is not
+that its entry joins a sentence but that its sentence is said before the page
+changes. Fixture `navigate-and-speak` is the pair.
+
+**It rides on `load_board` only.** Unlike the appending modifier it is not
+extended to `action: ":home"`, and beside `:home` it MUST be ignored — that
+button navigates home and speaks nothing. The narrowing is on purpose rather
+than an omission: the modifier exists for one authoring model, a key naming the
+page it leads to, and a board model with no message bar has no start page
+either — its pages are a ring the page key cycles. A future minor version may
+widen it if a board model turns up that wants both.
+
+**On a button that does not navigate, the flag is ignored** — no warning, no
+fault — exactly as the appending flag is, and for the reason given there. A
+`speak_immediately` button carrying it already speaks; an appending button
+carrying it meant something the format has no way to say.
+
+**Both modifiers on one button.** A button carrying `load_board` and both flags
+appends its entry *and* speaks it, then navigates. This is not a shape any
+Lautstark builder writes — the two belong to two board models, and neither
+editor offers both — and it is defined rather than forbidden because §10.3's
+whole posture is that a viewer does not fail on what it did not expect. An
+importer MUST NOT warn about it.
 
 ### 7.4 Actions
 
@@ -798,7 +831,7 @@ A builder MUST write the version it targets, not the version it happens to fit.
 
 ## 13. Conformance
 
-An importer is conformant at v1.3.0 when it produces, for **every** fixture
+An importer is conformant at v1.4.0 when it produces, for **every** fixture
 listed in [`fixtures/index.json`](fixtures/index.json), the outcome in the
 matching `.expected.json`. That index is the authoritative list; no count
 appears in this document, because a number restated in prose drifts from the
@@ -811,6 +844,42 @@ disagreement is a bug in this document. Report it.
 ---
 
 ## 14. Changelog
+
+### 1.4.0 — 2026-08-31
+
+Adds `ext_lautstark_speak_on_navigate` (§4.3, §7.3): a navigating button may
+speak its own audio before it navigates. Minor, per §12 — an importer written
+against 1.3.0 ignores the field under §10.3 and navigates in silence, which is
+what every earlier version of this document required.
+
+**The same modifier as 1.2.0's, for a board with no message bar.** That version
+added appending on the way through, and the argument for it was the carrier
+phrase: `I want …` opens the board its object is on with the sentence already
+begun. This is that argument on a board where nothing composes. The five-key
+talker has four keys and no bar; a key there is a whole sentence, said on the
+press. So the thing a page-leading key needs is not that its entry joins a
+sentence but that its sentence is *said* before the page changes — a key that
+answers and leads on to what comes next, which is one press for what is
+otherwise two.
+
+**A second field rather than a meaning for the first.** `append_on_navigate` on
+a board with no bar could have been read as "do whatever this board does with a
+word", and that reading is what the field would have been worth: nothing. A
+package does not know which board model it is opened on. The viewer that reads
+these decides what a button does from the button, and two fields say two things
+where one field would have had to be interpreted.
+
+**Why not simply `speak_immediately` beside `load_board`.** Because §7.3's table
+is exclusive and always has been — `load_board` beats `action` beats
+`speak_immediately` beats appending — so those two fields together already have
+a meaning, and it is *navigate, say nothing*. Giving that pair a second meaning
+would change what a package written under 1.3.0 does, which is the definition of
+a major version in §12. A new field costs a minor bump and changes nothing that
+already exists.
+
+**Absent means off**, so no existing package changes meaning and nothing has to
+be migrated — the same shape `negated`, both press timings and the appending
+modifier are already written in.
 
 ### 1.3.0 — 2026-08-30
 

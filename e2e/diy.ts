@@ -76,6 +76,42 @@ export const keySheet = (page: Page) => sheet(page, "ui.diy_key_title");
 /** The card the ⋯ on the current tab and the set key both open. */
 export const setCard = (page: Page) => sheet(page, "ui.set_title");
 
+/** An entry in an open dropdown menu, matched by the words on it.
+ *
+ * `menuitemradio` rather than `button`: these are alternatives with one in
+ * force, which is what `checked` on every item buys - see shell/sheet.ts's
+ * dropdown().
+ *
+ * The tick a chosen entry wears is generated content and joins the accessible
+ * name, so it is *matched* rather than excluded. Choosing what is already
+ * chosen is a no-op in the control, so the entry in force is a perfectly good
+ * answer to "click the one that says this" - and excluding it is a race with
+ * nothing to end it. e2e/editor_app.spec.ts has the long version of that
+ * argument at its own copy of this helper.
+ *
+ * Anchored, because these labels are not prefix-free: "Wort" is also the
+ * beginning of "Wort & weiter", and unanchored the two are one entry.
+ */
+const menuEntry = (page: Page, words: string) =>
+  page.getByRole("menuitemradio",
+                 { name: new RegExp(`^(${words})(\\s*\u2713)?$`) });
+
+/** Chooses from one of the sheet's dropdowns, by the text key its answer comes
+ *  from. Nothing is pressed where the answer is already the answer. */
+export async function choose(page: Page, trigger: string, key: string) {
+  const now = (await page.locator(trigger).textContent() || "").trim();
+  if (label(key).test(now)) return;
+  await page.locator(trigger).click();
+  await menuEntry(page, label(key).source.slice(2, -2)).click();
+}
+
+/** The same, for a list whose entries are content rather than interface: the
+ *  pages of the Sammlung, named by whoever named them. */
+export async function chooseNamed(page: Page, trigger: string, name: string) {
+  await page.locator(trigger).click();
+  await menuEntry(page, name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).click();
+}
+
 /** Presses a foot button by its label. */
 export const press = (box: Locator, key: string) =>
   box.locator(".foot button", { hasText: label(key) }).click();

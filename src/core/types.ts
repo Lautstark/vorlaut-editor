@@ -19,7 +19,56 @@ export interface Slot {
   symbol: string;
   /** Whether the picture is crossed out - see Negated below. */
   negated?: boolean;
+  /** What one press does. Exactly one thing.
+   *
+   *  Absent is not a fourth value: it means `speak`, which is what every key
+   *  on this device did before there was anything else it could do. So a
+   *  Sammlung written before this field existed reads back as the Sammlung it
+   *  was and exports byte for byte the file it exported, which is the same
+   *  reason `negated` above is absent rather than false. AppButton.act is
+   *  required where this is optional for exactly that difference: a tablet
+   *  button has never had a default worth writing down. */
+  act?: SlotAct;
 }
+
+/** What pressing a speech key does, on the device with four of them.
+ *
+ * Three things in the editor's words - **Wort**, **Wort & weiter**, **weiter**
+ * - which are two members and a modifier here, for the reason Act's own note
+ * gives one floor along: the modifier rides on the case that navigates,
+ * because that is the only case the states it can reach are states a file can
+ * hold.
+ *
+ * **Its own union rather than a narrowing of Act.** Four of Act's seven are
+ * the sentence bar - `append`, `clear`, `backspace`, `sayBar` - and this
+ * device has no bar at all: the key is the whole sentence and it is said on
+ * the press. `home` is the fifth, and it goes with the bar's neighbour, the
+ * start page, which a ring of sets does not have. What is left is not a subset
+ * either, because `goto` names a different thing here - a BoardSet, not an
+ * AppPage - and the modifier says something else about it. A shared union
+ * would therefore have to be widened until it could express a talker key
+ * appending to a bar that does not exist, which is the kind of state
+ * core/types.ts's shapes exist to make unwritable.
+ *
+ * What *is* shared is the thinking, and deliberately: one dropdown asking what
+ * one press does, a target list under it when the answer navigates, and the
+ * same marks on the cell. Somebody who has authored one of these boards has
+ * authored the other.
+ */
+export type SlotAct =
+  /** Say this key. The default and, until this type existed, the only thing a
+   *  speech key did. */
+  | { kind: "speak" }
+  /** Switch to another set. `set` is a BoardSet.id in this same Sammlung.
+   *
+   *  `alsoSpeak` is the talker's half of exchange/SPEC.md §7.3's modifier: the
+   *  key says its word first, then the set changes. It is
+   *  `ext_lautstark_speak_on_navigate` on the wire, the sibling of
+   *  `ext_lautstark_append_on_navigate` - *speak on the way through* where the
+   *  tablet *appends on the way through*, because a tablet has a bar to append
+   *  to and this device has a voice. Absent rather than false where it is not
+   *  wanted, like `negated` and for the same reason. */
+  | { kind: "goto"; set: string; alsoSpeak?: boolean };
 
 /* --- Crossing a picture out ------------------------------------------------
  *
@@ -56,6 +105,23 @@ export interface Slot {
 
 /** One set of four keys, and the set key that switches to it. */
 export interface BoardSet {
+  /** What a `goto` key names, when one names this set. AppPage.id one editor
+   *  along, and the same argument: a set is told apart from its neighbours by
+   *  being itself, not by where it currently sits. The order of these is the
+   *  order the device's set key cycles them in, so reordering them is an
+   *  ordinary authoring act on this device rather than a rearrangement of a
+   *  list - and a target stored as a position would follow the drag instead of
+   *  staying where it was pointed.
+   *
+   *  **Minted when something first points at it, and not before.** Absent
+   *  means no key leads here, which is every set in every Sammlung written
+   *  until now: nothing has to be migrated, nothing already stored changes,
+   *  and a Sammlung nobody uses this on goes on exporting the file it exported.
+   *  The alternative - an id on every set the moment this field existed -
+   *  would rewrite every board in the store to say something none of them had
+   *  been asked. openKeySheet() is where the minting happens, on the press
+   *  that writes the key that needed it. */
+  id?: string;
   name: string;
   symbol: string;
   slots: Slot[];
@@ -328,6 +394,24 @@ export const isApp = (layout: Layout): layout is AppLayout =>
   layout.target === "app";
 export const isDiy = (layout: Layout): layout is DiyLayout =>
   layout.target !== "app";
+
+/** What a talker key does, with the default written out.
+ *
+ * Absent means `speak` - Slot.act says why it is absent rather than stored -
+ * and here rather than in either reader for the reason slotIsEmpty() is where
+ * it is: the editor draws a key from this and app_package.ts writes one from
+ * it, and the two agreeing is the whole point. A default decided twice is a
+ * default that goes on being decided twice until the copies disagree. */
+export const actOf = (slot: Slot): SlotAct => slot.act ?? { kind: "speak" };
+
+/** Whether pressing a talker key says anything.
+ *
+ *  Both halves of the middle answer: a key that leads onward *and* carries its
+ *  word through says it exactly as a plain speaking key does. What reads this
+ *  is every question that is really about sound - whether to offer a play
+ *  control, whether to bake a recording into a package. */
+export const says = (act: SlotAct): boolean =>
+  act.kind === "speak" || act.alsoSpeak === true;
 
 /** One page: an OBF board, with the buttons that sit on it. */
 export interface AppPage {
