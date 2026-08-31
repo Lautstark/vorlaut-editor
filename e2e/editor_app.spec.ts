@@ -756,30 +756,21 @@ test("a press timing set in Bedienung reaches the package", async ({ page }) => 
   await build(page);
 
   const card = await openAccess(page);
-  // Nothing is set on a new Sammlung, and the folded line says so with the one
-  // word rather than with two zeroes.
+  // A new Sammlung is at the first mode, which is what absent means in the
+  // format too - so the folded line names it rather than showing two zeroes.
   const stated = page.locator("#collectionAccessState");
-  await expect(stated).toHaveText(label("ui.app_press_off"));
+  await expect(stated).toHaveText(label("ui.app_press_at_once"));
 
-  // Applied on touch: no apply button in this panel, because neither setting
+  // Applied on touch: no apply button in this panel, because nothing here
   // destroys anything and the sheet's default is that a choice takes effect
   // where it is made.
   await expect(card.locator(".row--apply")).toHaveCount(0);
-  /* Each step picked inside its own group, by the group's name. The two step
-   * lists overlap - 500 is offered for both - so reaching for the number alone
-   * finds the hold's copy of it twice and silently leaves the pause unset. */
-  const group = (name: string) =>
-    card.getByRole("group", { name: label(name) });
-  await group("ui.app_press_hold").locator("button", { hasText: /^300 ms$/ })
-    .click();
-  await group("ui.app_press_release").locator("button", { hasText: /^1000 ms$/ })
-    .click();
-  // The chip says it is the one in force, the way a size chip does.
-  await expect(group("ui.app_press_hold")
-    .locator("button", { hasText: /^300 ms$/ }))
-    .toHaveAttribute("aria-pressed", "true");
+  /* By the name inside the option rather than by the option's own text: an
+   * option carries its explaining sentence too, so an anchored match on the
+   * whole label never fires. */
+  await card.locator("b").filter({ hasText: label("ui.app_press_held") }).click();
   // The heading follows immediately, which is what says the choice took.
-  await expect(stated).toHaveText("300 ms · 1000 ms");
+  await expect(stated).toHaveText(label("ui.app_press_held"));
 
   await page.locator("#collectionSheetClose").click();
   await expect(page.locator("#collectionSheet")).toBeHidden();
@@ -792,8 +783,57 @@ test("a press timing set in Bedienung reaches the package", async ({ page }) => 
   const { pkg } = readPackage(new Uint8Array(readFileSync(path!)));
 
   expect(checkPackage(pkg)).toEqual([]);
-  expect(pkg.manifest.ext_lautstark_hold_time_ms).toBe(300);
-  expect(pkg.manifest.ext_lautstark_release_time_ms).toBe(1000);
+  /* The numbers the viewer's own mode of the same name uses. They have to be
+   * these exactly: a Sammlung set to "Erst beim Halten" here and a tablet set
+   * to it there must be the same board, and before this panel offered modes the
+   * editor could not express either of the two useful ones at all. */
+  expect(pkg.manifest.ext_lautstark_hold_time_ms).toBe(400);
+  expect(pkg.manifest.ext_lautstark_release_time_ms).toBe(800);
+});
+
+test("the modes are the same three the tablet offers", async ({ page }) => {
+  /* The whole reason this panel changed shape. The viewer names what a package
+   * asks for by matching it against its own three modes; a value it cannot
+   * match it has to describe some other way, and a value it matches to the
+   * *wrong* mode it reports confidently and wrongly. Keeping one vocabulary is
+   * what makes that matching exact rather than a guess.
+   *
+   * The pairs below are PressMode in vorlaut-app. If either side moves without
+   * the other, this fails - which is the point of asserting them here rather
+   * than trusting two files in two repositories to be read together.
+   *
+   * Three exports in one test, and an export encodes every clip in the
+   * Sammlung. It fits the ordinary budget alone and runs out of it under a full
+   * parallel suite, which makes it a slow test rather than a flaky one - so it
+   * says so, rather than being thinned out. What would have to go to make it
+   * quick is one of the three modes, and then it stops asserting what it is
+   * named after. */
+  test.slow();
+  await standIn(page);
+  await build(page);
+  const card = await openAccess(page);
+
+  for (const [key, hold, release] of [
+    ["ui.app_press_at_once", undefined, undefined],
+    ["ui.app_press_once", undefined, 600],
+    ["ui.app_press_held", 400, 800],
+  ] as const) {
+    await card.locator("b").filter({ hasText: label(key) }).click();
+    await expect(page.locator("#collectionAccessState")).toHaveText(label(key));
+    await page.locator("#collectionSheetClose").click();
+    await expect(page.locator("#collectionSheet")).toBeHidden();
+
+    await exportPackage(page);
+    const asked = sheet(page, "ui.package_title");
+    await expect(asked).toBeVisible();
+    const download = await savePackage(asked);
+    const { pkg } = readPackage(new Uint8Array(readFileSync((await download.path())!)));
+    expect(pkg.manifest.ext_lautstark_hold_time_ms).toBe(hold);
+    expect(pkg.manifest.ext_lautstark_release_time_ms).toBe(release);
+
+    await openAccess(page);
+  }
+  await page.locator("#collectionSheetClose").click();
 });
 
 test("a Sammlung nobody has set a timing on carries neither field",
