@@ -897,7 +897,8 @@ async function audioName(text: string, spokenBy: string): Promise<string> {
  *
  * So it synthesises, and it needs the progress and the stop the app package
  * needs and for the same reason: every distinct sentence is a model inference
- * or a round trip to Azure, and a five-set Sammlung is up to twenty of them.
+ * or a round trip to Azure, and a Sammlung of twenty pages is up to eighty of
+ * them.
  * What it costs is that the export is no longer instant. What it buys is that
  * a Sammlung can be written out the moment it is finished, by somebody who has
  * never seen a cable, and the file is complete on its own.

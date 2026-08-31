@@ -23,11 +23,30 @@
 
 export const LANGUAGES = ["de", "en"];
 export const DEFAULT_LANGUAGE = "en";
-/* One number, because there is one rule: a Sammlung holds at most five sets
- * and every one of them goes onto the device. It used to be two - author up
- * to 25, mark 5 to ship - which was a second selection mechanism from before
- * Sammlungen existed. */
-export const LIMITS = {"maxSets": 5};
+/* One number, because there is one rule: every set a Sammlung holds goes onto
+ * the device, so how many it may hold and how many the device has room for are
+ * the same question. It used to be two - author up to 25, mark 5 to ship -
+ * which was a second selection mechanism from before Sammlungen existed.
+ *
+ * **Sixty-four, and the number is the device's.** MAX_SETS in
+ * `firmware/vorlaut/layout_format.h` went from 5 to 64 in
+ * Lautstark/vorlaut-diy-talker's 0ac0465, and the editor follows rather than
+ * picking a cap of its own: a Sammlung the editor accepts and the device
+ * refuses is a file somebody finds out about at the cable. The generosity is
+ * deliberate there and worth repeating here, because it is the reason the
+ * number is not 20 - a talker already standing in a house has no radio, so
+ * MAX_SETS can never be raised for it again. What the room actually costs was
+ * measured rather than estimated: globals from 33% to 41%, and the limit that
+ * binds first is the file partition, not this.
+ *
+ * **Nothing checks that the two copies agree.** The device facts the editor
+ * duplicates are held to `device/fixtures/` by
+ * tests/unit/device_facts.test.ts; this one is not among them, and the pinned
+ * fixtures under third_party/ are still device interface 1.1.0, which is the
+ * layout version whose MAX_SETS was 5. So this line is a number typed out of
+ * one repository into the other, and the divergence it comes from is the
+ * thing worth fixing rather than the number. */
+export const LIMITS = {"maxSets": 64};
 
 /* The Modified Fitzgerald Key: which colour a word class is drawn in.
  *
@@ -519,6 +538,8 @@ export const TEXTS = {
     "ui.set_name_note": "Steht auf dem Reiter und auf der Seiten-Taste - die zeigt am Gerät, wo man gerade ist.",
     "ui.set_more": "Seite bearbeiten",
     "ui.set_title": "Seite",
+    "ui.sets_count": "Seiten auf dem Gerät: {used}",
+    "ui.sets_full": "Seiten auf dem Gerät: {used} — mehr passen nicht darauf.",
     "ui.shelf_elsewhere": "Diese Sammlung gehört zu einem anderen Programm. Auf lautstark.tech/sammlungen steht bei jeder, wofür sie ist.",
     "ui.shelf_fetching": "Sammlung wird geholt \u2026",
     "ui.shelf_offline": "Die Sammlung lie\u00df sich nicht holen: {error}",
@@ -527,7 +548,6 @@ export const TEXTS = {
     "ui.dsg_shelf_head": "Eine fertige Sammlung holen",
     "ui.settings": "Einstellungen",
     "ui.settings_saved": "gespeichert",
-    "ui.slots_used": "{used} von {max} Plätzen auf dem Gerät belegt",
     "ui.source_active": "Aktive Quelle",
     "ui.source_azure": "Azure",
     "ui.source_piper": "Mitgeliefert",
@@ -998,6 +1018,8 @@ export const TEXTS = {
     "ui.set_name_note": "Shows on the tab and on the page key, which is what tells you on the device where you are.",
     "ui.set_more": "Edit this page",
     "ui.set_title": "Page",
+    "ui.sets_count": "Pages on the device: {used}",
+    "ui.sets_full": "Pages on the device: {used} — no more fit on it.",
     "ui.shelf_elsewhere": "That collection belongs to a different program. lautstark.tech/sammlungen says which each one is for.",
     "ui.shelf_fetching": "Fetching the collection \u2026",
     "ui.shelf_offline": "The collection could not be fetched: {error}",
@@ -1006,7 +1028,6 @@ export const TEXTS = {
     "ui.dsg_shelf_head": "Fetching a ready-made collection",
     "ui.settings": "Settings",
     "ui.settings_saved": "saved",
-    "ui.slots_used": "{used} of {max} places on the device taken",
     "ui.source_active": "Active source",
     "ui.source_azure": "Azure",
     "ui.source_piper": "Bundled",

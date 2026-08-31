@@ -159,17 +159,47 @@ compared as text, so sorted keys and two-space indent are still held too."""
 THE_CAP_MOVED = """the cap on how many sets a layout may hold.
 
 It used to be two numbers - author up to 25, mark 5 to ship - and collapsing
-the distinction above collapsed them into one: a Sammlung holds at most five
-sets. normalizeLayout() refuses more than that now, where obf.py refused more
-than 25 and separately refused a sixth *active* set.
+the distinction above collapsed them into one: how many sets a Sammlung may
+hold and how many the device has room for stopped being two questions.
+normalizeLayout() holds the second, where obf.py refused more than 25 and
+separately refused a sixth *active* set.
 
-Six frozen normalizeLayout cases hand it more sets than the new cap. Five were
-refused by the oracle for having too many active, one was answered because only
-five of its six were active; all six are refused now, and the sentence they are
-refused with is not the sentence obf.py used. What survives is the half that is
-still a fact about the mapping: an over-cap layout must be refused rather than
-quietly truncated. That is what these cases are held to below. What is lost is
-the exact wording, and for the sixth case the answer itself."""
+**The cap has moved twice, and the second move is what empties this
+narrowing.** The one cap was five while the device's MAX_SETS was five; it is
+sixty-four now, because the firmware's is - see the note on LIMITS in
+src/core/boot_data.ts. Six frozen normalizeLayout cases hand more sets than
+obf.py would take, and they hand six, six, six, seven, twenty-five and
+twenty-six of them. Under a cap of five all six were refusals, and five of them
+were held here to refusing rather than to their wording. Under a cap of
+sixty-four not one of them is over the cap at all.
+
+So what these cases can be held to now is decided by their frozen answer rather
+than by the new cap:
+
+*Five recorded refusals are set aside.* Four name a cap on *active* sets, which
+is ACTIVE_IS_GONE's flag and cannot be asked for; the fifth names the cap of
+25, which no longer exists either. All five describe a document this module now
+accepts, and accepting it is correct, so there is nothing left in them to
+compare. Named and counted below rather than filtered quietly, the way
+cssColor's ten answers are.
+
+*The sixth is a gain.* It is the case obf.py answered - six sets of which five
+were active - and its frozen value comes back into the comparison, because the
+only reason it was held to a refusal was a cap that has moved past it.
+
+What is lost is the coverage: no recorded case reaches sixty-four sets, so the
+lock no longer says anything about over-cap refusal, which is the half of this
+that was still a fact about the mapping. It is not re-frozen - the oracle is
+gone, and a lock written from the module under test is the module compared
+against itself. tests/unit/collection_cap.test.ts carries that property
+instead, as an authored check rather than a recorded answer. The check below
+stays, so a lock that ever gains a case past the cap is still held to it."""
+
+# A refusal obf.py gave about the number of sets, in the two shapes it had: the
+# total cap, and the separate cap on the active ones. Matched on the frozen
+# sentence rather than on the argument, because what makes these unanswerable
+# is what they say - a cap that is gone - and not how many sets they hand over.
+A_CAP_REFUSAL = re.compile(r"At most \d+ sets(,| active at once\b)")
 
 
 def cap_from_the_page() -> int:
@@ -308,6 +338,18 @@ def over_the_cap(args: list, cap: int) -> bool:
     return (bool(args) and isinstance(args[0], dict)
             and isinstance(args[0].get("sets"), list)
             and len(args[0]["sets"]) > cap)
+
+
+def set_aside_by_the_cap(one: dict, cap: int) -> bool:
+    """Whether a frozen answer is a refusal only a cap that is gone explains.
+
+    THE_CAP_MOVED. Both halves have to hold: the recorded answer refuses the
+    document for the number of its sets, and the document is one the cap in
+    force now accepts. A case still over the cap keeps its check.
+    """
+    return (one["call"] == "normalizeLayout" and "error" in one
+            and bool(A_CAP_REFUSAL.match(one["error"]))
+            and not over_the_cap(one["args"], cap))
 
 
 def compare(name: str, want: dict, answer: dict, ours: bool = False) -> None:
@@ -459,19 +501,29 @@ def main() -> int:
     if dead:
         print(f"  --    {len(dead)} cssColor answer(s): set aside, the "
               f"function went with the colour (THE_COLOUR_IS_GONE)")
+    # THE_CAP_MOVED, counted the same way and for the same reason.
+    stale = [one for one in lock["helpers"] if set_aside_by_the_cap(one, cap)]
+    if stale:
+        print(f"  --    {len(stale)} normalizeLayout refusal(s): set aside, "
+              f"they name caps that are gone and none of them is over the "
+              f"cap of {cap} (THE_CAP_MOVED)")
     for one, answer in zip(lock["helpers"], answers["helpers"]):
         if one["call"] == "cssColor":
             continue
         name = f"{one['call']}({', '.join(repr(a) for a in one['args'])})"
         name = name[:87] + "...)" if len(name) > 90 else name
-        # THE_CAP_MOVED. The oracle answered these under a cap of 25 sets and a
-        # separate cap of 5 active ones; both are one cap of 5 now, so the
-        # frozen answer is not the right answer any more. Held to refusing,
-        # which is the part of it that is still a fact about the mapping.
+        # THE_CAP_MOVED. A case still over the cap is held to refusing, which
+        # is the part of the frozen answer that is a fact about the mapping
+        # rather than about a sentence obf.py wrote. No recorded case is, at a
+        # cap of 64; this stands for a lock that ever gains one.
         if one["call"] == "normalizeLayout" and over_the_cap(one["args"], cap):
             check(f"{name}: more than {cap} sets, and refused",
                   "error" in answer,
                   answer.get("error", "JavaScript normalized it anyway"))
+            continue
+        # And one that is under it, whose frozen answer refuses it for being
+        # over a cap that has since moved, has nothing left to say.
+        if set_aside_by_the_cap(one, cap):
             continue
         compare(name, one, answer)
 

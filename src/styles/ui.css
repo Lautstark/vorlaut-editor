@@ -224,7 +224,48 @@ main {
    product. The :focus-visible rules further down add their hover look on top
    of it; none of them stands in for it. */
 
-.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+/* The set strip: wrapping, and bounded once it is deep enough to push the
+   board off the screen.
+
+   It was a plain wrapping row, which was the whole answer while the device
+   held five sets: five tabs are one row at this width and two at worst, and a
+   strip that grew by one line now and then cost nothing anybody would notice.
+   At sixty-four it is thirteen rows, and thirteen rows of chrome above a board
+   is a page where the board is below the fold before the first page is edited.
+
+   Three rows and then it scrolls. Not a sideways row, which is the shape this
+   strip has always refused - the sets *are* the navigation on this device, and
+   a row that scrolls sideways hides them past an edge with nothing to say they
+   are there. Scrolling downward does not have that failure, and the height is
+   picked so that it does not: three whole rows and then 20px of a fourth, so
+   the tabs below are a band cut off at the bottom edge rather than an absence.
+   That band is the thing somebody can see; the scrollbar is a second cue and
+   not the only one, and it is on the axis a page is already read in. Three
+   because two is not obviously more than one line of an ordinary wrap, and
+   four with its band is taller than the board's first row of keys.
+
+   --tab-row is what one tab measures - 14px type on --leading, plus 9px of
+   padding and a 2px border, both doubled - and it is 44px measured in Chrome
+   rather than 43px arrived at by that addition, because --leading is design's
+   and this file does not get to decide it. A variable because the media query
+   below re-measures at the smaller padding rather than doing the sum twice,
+   and because the two numbers that follow from it are then one edit.
+
+   The 4px is the padding, twice: box-sizing is border-box, so a max-height
+   that forgot it would eat 4px off the last row. The padding itself is for the
+   focus ring, which sits 2px outside its tab and would otherwise be clipped by
+   the scrollport on the first and last row; the negative margins take it
+   straight back out, so the strip still starts at the board's leading edge and
+   still leaves 10px under it. */
+.tabs {
+  display: flex; flex-wrap: wrap;
+  --tab-row: 44px; --tab-gap: 8px;
+  gap: var(--tab-gap);
+  max-height: calc(3 * var(--tab-row) + 3 * var(--tab-gap) + 20px + 4px);
+  overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  padding: 2px; margin: -2px -2px 8px;
+}
 .tab {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 14px; border-radius: 10px; cursor: pointer;
@@ -234,8 +275,8 @@ main {
 /* The open tab, marked the way every other selected chip on this page is
    marked - .size below is the same two lines. It used to be the set's own
    colour on the border, with a square of it beside the name; the set has no
-   colour any more, and a square that is the same on all five tabs would have
-   been decoration rather than a mark. */
+   colour any more, and a square that is the same on every tab would have been
+   decoration rather than a mark. */
 .tab.active {
   color: var(--text); background: var(--surface-2); border-color: var(--accent);
 }
@@ -429,14 +470,23 @@ pre.log {
      scoping stays: the reason it is not a bare rule is the general one, that
      this block is about the header's own group. */
 
-  /* Wrapping, not a scrolling row. A row that scrolls sideways hides the
-     sets past the edge with nothing to say they are there - and the sets
-     are the navigation. Several lines cost height, but only as many lines
-     as there are actually sets.
+  /* Wrapping, not a scrolling row, and two rows rather than three. The
+     argument is `.tabs`'s above and unchanged - the sets are the navigation,
+     so they wrap rather than disappearing past a sideways edge - and what
+     differs here is the budget: at this width the whole page is a column on a
+     phone, and a third row of chrome is a third of the board.
+
+     --tab-row is re-measured because .tab is 8px of padding here rather than
+     9, and the band under the second row is 16px rather than 20 for the same
+     reason the row count is smaller.
 
      The talker's strip, and now the only one: the tablet's pages are a list
      in the sidebar. */
-  .tabs { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .tabs {
+    flex-wrap: wrap; margin: -2px -2px 6px;
+    --tab-row: 42px; --tab-gap: 6px;
+    max-height: calc(2 * var(--tab-row) + 2 * var(--tab-gap) + 16px + 4px);
+  }
   .tabs .tab { flex: none; padding: 8px 12px; }
 
   /* Nothing here for the tablet any more. The bar this block used to shrink -
@@ -889,25 +939,33 @@ a.factlinks__line:hover { text-decoration: underline; }
  * its board wants width, but because its tab strip does and the board must not
  * get any.
  *
- * A set is a tab, and the strip is how somebody reaches one. The device holds
- * five, and five with ordinary names - a word or three each - measure about
- * 754px laid out in a row; four of them beside the "+ Neue Seite" button that
- * is still there until the fifth arrives, about 738px. 640 minus this column's
- * padding gives them 600, so both of those wrap, and a strip that wraps pushes
- * the board down by the height of a whole row of tab. Every cure that keeps
- * the 640 makes the names harder to read - smaller type, an ellipsis, a strip
- * that scrolls sideways - and a set's name is the entire way it is told apart
- * from the four beside it.
+ * A set is a tab, and the strip is how somebody reaches one. The device held
+ * five when this number was picked, and five with ordinary names - a word or
+ * three each - measure about 754px laid out in a row; 640 minus this column's
+ * padding gives them 600, so the row wrapped, and a strip that wraps pushed
+ * the board down by the height of a whole row of tab. Every cure that kept the
+ * 640 made the names harder to read - smaller type, an ellipsis, a strip that
+ * scrolls sideways - and a set's name is the entire way it is told apart from
+ * the ones beside it.
+ *
+ * **The device holds sixty-four now, and no width was ever going to keep that
+ * on one line.** The strip wraps by design and is bounded at three rows
+ * instead - see `.tabs` - so this width buys something different from what it
+ * was bought for. It is no longer the difference between wrapping and not; it
+ * is how many tabs sit on each of the three rows before the strip scrolls.
+ * The same measurement gives about 152px a tab with its gap, so it is five to
+ * a row in 840px against four in 600 - the three rows reach fifteen pages
+ * rather than twelve, and the sixteenth is a scroll either way. Short names
+ * do better than that and the default ones are short: sixty-four pages nobody
+ * has renamed measured seven to a row here, ten rows in all.
  *
  * But the cap is a height budget, spent by the board and by nothing else, so
  * the board is where it belongs: 600px, which is exactly what 640 minus the
  * padding always drew, now written on the thing it was always about. The
- * column above it is free to be wider, and only chrome uses the difference.
- *
- * 880 is that difference sized to the strip: 840px of room for a row that
- * needs 754 at its widest, which is about one more ordinary name's worth of
- * slack in a strip that can never hold more than five. It stays inside the
- * content column on a 1280px laptop rather than running out to its edges.
+ * column above it is free to be wider, and only chrome uses the difference -
+ * and the strip is chrome with a ceiling of its own now rather than a height
+ * that grows with the Sammlung. It stays inside the content column on a 1280px
+ * laptop rather than running out to its edges.
  *
  * The board stays at the column's leading edge rather than centred in it, so
  * the strip grows rightward from the board's own left edge and the two go on
