@@ -124,6 +124,26 @@ export interface BoardSet {
   id?: string;
   name: string;
   symbol: string;
+  /** What the set key does, where it does something other than the ring.
+   *
+   * **Absent is the ring**, which is what the set key did from the first
+   * five-key board until 2026-09-01 and what every Sammlung already stored
+   * means: press it and the next set comes up, forever, in the order these sit
+   * in. So nothing has to be migrated and a Sammlung nobody uses this on
+   * exports the file it exported - the same rule as `Slot.act` and
+   * `Slot.negated`, and it is the third field to take it.
+   *
+   * `text` is what the key says when it says anything, and absent means the
+   * set's name: a set key that speaks is nearly always saying what the set is
+   * called, and making somebody type that twice would be the editor asking for
+   * a fact it already has. The picture stays `symbol` above, where it was
+   * before the key had anything else.
+   *
+   * A set key that speaks is what a joining game's board needs - the round
+   * says its own compound word and waits, and the four speech keys answer it -
+   * and it is the half of vorlaut-diy-talker's adr/0020 that the device
+   * gained on 2026-08-31 and this editor could not yet write down. */
+  key?: { text?: string; act?: SlotAct };
   slots: Slot[];
 }
 

@@ -912,7 +912,8 @@ export async function exportDevicePackage(
   onProgress?: (at: PackageProgress) => boolean | void,
 ): Promise<{ blob: Blob; missing: number } | null> {
   const list = await store.readCollections();
-  if (!list.collections.some((one) => one.id === list.current)) {
+  const open = list.collections.find((one) => one.id === list.current);
+  if (!open) {
     throw new Error("There is no Sammlung open to export.");
   }
   const held = await store.readLayout();
@@ -980,7 +981,15 @@ export async function exportDevicePackage(
   }
   onProgress?.({ done: spoken.length, total: spoken.length, text: "" });
 
-  const pkg = devicePackage.buildDevicePackage({ layout, voice, sources, sounds });
+  // Which Sammlung this is and what it is called, both of which the file used
+  // to leave behind. The name survived only as the download's filename, and
+  // nothing at all carried the identity - so on a talker holding several
+  // collections, every export was the same file under the same menu entry.
+  // See ext_lautstark_package_id in data/device_package.ts.
+  const pkg = devicePackage.buildDevicePackage({
+    layout, voice, sources, sounds,
+    collection: { id: open.id, name: open.name },
+  });
   return {
     blob: new Blob([await devicePackage.devicePackageBytes(pkg)],
                    { type: "application/zip" }),

@@ -54,6 +54,66 @@ const FIXTURES = resolve(HERE, "..", "..", "third_party", "vorlaut-diy-talker",
 const readJson = (name: string) =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 
+/** The set a target names, as this editor stores it.
+ *
+ *  A position in the fixture and an id here, which is the difference
+ *  BoardSet.id exists for: a target stored as a position follows a drag, and
+ *  one stored as an id stays where it was pointed. devicePlan() turns it back
+ *  into a position at the last moment before the bytes, so this is the inverse
+ *  of the thing under test rather than a copy of it. */
+const setId = (at: number) => `set-id-${at}`;
+
+/** What one press does, from the file format's three words into this editor's.
+ *
+ * The fixture is owned by neither half and states its input in the interface's
+ * vocabulary - `does` and `target` - because that is what both implementations
+ * have in common. A Sammlung in this repository is `Slot.act` instead, and
+ * turning one into the other is what a person authoring a board does through
+ * the key sheet. Doing it here is what makes the writer answer the fixture's
+ * question rather than a question shaped like this editor.
+ *
+ * `speak` becomes an absent act rather than `{kind: "speak"}`, because absent
+ * is what a Sammlung really holds - Slot.act is written only when a key does
+ * something other than speak, so a fixture translated with the field always
+ * present would never exercise the default every stored Sammlung is relying
+ * on. */
+const asAct = (key: { does: string; target: number }) =>
+  key.does === "speak"
+    ? undefined
+    : { kind: "goto" as const, set: setId(key.target),
+        ...(key.does === "speak-and-go" ? { alsoSpeak: true } : {}) };
+
+/** The same, for the set key, where there is no absent to fall back to. */
+const asSetAct = (key: { does: string; target: number } | undefined) =>
+  !key || key.does === "speak"
+    ? { kind: "speak" as const }
+    : asAct(key);
+
+/** The fixture's layout, as a Sammlung this editor could have written. */
+const asSammlung = (layout: any): DiyLayout => ({
+  ...layout,
+  sets: (layout.sets ?? []).map((set: any, at: number) => ({
+    id: setId(at),
+    name: set.name,
+    // The set key's picture is the set's, which is where it sat before the set
+    // key had anything else to say.
+    symbol: set.key?.symbol ?? "",
+    // The set key is written out in full, never left absent, because absent
+    // means something else there: on a slot it means `speak`, and on the set
+    // key it means the ring every Sammlung had before the key could do
+    // anything else. A fixture that says the set key speaks is saying it does
+    // NOT go on to the next set, and translating that to an absent act would
+    // hand the writer the opposite instruction.
+    key: { text: set.key?.text ?? "", act: asSetAct(set.key) },
+    slots: (set.slots ?? []).map((slot: any) => ({
+      text: slot.text,
+      symbol: slot.symbol,
+      ...(slot.negated ? { negated: true } : {}),
+      ...(asAct(slot) ? { act: asAct(slot) } : {}),
+    })),
+  })),
+});
+
 const index = readJson("index.json");
 const listed: any[] = index.fixtures;
 const packages = listed.filter((one) => one.kind === "package")
@@ -129,10 +189,15 @@ for (const { listed: one, want } of packages) {
         sounds.set(sound.text, { name: sound.name, bytes: bytes! });
       }
       return {
-        layout: want.write.layout as DiyLayout,
+        layout: asSammlung(want.write.layout),
         voice: want.write.voice as string,
         sources,
         sounds,
+        // Which Sammlung is being written out. An input like the layout and
+        // not something derived from it: a layout does not know which Sammlung
+        // holds it, and the id has to outlive every rename of the one that
+        // does. The fixture states it because the writer cannot invent it.
+        collection: want.write.collection as { id: string; name: string },
       };
     };
 
