@@ -61,7 +61,7 @@ import {
   SLEEP_MAX,
   SLEEP_DEFAULT,
 } from "../device/layout_facts.js";
-import type { BoardSet, DiyLayout, Slot } from "../core/types.js";
+import type { BoardSet, DiyLayout, Slot, SlotAct } from "../core/types.js";
 
 /* The Open Board Format shapes this reads and writes.
  *
@@ -429,8 +429,15 @@ export async function layoutToDocument(
  *
  * A grid with a hole in it is what grid.order's nulls are for, and it beats a
  * tidy 1x5 that no renderer could turn back into the thing on the table.
- * Nothing downstream depends on it: the importer finds the set key by its
- * load_board and the speech keys by not having one.
+ *
+ * Something downstream does depend on it now, and it did not use to. The
+ * importer found the set key by its `load_board` and the speech keys by not
+ * having one, which held for exactly as long as a speech key could not lead
+ * anywhere. Slot.act and BoardSet.key ended it: in a game the key that asks
+ * the round's question speaks and stays put, and one of the four answers
+ * carries the link, so the old rule reads such a board back inside out.
+ * setKeyCell() below reads the place instead - this shape, and the leftmost
+ * cell of the second row.
  */
 export function grid(boardId) {
   return {
@@ -441,6 +448,34 @@ export function grid(boardId) {
       [`${boardId}-set`, `${boardId}-key-3`, `${boardId}-key-4`],
     ],
   };
+}
+
+/** The set key's button id on a board this project wrote, and "" on any other.
+ *
+ * The shape is the evidence: two rows, three columns and a null in the corner
+ * where the speaker is, which is grid() above and deviceGrid() in
+ * data/device_package.ts and nothing else.
+ *
+ * Tighter than the rule that file's own reader keeps - it takes the last row's
+ * first cell off any grid it is handed - and deliberately so, because the two
+ * are asked different questions. That reader has already established it is
+ * holding a device package. This one is handed whatever somebody dropped on
+ * the page: a phone's board of sixty buttons has a grid too, and reading a set
+ * key out of its bottom-left corner would be inventing one. About those boards
+ * this says nothing, and they go on being read by the rule that has always
+ * read them.
+ */
+export function setKeyCell(board) {
+  const grid = (board || {}).grid;
+  if (!isObject(grid) || grid.rows !== 2 || grid.columns !== 3) return "";
+  const cells = grid.order;
+  if (!Array.isArray(cells) || cells.length !== 2) return "";
+  const [top, bottom] = cells;
+  if (!Array.isArray(top) || !Array.isArray(bottom)) return "";
+  // The hole, and it has to be a hole: a board with something in that corner
+  // is not the one this project draws, whatever else about it lines up.
+  if ((top[0] ?? null) !== null) return "";
+  return text(bottom[0]);
 }
 
 // --- document -> layout.json -------------------------------------------------
@@ -528,23 +563,60 @@ export function linkTarget(document, button) {
 export function documentToLayout(document) {
   const sets: BoardSet[] = [];
   const rootBoard = document.boards[document.root] || {};
+  const ids = order(document);
+  /* Which boards a key names, so that only those sets are given an id.
+   *
+   * BoardSet.id is minted when something first points at a set and not before,
+   * and an import is no reason to break that rule: a document where nobody led
+   * anywhere comes back with the ids it had, which is none, and every Sammlung
+   * imported until now goes on reading exactly as it did. The board's own id
+   * is what a set that IS pointed at gets - unique within the document by
+   * construction, since these are the keys of an object, and stable if the
+   * same Sammlung goes back out and comes in again. */
+  const pointedAt = new Set<string>();
 
-  for (const boardId of order(document)) {
+  for (const [at, boardId] of ids.entries()) {
     const board = document.boards[boardId];
     const images = imagesById(board);
     const slots: Slot[] = [];
-    /* The set's own key, which is a symbol rather than an id - see where it
-       is read below. */
-    let switchKey: { symbol: string } | null = null;
+    /* The set's own key. A symbol, and now also the button it came off,
+       because what that button does is read below. */
+    let switchKey: { symbol: string; button } | null = null;
+    /* Which button that is, and by what rule.
+     *
+     * On a board this project wrote, the cell: the four speech keys may lead
+     * anywhere they like now, so a link is no longer what tells the fifth key
+     * apart from them. On anybody else's board, the old rule and nothing else
+     * - the first link out is the set key and every other one is a page this
+     * device cannot reach, which is what a board of sixty buttons and eleven
+     * links means when it is read onto five keys. */
+    const cell = setKeyCell(board);
+    const ours = cell !== ""
+      && (board.buttons || []).some((one) => text(one.id) === cell);
 
     for (const button of buttonsInOrder(board)) {
       const symbol = symbolOf(images[text(button.image_id)] || {});
-      if (isObject(button.load_board)) {
-        // The first link out is the set key. A board with several is legal OBF
-        // and normal on a phone; here the rest cannot be reached.
-        if (switchKey === null) switchKey = { symbol };
+      if (ours ? text(button.id) === cell : isObject(button.load_board)) {
+        if (switchKey === null) switchKey = { symbol, button };
         continue;
       }
+      /* What one press does, out of the two fields §7.3 puts it in.
+       *
+       * Only on our own boards, and that is the whole of why `ours` exists: a
+       * foreign board's links were skipped above and never reach here, because
+       * reading them as acts would turn a phone's page tree into four keys
+       * pointing at pages this device has no way to show.
+       *
+       * A link that leads nowhere in this document reads as a key that speaks.
+       * linkTarget() already answers "" for one, and it is the answer the
+       * device door gives to the mirror of the same gap - a key whose target
+       * is gone is a key that says its word. */
+      const target = ours ? linkTarget(document, button) : "";
+      if (target) pointedAt.add(target);
+      const act: SlotAct | null = !target ? null
+        : button.ext_lautstark_speak_on_navigate === true
+          ? { kind: "goto", set: target, alsoSpeak: true }
+          : { kind: "goto", set: target };
       slots.push({
         // The vocalization is what gets spoken and therefore what a slot's
         // text is. The label stands in when there is none, which is the common
@@ -555,6 +627,9 @@ export function documentToLayout(document) {
         // out of a document is the shape a slot written by the editor is. A
         // board from other software has no such field and is not negated.
         ...(button.ext_vorlaut_negated === true ? { negated: true } : {}),
+        // The same rule one field along: absent is what `speak` means, so a
+        // key that only says its word is written the way it always was.
+        ...(act ? { act } : {}),
       });
     }
 
@@ -565,11 +640,62 @@ export function documentToLayout(document) {
         `exactly ${SLOTS_PER_SET} are allowed.`);
     }
 
+    const name = text(board.name) || boardId;
+    /* What the set key itself does, and what it says while doing it.
+     *
+     * **Absent is the ring**, which BoardSet.key states and which is what the
+     * fifth key did on every board written before 2026-09-01. So a set key
+     * leading to the set after this one comes back as nothing at all, and a
+     * Sammlung that has never used this reads exactly as it always did.
+     *
+     * An explicit `goto` at the next set is written by the device door in the
+     * same two bytes as the ring and cannot be told from it here. Read as the
+     * ring, deliberately: the two do the same thing on the device, and the
+     * reading that leaves every existing Sammlung alone is the right one of
+     * two that behave alike. `alsoSpeak` beside it is a different key though -
+     * the ring never speaks - so that one stays an act.
+     *
+     * A set key with no link at all is a key that says its word and stays put,
+     * which is the arrangement a joining game needs and the reason all of this
+     * had to be read by the place rather than by the link.
+     *
+     * `text` is the round's question, and absent means the set's name - so it
+     * is written only where the two differ. That sentence had nowhere to go
+     * until BoardSet.key gained a field for it, and it was dropped on every
+     * import until now. */
+    let key: BoardSet["key"];
+    if (ours && switchKey) {
+      const button = switchKey.button;
+      const target = linkTarget(document, button);
+      const alsoSpeak = button.ext_lautstark_speak_on_navigate === true;
+      const ring = ids[(at + 1) % ids.length];
+      const act: SlotAct | null = !target ? { kind: "speak" }
+        : target === ring && !alsoSpeak ? null
+          : alsoSpeak ? { kind: "goto", set: target, alsoSpeak: true }
+            : { kind: "goto", set: target };
+      // The ring points at a position rather than at a set, so it mints no id.
+      if (act?.kind === "goto") pointedAt.add(target);
+      const word = text(button.vocalization || button.label);
+      const parts = {
+        ...(word && word !== name ? { text: word } : {}),
+        ...(act ? { act } : {}),
+      };
+      if (Object.keys(parts).length) key = parts;
+    }
+
     sets.push({
-      name: text(board.name) || boardId,
+      name,
       symbol: switchKey === null ? "" : switchKey.symbol,
+      ...(key ? { key } : {}),
       slots,
     });
+  }
+
+  // Second pass, because a key on the first board may name the last: which
+  // sets are pointed at is known only once every board has been read. See
+  // pointedAt above.
+  for (const [at, boardId] of ids.entries()) {
+    if (pointedAt.has(boardId)) sets[at].id = boardId;
   }
 
   const raw: DiyLayout = {
@@ -661,6 +787,45 @@ function pyInt(value, fallback) {
   return fallback;
 }
 
+/** A stored act, if it is one this device can hold, and null otherwise.
+ *
+ * The shape rather than the target: whether the set a `goto` names is still in
+ * the Sammlung is a question this function has no business answering, because
+ * the answer changes when somebody deletes a set and both export doors already
+ * give the same one - a key whose target is gone says its word. What is
+ * checked is that the thing is an act at all, since this is the gate a foreign
+ * file comes through and `act: 7` must not reach the key sheet.
+ *
+ * `speak` comes back as itself rather than as null, because on BoardSet.key
+ * absent means the ring and `speak` is a different thing. Slot.act's absent
+ * does mean `speak`, and the caller there drops it - see below.
+ */
+function actShape(value): SlotAct | null {
+  if (!isObject(value)) return null;
+  if (value.kind === "speak") return { kind: "speak" };
+  if (value.kind !== "goto") return null;
+  const set = text(value.set).trim();
+  if (!set) return null;
+  // Absent rather than false, like `negated` and for the same reason: the act
+  // read out of a file has to be the shape the key sheet writes, or the two
+  // compare unequal while meaning the same thing.
+  return value.alsoSpeak === true
+    ? { kind: "goto", set, alsoSpeak: true } : { kind: "goto", set };
+}
+
+/** A stored set key, brought to the shape the key sheet writes, or undefined.
+ *
+ * Undefined for an empty one as well as a missing one: `{}` and absent both
+ * mean the ring and the set's own name, and carrying an empty object through
+ * would put a field on every set that has never had one. */
+function keyShape(value): BoardSet["key"] {
+  if (!isObject(value)) return undefined;
+  const word = text(value.text).trim();
+  const act = actShape(value.act);
+  const parts = { ...(word ? { text: word } : {}), ...(act ? { act } : {}) };
+  return Object.keys(parts).length ? parts : undefined;
+}
+
 /** layout.py's normalize_layout(): the file, brought into a complete shape. */
 export function normalizeLayout(raw) {
   // The same [10, 86400] it has always clamped to, taken from the range
@@ -704,11 +869,21 @@ export function normalizeLayout(raw) {
     }
     slots = [...slots];
     while (slots.length < SLOTS_PER_SET) slots.push({ text: "", symbol: "" });
+    const key = keyShape(entry.key);
     return {
+      // Carried where there is one, and never invented: BoardSet.id is minted
+      // by whatever first points at the set, so a set nobody leads to has none
+      // and a normalize that gave it one would rewrite every board in the
+      // store to say something none of them had been asked.
+      ...(text(entry.id) ? { id: text(entry.id) } : {}),
       name: text(entry.name || `Set ${index + 1}`).trim(),
       symbol: text(entry.symbol).trim(),
+      // Absent is the ring and the set's own name, so an untouched set key
+      // goes on being nothing at all here.
+      ...(key ? { key } : {}),
       slots: slots.map((slot) => {
         const one = isObject(slot) ? slot : {};
+        const act = actShape(one.act);
         return {
           text: text(one.text).trim(), symbol: text(one.symbol).trim(),
           // Carried, and only when it is true. Rebuilding a slot field by
@@ -717,6 +892,13 @@ export function normalizeLayout(raw) {
           // dropped on every import - which for this one would take the cross
           // off a key that says "kein Brot" and leave it saying "Brot".
           ...(one.negated === true ? { negated: true } : {}),
+          // The warning that comment ends on, collected on. Slot.act is the
+          // field added later, and dropping it here took the second job off
+          // every key of every imported game and left it speaking - a Sammlung
+          // that reads as a Sammlung and is not the one in the file, which is
+          // the failure this repository calls the worse sort. Absent stays
+          // absent, because on a slot absent is what `speak` means.
+          ...(act && act.kind === "goto" ? { act } : {}),
         };
       }),
     };
