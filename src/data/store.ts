@@ -534,7 +534,17 @@ export function serialise(layout: Layout): string {
 }
 
 /** The same stamp app.py's layout_version() computes: sha256 of the stored
- * bytes, first sixteen hex characters.
+ * bytes, first sixteen hex characters - as of the last ordinary write.
+ *
+ * That qualification is adr/0023's, and it is the only thing this value
+ * promises less of than it used to. A migration step may rewrite a layout's
+ * text and leaves the stamp standing, because it has nowhere to hash; the pair
+ * is then unmatched until the next write puts both down together. Nothing
+ * notices, and that is checkable rather than hoped: the one comparison in this
+ * file is writeLayout()'s `expected !== held.version`, and both sides of it
+ * come out of the same record. A stamp is a *this has moved* mark and not a
+ * checksum - nothing anywhere re-derives one from stored bytes to check it,
+ * and the day something does, adr/0023 has to be reopened.
  *
  * The same algorithm rather than the same number - the two stores hold their
  * own bytes and are not expected to agree - so that the one concept has one

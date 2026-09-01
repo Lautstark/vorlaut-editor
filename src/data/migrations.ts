@@ -28,12 +28,20 @@
  * the failure this whole arrangement exists to make impossible. The head of
  * store.ts documents that trap in general; here it is load-bearing.
  *
- * What it rules out, concretely: a step may **move** a layout, and may not
- * **rewrite** one. The stored `text` and the `version` hash over it are a
- * matched pair, re-deriving the hash is a `crypto.subtle` call, and there is
- * nowhere in here to make one. A future change to what is *inside* a layout
- * therefore cannot be done as a step - it has to come back to adr/0015 rather
- * than around it.
+ * What it rules out is every one of those awaits, and it rules them out still.
+ * What it used to rule out on top of them - **rewriting** a layout rather than
+ * merely moving one - it no longer does. The stored `text` and the `version`
+ * hash over it are a matched pair and re-deriving the hash is a
+ * `crypto.subtle` call, so a step that rewrites a layout leaves the stamp
+ * exactly as it found it and the next ordinary write re-stamps it. That is
+ * safe because the stamp is only ever compared against itself - store.ts's
+ * writeLayout() is the one comparison there is - and adr/0023 is the argument,
+ * which amends that consequence of adr/0015 rather than going around it.
+ *
+ * The preference underneath it is unchanged, though, and it is the one worth
+ * keeping: a step that moves records cannot lose a layout, and a step that
+ * rewrites them can. So rewriting is the exception, it carries its reason, and
+ * its test asserts what came across rather than only how much did.
  *
  * ## Preconditions, and why they are not the old shape-sniffing
  *
