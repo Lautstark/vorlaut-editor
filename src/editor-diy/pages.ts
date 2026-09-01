@@ -43,6 +43,28 @@
  * refuses a package whose boards it cannot all walk to. What that means here
  * is that the mark is a warning about an export that has not happened yet,
  * which is exactly when a warning is useful.
+ *
+ * ## What is not reported, and it is the obvious one
+ *
+ * **Whether the chain comes back round.** The ring did close - page twelve
+ * went to page one because page one was next after last - and a joining game
+ * built out of targets usually still does, so a mark for "the last round leads
+ * home" looks like the thing to draw next.
+ *
+ * It is a shape and not a fact. A ring is one arrangement of a graph, and the
+ * three Sammlungen this was checked against already disagree about it: two
+ * games close, and a Plauderbuch's last page ends on *Fertig* - a key that
+ * says its word and stays put - which is the ending its author wrote and not a
+ * chain somebody forgot to finish. A mark saying "not closed" would be the
+ * editor holding one of them wrong, and the thing this file is careful about
+ * is exactly that: it reports what the device will do, never what a Sammlung
+ * ought to look like.
+ *
+ * What that mark would have been *for* is already drawn, and drawn as a fact
+ * rather than as a shape: a page nothing leads to wears `unreachable()`'s
+ * warning, and a key that leads onward names the page it leads to on the cell
+ * itself. Between them, a chain that is broken says so at the break. A chain
+ * that is merely open says nothing, because there is nothing wrong with it.
  */
 import { KEYS_PER_SET } from "../device/layout_facts.js";
 import { actOf } from "../core/types.js";

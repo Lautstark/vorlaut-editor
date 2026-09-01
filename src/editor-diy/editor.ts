@@ -88,7 +88,15 @@
 // play control that auditions it, and one that does both wears both - which is
 // the same table a tablet cell reads, with the rows this device has. Nothing
 // lands in `.cell__act`: that badge is for the acts with no better mark of
-// their own, and neither of these is one.
+// their own, and neither of these is one. Anybody arriving here from a grep
+// for `actBadge` is in the right file and looking for the wrong class.
+//
+// The one thing this board says that a tablet cell does not is *which* page a
+// key leads to, on the line over the picture. On a tablet the button already
+// carries the name of the page it opens - that is what a `goto` button is
+// usually called - and here it does not: the key says "Spiegelei" and the page
+// is "Runde 7". keyCell() has the rule, and the seat is the caption line that
+// was already on this cell rather than a mark of its own.
 import { $, negationCross } from "../shell/dom.js";
 import { symbolInto } from "../backend/index.js";
 import { state } from "../core/state.js";
@@ -372,15 +380,62 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
                                           : t("ui.diy_key_add")));
   box.appendChild(hit);
 
-  /* The page's name showing through, said once where it happens rather than
-   * left for somebody to work out from a word they never typed. It goes as
-   * soon as the key has a word of its own, which is when there is nothing left
-   * to explain. */
+  /* Where this key leads, if it leads anywhere: the page it names, found once
+   * here because both the line below and the corner further down need it, and
+   * a key pointed at a page that has since been deleted names nothing. */
+  const at = act.kind === "goto" ? pageAt(board(), act.set) : -1;
+  const to = at < 0 ? undefined : board().sets[at];
+
+  /* The one line above the picture, and the two facts that want it.
+   *
+   * **Where the key leads, and not only that it leads.** The corner says
+   * *that* - and its title says where, which is a fact nobody reads. On a
+   * joining game of twelve rounds every round wears the same arrow in the same
+   * seat, so the board answered "one of these five carries on" and stopped
+   * there; which round it carries on *to* is the other half of the same
+   * question, and it was a hover away on the one screen somebody builds the
+   * chain on. A page's own name is what a `goto` is pointed with in the sheet
+   * - `ui.goto_page`'s list - so naming it here is the same word by the same
+   * route, not a second vocabulary for it.
+   *
+   * **And the caption, where the panel decides one.** A key on PAGE_KEY with
+   * no word of its own is drawn carrying the page's name, because that is what
+   * the firmware prints there - core/types.ts's PAGE_KEY, and ADR 0024 §1 for
+   * why that is a fact about a seat rather than a role. Said once where it
+   * happens, or the name reads as a word somebody typed and never did.
+   *
+   * **Printed and said are two things, and the line says which.** Everywhere
+   * else on this board a word on a cell is a word the key speaks - there are
+   * no captions, `ui.diy_key_spoken_note` - and on this one seat it is what
+   * the display shows. The two coincide on a key that speaks and come apart on
+   * a key that only leads onward: that key prints the name and says nothing,
+   * and the board drew the name with nothing to say so. Not the drawing that
+   * was wrong - all three export doors write that label unconditionally and
+   * the spoken half only where `says(act)`, so a cell without it would be a
+   * board that is not the one on the table - but the line above it, which
+   * offered the name as though it were a word. It names which of the two now,
+   * and the missing play control is the second half of the same answer.
+   *
+   * **The caption wins the line where both apply**, which is one seat with no
+   * word on it. It explains something already drawn on the cell and has no
+   * other mark; the target has the corner, and its name is a hover and a press
+   * away there. A second line would push the picture down on one cell of five
+   * and make the board disagree with the device about how a key is laid out.
+   *
+   * aria-hidden on the target, because the corner below carries that same page
+   * name as its accessible name. One fact read out twice is what somebody
+   * listening rather than looking hears as two keys. */
+  const eyebrow = (text: string, hidden = false): void => {
+    const line = document.createElement("span");
+    line.className = "cell__eyebrow";
+    line.textContent = text;
+    if (hidden) line.setAttribute("aria-hidden", "true");
+    box.appendChild(line);
+  };
   if (index === PAGE_KEY && !own) {
-    const eyebrow = document.createElement("span");
-    eyebrow.className = "cell__eyebrow";
-    eyebrow.textContent = t("ui.diy_page_name_here");
-    box.appendChild(eyebrow);
+    eyebrow(t(says(act) ? "ui.diy_page_name_says" : "ui.diy_page_name_shows"));
+  } else if (to) {
+    eyebrow(t("ui.diy_leads_to", { name: setName(to, at) }), true);
   }
 
   if (slot.symbol) box.appendChild(picture(slot.symbol, slot.negated));
@@ -412,23 +467,19 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
    * own sheet, exactly as it opens a page on a tablet. The cell behind it still
    * opens the sheet, for templates/board.ts's reason: a key that navigated when
    * pressed would be the one key on the board nobody could ever edit. */
-  if (act.kind === "goto") {
-    const at = pageAt(board(), act.set);
-    const to = at < 0 ? undefined : board().sets[at];
-    if (to) {
-      const follow = document.createElement("button");
-      follow.type = "button";
-      follow.className = "cell__follow";
-      follow.textContent = "›";
-      follow.title = t("ui.page_follow", { name: setName(to, at) });
-      follow.setAttribute("aria-label", follow.title);
-      follow.onclick = (event) => {
-        event.stopPropagation();
-        current = at;
-        render();
-      };
-      box.appendChild(follow);
-    }
+  if (to) {
+    const follow = document.createElement("button");
+    follow.type = "button";
+    follow.className = "cell__follow";
+    follow.textContent = "›";
+    follow.title = t("ui.page_follow", { name: setName(to, at) });
+    follow.setAttribute("aria-label", follow.title);
+    follow.onclick = (event) => {
+      event.stopPropagation();
+      current = at;
+      render();
+    };
+    box.appendChild(follow);
   }
 
   const open = () => { void editKey(index); };
