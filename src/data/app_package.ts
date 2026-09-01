@@ -96,7 +96,7 @@ import { LANGUAGE_CODES, DEFAULT_LANGUAGE } from "../device/layout_facts.js";
 import { encodeOpus, ENCODER_RATE, type OpusClip } from "./opus.js";
 import { zipBytes, type ZipMember } from "./zip.js";
 import { WORD_CLASSES } from "../core/boot_data.js";
-import { actOf, says } from "../core/types.js";
+import { PAGE_KEY, actOf, says } from "../core/types.js";
 import type {
   Act, AppButton, AppLayout, CollectionRef, DiyLayout, Layout, WordColor,
 } from "../core/types.js";
@@ -424,16 +424,25 @@ const naming = (places: readonly SymbolPlace[]): string => {
   return rest ? `${shown.join(", ")} and ${rest} more` : shown.join(", ");
 };
 
+/** What each of the five keys is called on a board this file writes.
+ *
+ * BoardSet.slots order, and the same names data/obf.ts writes down again: the
+ * fifth is `-set` because that is what every .obz this project has written has
+ * called it, not because it is a different kind of key. Copied rather than
+ * imported, which is the rule the head of device_package.ts states for all
+ * three export doors - a helper shared across that line is where a flag grows. */
+const KEY_IDS = ["key-1", "key-2", "set", "key-3", "key-4"] as const;
+
 /** §7.1's grid: the five keys where they really sit, with the speaker's
  *  corner left empty. The same shape obf.ts writes, for the same reason. */
 export function grid(boardId: string, present: readonly boolean[]) {
-  const key = (at: number) => (present[at] ? `${boardId}-key-${at + 1}` : null);
+  const key = (at: number) => (present[at] ? `${boardId}-${KEY_IDS[at]}` : null);
   return {
     rows: 2,
     columns: 3,
     order: [
       [null, key(0), key(1)],
-      [`${boardId}-set`, key(2), key(3)],
+      [key(2), key(3), key(4)],
     ],
   };
 }
@@ -507,18 +516,15 @@ export function symbolPlaces(layout: Layout): SymbolPlace[] {
     return out;
   }
   for (const set of layout.sets ?? []) {
-    const which = named(set.name, "an unnamed set");
-    // A set key is navigation rather than a word, so there is nothing on it to
-    // negate and no field on BoardSet to read - see Slot.negated.
-    out.push({
-      reference: String(set.symbol ?? ""),
-      negated: false, where: `the set key of ${which}`,
-    });
-    for (const slot of set.slots ?? []) {
+    const which = named(set.name, "an unnamed page");
+    // All five alike, page key included: it is a key with a picture of its own
+    // and one that may be crossed out, which is what stopped being two cases.
+    for (const [at, slot] of (set.slots ?? []).entries()) {
       out.push({
         reference: String(slot.symbol ?? ""),
         negated: Boolean(slot.negated),
-        where: `${named(slot.text, "an unnamed key")} in ${which}`,
+        where: `${named(slot.text, at === PAGE_KEY ? named(set.name, "an unnamed key")
+                                                   : "an unnamed key")} in ${which}`,
       });
     }
   }
@@ -806,7 +812,6 @@ function diyBoards(
 
   for (const [index, set] of sets.entries()) {
     const boardId = ids[index]!;
-    const following = ids[(index + 1) % ids.length]!;
     const buttons: PackageButton[] = [];
     const images = new Map<string, PackageImage>();
     const sounds = new Map<string, PackageSound>();
@@ -816,14 +821,6 @@ function diyBoards(
     for (const [at, slot] of (set.slots ?? []).entries()) {
       const text = String(slot?.text ?? "").trim();
       const reference = String(slot?.symbol ?? "");
-      // A key with nothing on it is a cell rather than a button. §7.2 would
-      // render an empty button as an empty cell anyway; leaving the button out
-      // says the same thing without asking the viewer to draw nothing.
-      //
-      // Through slotIsEmpty() rather than written out here, because the build
-      // has to reach the same answer - see the note on that function.
-      if (slotIsEmpty(slot)) { present[at] = false; continue; }
-      present[at] = true;
       /* What one press does, as §7.3 writes it down.
        *
        * Three shapes, and the union in core/types.ts is what makes them three
@@ -852,9 +849,27 @@ function diyBoards(
        * check, and a package that cannot be exported at all is a worse answer
        * than a key that says its word. */
       const navigates = leadsTo !== undefined;
+      /* A key with nothing on it is a cell rather than a button. §7.2 would
+       * render an empty button as an empty cell anyway; leaving the button out
+       * says the same thing without asking the viewer to draw nothing.
+       *
+       * Through slotIsEmpty() rather than written out here, because the build
+       * has to reach the same answer - see the note on that function. Two
+       * things are drawn even so, and neither is a picture: a key that leads
+       * onward is a live button whichever way it looks, and the panel the
+       * page's name is printed on has the name on it - see PAGE_KEY. Leaving
+       * either out would take the only way off a page with it. */
+      if (slotIsEmpty(slot) && !navigates && at !== PAGE_KEY) {
+        present[at] = false;
+        continue;
+      }
+      present[at] = true;
       const button: PackageButton = {
-        id: `${boardId}-key-${at + 1}`,
-        label: String(slot?.text ?? ""),
+        id: `${boardId}-${KEY_IDS[at]}`,
+        // The key's own word, and on the page-key panel the page's name where
+        // the key has none, because that is what the firmware prints there.
+        label: String(slot?.text ?? "")
+               || (at === PAGE_KEY ? String(set.name ?? "") : ""),
         // No border_color. It was the set's colour, drawn per button because
         // OBF has nowhere to put a colour that belongs to a board; the set has
         // no colour now. §7.2's field stays optional and stays defined - a
@@ -875,7 +890,11 @@ function diyBoards(
       // label is what the button shows, the vocalization is what it says, and
       // §7.3 puts the vocalization in the message bar. Saying it twice keeps
       // the spoken half right if somebody later shortens the label.
-      if (button.label) button.vocalization = button.label;
+      //
+      // The key's own word rather than the label, which is the same string
+      // everywhere except on the page-key panel: the name printed there is
+      // what the page is called and not something the key says.
+      if (slot?.text) button.vocalization = String(slot.text);
       const picture = put.image(reference, Boolean(slot?.negated));
       if (picture) button.image_id = picture;
       /* The recording, where there is anything to play it.
@@ -889,19 +908,6 @@ function diyBoards(
       if (recording) button.sound_id = recording;
       buttons.push(button);
     }
-
-    const switchKey: PackageButton = {
-      id: `${boardId}-set`,
-      label: String(set.name ?? ""),
-      load_board: {
-        id: following,
-        name: String(sets[(index + 1) % sets.length]!.name ?? ""),
-        path: boardPath(following),
-      },
-    };
-    const setPicture = put.image(String(set.symbol ?? ""));
-    if (setPicture) switchKey.image_id = setPicture;
-    buttons.push(switchKey);
 
     boards.push({
       format: FORMAT,

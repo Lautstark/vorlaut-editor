@@ -6,7 +6,7 @@ import type { Layout } from "./types.js";
 // obvious reading was that all eleven were shared state. They were not: they
 // sat together because one file has one scope. Nine of them are used by one
 // section only - searchToken, pickTarget and sources never leave the symbol
-// picker, dragSet and dragSlot never leave the editor, saveTimer, unsaved and
+// picker, dragSlot never leaves the editor, saveTimer, unsaved and
 // layoutVersion never leave saving, and preview is read by render() alone.
 // Each of those is now a plain `let` inside the one module that uses it,
 // which is a stronger statement than any accessor: nothing else *can* touch

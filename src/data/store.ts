@@ -136,8 +136,15 @@ const DB_NAME = "vorlaut";
  * store of derived files is back after 4 took one away - `data` was a build's
  * record of a device and left with the build, this is a cache of what a
  * synthesis cost and belongs to nothing but itself.
+ *
+ * **6 is the first one that opens a layout**, and it is the exception the five
+ * before it make look like the rule. A page of the talker holds five equal
+ * keys now - adr/0024 - so what is *inside* every stored layout had to change,
+ * which is the case adr/0023 is the permission for. What it costs is the stamp
+ * below standing stale over new bytes until the next ordinary save; the shape
+ * itself is data/upgrade.ts's, a pure function with no database in it.
  */
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 /** One Sammlung's layout, as it is stored: the bytes and the stamp over them.
  *  The id is in the record rather than only in the key, because the store has

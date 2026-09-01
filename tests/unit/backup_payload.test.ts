@@ -28,7 +28,6 @@ const NOTICE = "what this file does and does not contain";
 const board = (): DiyLayout => ({
   sets: [{
     name: "Kitchen",
-    symbol: "",
     slots: [
       // A METACOM reference: a symbol the user chose and put on their own
       // board. It travels; see the note in data/backup.ts about why a

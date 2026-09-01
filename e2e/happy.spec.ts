@@ -2,8 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
-  KEY_CELL, cells, choose, chooseNamed, expectSaid, key, keySheet, label, nameSet,
-  openBoard, press, within, put, search, searchNote, setCard, setKey, word,
+  KEY_CELL, PAGE_KEY, cells, choose, chooseNamed, expectSaid, key, keySheet, label,
+  nameSet, openBoard, pageMore, press, within, put, search, searchNote, setCard,
+  word,
 } from "./diy.js";
 import { exportForTalker, openSettings, openVoices } from "./sheets.js";
 
@@ -51,7 +52,7 @@ async function openBoardPanel(page: Page) {
   }
 }
 
-test("the board is the device: a hole, the set key and four speech keys", async ({ page }) => {
+test("the board is the device: a hole and five equal keys", async ({ page }) => {
   /* The arrangement, asserted because it is the thing that was wrong. This
    * editor drew a set tile and four tiles in a row of three while
    * data/obf.ts's grid() exported two rows of three with a hole in it, so the
@@ -59,38 +60,52 @@ test("the board is the device: a hole, the set key and four speech keys", async 
    * becomes. docs/hardware.md is the authority for both. */
   await openBoard(page);
   await expect(cells(page).nth(0)).toHaveClass(/cell--hole/);
-  await expect(cells(page).nth(3)).toHaveClass(/cell--setkey/);
   // The hole is neither a control nor a drop target: nothing in it is
   // focusable and it cannot be dragged.
   await expect(cells(page).nth(0).locator(".cell__open")).toHaveCount(0);
   await expect(cells(page).nth(0)).not.toHaveAttribute("draggable", "true");
-  // Nor does the set key move: its position is the hardware's.
-  await expect(cells(page).nth(3)).not.toHaveAttribute("draggable", "true");
-  // The four that do.
+  /* And the other five are five of a kind. There used to be four here: the
+   * cell under the speaker was a set key, was not a drop target, and opened
+   * something else. It is a key. */
   for (const at of KEY_CELL) {
     await expect(cells(page).nth(at)).toHaveAttribute("draggable", "true");
+    await expect(cells(page).nth(at).locator(".cell__open")).toHaveCount(1);
+  }
+  // Every one of them opens the same sheet, the page key included.
+  for (const slot of [0, PAGE_KEY, 4]) {
+    await key(page, slot).click();
+    await expect(keySheet(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(keySheet(page)).toHaveCount(0);
   }
 });
 
-test("a set can be named, filled and kept", async ({ page }) => {
+test("a page can be named, filled and kept", async ({ page }) => {
   await openBoard(page);
 
   await nameSet(page, "Morgens");
   await put(page, 0, "Ich will nach draussen");
 
-  // The set's card is a name and a picture. It held a row of swatches until
-  // the firmware stopped reading the colour, and the assertion that they are
-  // gone is here rather than in a test of its own: this is the test that opens
-  // the card, and a control nobody can find is what the card is for.
-  await setKey(page).click();
+  /* The page's card is a name and a delete, and nothing else. It held a row of
+   * swatches until the firmware stopped reading the colour; it held the set
+   * key's own two rows and a picture column until the fifth key stopped being
+   * a different kind of thing. The assertion that none of them is there is
+   * here rather than in a test of its own: this is the test that opens the
+   * card, and a control nobody can find is what the card is for. */
+  await pageMore(page).click();
   const card = setCard(page);
   await expect(card.locator(".swatch")).toHaveCount(0);
+  await expect(card.locator(".pick")).toHaveCount(0);
+  await expect(card.locator("#diySetDoes")).toHaveCount(0);
   await press(card, "ui.done");
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
 
   await page.reload();
   await expect(cells(page)).toHaveCount(6);
-  await expect(cells(page).nth(3).locator(".cell__word")).toHaveText("Morgens");
+  // The name is drawn on the panel the firmware prints it on, because the key
+  // there has no word of its own - see PAGE_KEY.
+  await expect(cells(page).nth(KEY_CELL[PAGE_KEY]!).locator(".cell__word"))
+    .toHaveText("Morgens");
   await expectSaid(page, 0, "Ich will nach draussen");
 });
 
@@ -129,10 +144,10 @@ test("a second set can be added and removed again", async ({ page }) => {
    * reason the question exists and a button reading OK would still pass a test
    * that only checked the set disappeared.
    *
-   * It is reached from the set's own card now rather than from a red button
+   * It is reached from the page's own card now rather than from a red button
    * under the board, which is where every other destructive act in this
    * product sits. */
-  await setKey(page).click();
+  await pageMore(page).click();
   await press(setCard(page), "ui.remove_set");
   const asked = page.getByRole("dialog", { name: label("ui.remove_set") });
   await expect(asked).toBeVisible();
@@ -171,29 +186,26 @@ test("tabs and cells answer the keyboard", async ({ page }) => {
   await expect(keySheet(page)).toBeVisible();
   await page.keyboard.press("Escape");
 
-  // And the ⋯ on the current tab opens the set's card, the same one the set
-  // key opens. Two doors to one set, which is not what conventions.md §3.2
-  // forbids: the tab and the set key are the same set drawn twice.
+  // And the ⋯ on the current tab opens the page's own card, which is the only
+  // door to it: the cell under the speaker used to open it too, and that was
+  // the one cell on the board that did not open what was on it.
   await page.locator("#tabs .tab.active .tab__more").focus();
   await page.keyboard.press("Enter");
   await expect(setCard(page)).toBeVisible();
 });
 
-test("sets move and keys swap without a mouse", async ({ page }) => {
+test("the pages do not move, and the keys swap without a mouse", async ({ page }) => {
   await openBoard(page);
 
-  /* A second set, so there is somewhere to move to, and a name on it, which
-   * is what the order is read off below.
+  /* A second page, so there is a strip with something in it.
    *
-   * Named here rather than taken as it comes. A new set used to arrive
-   * carrying "Set 2" - minted into the layout by the press that made it, in
-   * the one English string left on that screen - and this test read the order
-   * off it. It arrives nameless now, so the strip falls back to
-   * `ui.set_n` and draws its *position*: an unnamed set is "Seite 2" because
-   * it is second, and moving it to the front makes it "Seite 1". That is right
-   * for a set nobody has named - there is nothing else to call it - and it
-   * means the fallback cannot be what an order is read off. So the set gets
-   * the identity the test needs, the way somebody would give it one.
+   * **Nothing reorders the pages any more, and that is the assertion.** The
+   * order used to be the navigation - the set key went to the next page along,
+   * so where a page sat was where its key led - and a tab was dragged or moved
+   * with Alt+Arrow to steer it. The ring is targets now, so a move would
+   * shuffle the strip and change nothing about what leads where: a gesture
+   * that looks like it did something. What it did is done by pointing a key
+   * somewhere, in the sheet the cell opens. adr/0023.
    */
   await page.locator("#tabs .tab.add").focus();
   await page.keyboard.press("Enter");
@@ -201,49 +213,53 @@ test("sets move and keys swap without a mouse", async ({ page }) => {
   await expect(tabs).toHaveCount(2);
   await nameSet(page, "Zwei");
 
-  // Alt+Arrow moves the focused tab, and focus travels with it. On this device
-  // the order of the sets *is* the navigation - the firmware advances with
-  // `rtcCurrentSet = (rtcCurrentSet + 1) % layout.setCount` - so this is not
-  // presentation the way the tablet's page strip is.
+  await expect(tabs.nth(1)).not.toHaveAttribute("draggable", "true");
+  await expect(tabs.nth(1)).not.toHaveAttribute("aria-keyshortcuts", /Alt/);
   await tabs.nth(1).focus();
   await page.keyboard.press("Alt+ArrowLeft");
-  await expect(tabs.first()).toHaveText(/Zwei/);
-  await expect(tabs.first()).toBeFocused();
-  await page.keyboard.press("Alt+ArrowRight");
   await expect(tabs.nth(1)).toHaveText(/Zwei/);
-  await expect(tabs.nth(1)).toBeFocused();
 
-  /* Four keys with distinguishable sentences, to see a move by its work.
+  /* Five keys with distinguishable sentences, to see a move by its work.
    *
    * Alt+Arrow on a cell replaces the grip that armed a swap with Enter and
    * completed it with a second Enter. It is the key editor-app uses for the
    * same act, and it needs no state between two ends - so there is nothing to
-   * arm, nothing to mark and nothing to let go of with Escape. */
+   * arm, nothing to mark and nothing to let go of with Escape.
+   *
+   * Over all five, where it used to be the 2x2 block: the one cell it could
+   * not reach was the set key, and there is no set key. */
   await put(page, 0, "Eins");
   await put(page, 1, "Zwei");
   await put(page, 2, "Drei");
   await put(page, 3, "Vier");
+  await put(page, 4, "Fuenf");
 
   await key(page, 0).focus();
   await page.keyboard.press("Alt+ArrowRight");
   await expectSaid(page, 0, "Zwei");
   await expectSaid(page, 1, "Eins");
   // Focus follows the key rather than staying at the cell, which is what makes
-  // a run of presses carry one key across the block.
+  // a run of presses carry one key across the board.
   await expect(key(page, 1)).toBeFocused();
 
   await page.keyboard.press("Alt+ArrowDown");
-  await expectSaid(page, 1, "Vier");
-  await expectSaid(page, 3, "Eins");
-  await expect(key(page, 3)).toBeFocused();
+  await expectSaid(page, 1, "Fuenf");
+  await expectSaid(page, 4, "Eins");
+  await expect(key(page, 4)).toBeFocused();
 
-  /* And the block is the whole of where a key may go. The cells to the left of
-   * it are the speaker's hole and the set key, and neither is a place a key
-   * can be: their positions are the hardware's. */
-  const slots = [0, 1, 2, 3];
-  const was = await Promise.all(slots.map((slot) => word(page, slot).textContent()));
-  await key(page, 2).focus();
+  // And across onto the panel under the speaker, which is a place a key can go
+  // now and was not while a set key sat there.
+  await key(page, 3).focus();
   await page.keyboard.press("Alt+ArrowLeft");
+  await expectSaid(page, PAGE_KEY, "Vier");
+  await expect(key(page, PAGE_KEY)).toBeFocused();
+
+  /* The speaker's corner is still the whole of where a key may not go: there
+   * is a 40 mm cone behind it. */
+  const slots = [0, 1, 2, 3, 4];
+  const was = await Promise.all(slots.map((slot) => word(page, slot).textContent()));
+  await key(page, PAGE_KEY).focus();
+  await page.keyboard.press("Alt+ArrowUp");
   await key(page, 0).focus();
   await page.keyboard.press("Alt+ArrowUp");
   expect(await Promise.all(slots.map((slot) => word(page, slot).textContent())))
@@ -716,33 +732,30 @@ test("a key can say its word, lead onward, or do both", async ({ page }) => {
   await expect(cells(page).nth(KEY_CELL[0]!).locator(".cell__follow")).toHaveCount(1);
 });
 
-test("the set key can ring, say a word and stand still, or lead where it was pointed",
+test("the key under the speaker asks a round's question and stands still",
      async ({ page }) => {
   /* The round of a joining game, built the way somebody builds one.
    *
-   * This is the last door that was shut. The device has spoken a set key since
-   * 2026-08-31, data/device_package.ts has written one and data/obf.ts has read
-   * one back - and tests/unit/import_acts.test.ts had to state its boards by
-   * hand rather than take them from a fixture, in the sentence "the editor's
-   * own writer cannot produce a set key that stays put and that is exactly the
-   * board that broke". This is that writer, so what is driven here is the
-   * control a person drives and never the layout behind it.
+   * This was the last door that was shut, and it is not a door any more: the
+   * fifth key opens the key sheet, so a round's question is written exactly
+   * the way an answer is. tests/unit/import_acts.test.ts had to state its
+   * boards by hand rather than take them from a fixture, in the sentence "the
+   * editor's own writer cannot produce a set key that stays put and that is
+   * exactly the board that broke". This is that writer.
    *
    * The board is the round out of Spiegel-und-Ei-device.obz, which runs on the
-   * real device: the fifth key asks the compound word and does not move, and
-   * exactly one of the four answers leads to the next round.
+   * real device: the key under the speaker asks the compound word and does not
+   * move, and exactly one of the four answers leads to the next round.
    *
-   * ## Four answers, and the first of them is the whole risk
+   * ## What used to be a fourth answer
    *
-   * Absent is the ring - press it, next set, forever - and `{kind: "speak"}` is
-   * a key that speaks and stands still. Reading those two as one thing goes
-   * wrong in one of two silent ways: every Sammlung ever stored becomes one
-   * whose set key does not move, or the board above cannot be written at all.
-   * So the ring is asserted twice here - as the answer an untouched set key
-   * stands on, and as the answer it is still standing on after being opened,
-   * confirmed with Fertig and reloaded. That second one is what the promise on
-   * BoardSet.key comes to in the interface: a Sammlung whose set key nobody
-   * touched exports the file it exported before.
+   * There was a **Reihum** on this key alone - go to the next page, for ever,
+   * in whatever order the pages sat in - and it was a rule rather than a
+   * target. adr/0023 wrote every stored one out as the goto it meant, so the
+   * list here is the same three every key has. What is asserted instead is the
+   * promise that replaced it: a page nobody has touched keeps a key that says
+   * its word and stays put, and opening the sheet and pressing Fertig writes
+   * nothing onto it.
    */
   await openBoard(page);
 
@@ -754,42 +767,38 @@ test("the set key can ring, say a word and stand still, or lead where it was poi
   await nameSet(page, "Runde 2");
   await tabs.first().click();
 
-  await setKey(page).click();
-  const card = setCard(page);
-  await expect(card).toBeVisible();
+  await key(page, PAGE_KEY).click();
+  const box = keySheet(page);
+  await expect(box).toBeVisible();
 
-  /* Reihum, which is where an untouched set key stands, and the answer that
-   * asks for nothing else: it neither speaks nor is pointed anywhere, so both
-   * of the rows under it are away. */
-  await expect(card.locator("#diySetDoes"))
-    .toHaveText(label("ui.diy_set_does_ring"));
-  await expect(card.locator("#diySetGoto")).toBeHidden();
-  await expect(card.locator("#diySetText")).toBeHidden();
-
-  /* Wort: the round's question, said on the press, and the page stays where it
-   * is. The target list goes away with the answer - hidden rather than greyed,
-   * for the key sheet's reason. */
-  await choose(page, "#diySetDoes", "ui.diy_does_word");
-  await expect(card.locator("#diySetGoto")).toBeHidden();
-  const says = card.locator("#diySetText");
+  /* Wort, which is where a key with no answer chosen stands - the same three
+   * answers the other four have, on the same list. It says the round's
+   * question and the page stays where it is, so the target list is away. */
+  await expect(box.locator("#diyDoes")).toHaveText(label("ui.diy_does_word"));
+  await expect(box.locator("#diyGoto")).toBeHidden();
+  const says = box.locator("#diyKeyText");
   await expect(says).toBeVisible();
 
-  /* Empty is the set's name, and the name is the placeholder rather than the
+  /* Empty is the page's name, and the name is the placeholder rather than the
    * value: the field offers the fact the editor already has without writing a
-   * second copy of it into the Sammlung. It follows the name as it is typed,
-   * which is what makes that offer true rather than a snapshot. */
+   * second copy of it into the Sammlung. This is the one thing the panel still
+   * decides - PAGE_KEY - and it is a caption rather than a role. */
   await expect(says).toHaveValue("");
   await expect(says).toHaveAttribute("placeholder", "Runde 1");
 
   await says.fill("Was wird aus Spiegel und Ei?");
-  await press(card, "ui.done");
-  await expect(card).toHaveCount(0);
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
+  // Drawn on the panel, and the caption that explained the name goes with it.
+  await expect(cells(page).nth(KEY_CELL[PAGE_KEY]!).locator(".cell__word"))
+    .toHaveText("Was wird aus Spiegel und Ei?");
+  await expect(cells(page).nth(KEY_CELL[PAGE_KEY]!).locator(".cell__eyebrow"))
+    .toHaveCount(0);
 
   // One answer of the four carries the round onward - the same key the game
-  // file has, written through the key sheet beside this one.
+  // file has, written through the same sheet.
   await put(page, 0, "Spiegelei. Genau!");
   await key(page, 0).click();
-  const box = keySheet(page);
   await expect(box).toBeVisible();
   await choose(page, "#diyDoes", "ui.diy_does_carry");
   await chooseNamed(page, "#diyGoto", "Runde 2");
@@ -803,53 +812,54 @@ test("the set key can ring, say a word and stand still, or lead where it was poi
    * says the key stands still. */
   await page.reload();
   await expect(cells(page)).toHaveCount(6);
-  await setKey(page).click();
-  await expect(card).toBeVisible();
-  await expect(card.locator("#diySetDoes")).toHaveText(label("ui.diy_does_word"));
-  await expect(card.locator("#diySetText"))
-    .toHaveValue("Was wird aus Spiegel und Ei?");
+  await key(page, PAGE_KEY).click();
+  await expect(box).toBeVisible();
+  await expect(box.locator("#diyDoes")).toHaveText(label("ui.diy_does_word"));
+  await expect(says).toHaveValue("Was wird aus Spiegel und Ei?");
 
-  /* Weiter: pointed at a set rather than at whichever one comes next. It says
+  /* Weiter: pointed at a page rather than at whichever one comes next. It says
    * nothing, so the field it would be said in is away and the list it is
-   * pointed with is there - which is the pair of rows Reihum has neither of,
-   * and the reason the two are different answers. */
-  await choose(page, "#diySetDoes", "ui.diy_does_goto");
-  await expect(card.locator("#diySetText")).toBeHidden();
-  await expect(card.locator("#diySetGoto")).toBeVisible();
-  await chooseNamed(page, "#diySetGoto", "Runde 2");
+   * pointed with is there. */
+  await choose(page, "#diyDoes", "ui.diy_does_goto");
+  await expect(says).toBeHidden();
+  await expect(box.locator("#diyGoto")).toBeVisible();
+  await chooseNamed(page, "#diyGoto", "Runde 2");
 
   // Wort & weiter draws both, and is the only answer that does.
-  await choose(page, "#diySetDoes", "ui.diy_does_carry");
-  await expect(card.locator("#diySetGoto")).toBeVisible();
+  await choose(page, "#diyDoes", "ui.diy_does_carry");
+  await expect(box.locator("#diyGoto")).toBeVisible();
   // Nothing was cleared on the way through the three answers, so the question
   // typed before somebody changed their mind is still there.
-  await expect(card.locator("#diySetText"))
-    .toHaveValue("Was wird aus Spiegel und Ei?");
-  await press(card, "ui.done");
-  await expect(card).toHaveCount(0);
+  await expect(says).toHaveValue("Was wird aus Spiegel und Ei?");
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
 
   /* The second round's key, which nobody has touched: opened, confirmed with
-   * Fertig and reloaded, it is still the ring. Anything the sheet wrote onto
-   * it - an act saying speak, or the name copied into the field - would show
-   * up here as a different answer or a filled field, and would be a Sammlung
-   * that exports a file it did not export before. */
+   * Fertig and reloaded, it still says its word and stays put, and its field
+   * is still empty. Anything the sheet wrote onto it - the page's name copied
+   * into the field, an act it was never given - would show up here, and would
+   * be a Sammlung that exports a file it did not export before. */
   await tabs.nth(1).click();
-  await setKey(page).click();
-  await expect(card).toBeVisible();
-  await expect(card.locator("#diySetDoes"))
-    .toHaveText(label("ui.diy_set_does_ring"));
-  await press(card, "ui.done");
-  await expect(card).toHaveCount(0);
+  await key(page, PAGE_KEY).click();
+  await expect(box).toBeVisible();
+  await expect(box.locator("#diyDoes")).toHaveText(label("ui.diy_does_word"));
+  await expect(says).toHaveValue("");
+  await expect(says).toHaveAttribute("placeholder", "Runde 2");
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
 
   await page.reload();
   await expect(cells(page)).toHaveCount(6);
   await tabs.nth(1).click();
-  await setKey(page).click();
-  await expect(card).toBeVisible();
-  await expect(card.locator("#diySetDoes"))
-    .toHaveText(label("ui.diy_set_does_ring"));
-  await choose(page, "#diySetDoes", "ui.diy_does_word");
-  await expect(card.locator("#diySetText")).toHaveValue("");
+  await key(page, PAGE_KEY).click();
+  await expect(box).toBeVisible();
+  await expect(box.locator("#diyDoes")).toHaveText(label("ui.diy_does_word"));
+  await expect(says).toHaveValue("");
+  // And the page's name is still drawn on the panel behind the sheet, because
+  // the key has no word of its own.
+  await page.keyboard.press("Escape");
+  await expect(cells(page).nth(KEY_CELL[PAGE_KEY]!).locator(".cell__word"))
+    .toHaveText("Runde 2");
 });
 
 test("a Sammlung of two dozen pages leaves the board on screen", async ({ page }) => {

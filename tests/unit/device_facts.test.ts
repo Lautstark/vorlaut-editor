@@ -5,7 +5,7 @@ import { check } from "./harness.js";
 
 import * as facts from "../../src/device/layout_facts.js";
 import {
-  SLOTS_PER_SET, HASH_BYTES, LANGUAGE_CODES, DEFAULT_LANGUAGE,
+  SLOTS_PER_SET, KEYS_PER_SET, HASH_BYTES, LANGUAGE_CODES, DEFAULT_LANGUAGE,
   SLEEP_MIN, SLEEP_MAX, SLEEP_DEFAULT,
 } from "../../src/device/layout_facts.js";
 import { normalizeLayout } from "../../src/data/obf.js";
@@ -107,6 +107,25 @@ const accepted = ofKind("layout")
   check("and SLOTS_PER_SET is it",
         widths.size === 1 && SLOTS_PER_SET === [...widths][0],
         `${SLOTS_PER_SET} against the fixtures' ${[...widths].join(", ")}`);
+}
+
+// --- and five keys to a page -------------------------------------------------
+
+/* The same fact counted the way a person sees it: every accepted entry carries
+ * one `key` beside those slots, so a page has one more panel than the file
+ * calls a slot. adr/0020 next door is where the five became one kind of thing -
+ * "A set holds five keys" - and this is the fixtures saying so, which is what
+ * KEYS_PER_SET is derived from rather than declared beside. */
+{
+  const keyed = accepted.filter((read) =>
+    read.entries.every((entry: { key?: unknown }) =>
+      entry.key !== undefined && entry.key !== null));
+  check("every accepted layout gives each set a key beside its slots",
+        keyed.length === accepted.length,
+        `${keyed.length} of ${accepted.length} layouts`);
+  check("and KEYS_PER_SET counts it with them",
+        KEYS_PER_SET === SLOTS_PER_SET + 1,
+        `${KEYS_PER_SET} = ${SLOTS_PER_SET} slots and the one key`);
 }
 
 // --- sixteen bytes of hash ---------------------------------------------------
@@ -243,6 +262,7 @@ for (const { listed: one, want } of ofKind("audio")) {
 {
   const PINNED = new Map<string, string>([
     ["SLOTS_PER_SET", "device/fixtures/layout/* - the stride they are laid out on"],
+    ["KEYS_PER_SET", "device/fixtures/layout/* - the key each entry carries beside its slots"],
     ["HASH_BYTES", "device/fixtures/names.expected.json - hash_bytes"],
     ["LANGUAGE_CODES", "device/fixtures/language.expected.json - the table"],
     ["DEFAULT_LANGUAGE", "device/fixtures/language.expected.json - default_code"],

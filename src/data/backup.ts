@@ -52,6 +52,7 @@
  */
 
 import * as store from "./store.js";
+import { fileLayout } from "./upgrade.js";
 import type { Layout, Settings } from "../core/types.js";
 
 export const BACKUP_FORMAT = "vorlaut-backup";
@@ -222,10 +223,15 @@ export async function importBackup(backup: Backup): Promise<Restored> {
     }
   }
 
+  /* Every layout brought forward on the way in - data/upgrade.ts's head says
+   * why this door is the one exception to "a step, once, and never on read".
+   * A Sicherung is bytes somebody kept: it can be older than any database this
+   * browser has ever held, and there is no version on it to run steps from. */
   const incoming: store.IncomingCollection[] = backup.boards?.length
-    ? backup.boards.map(({ id, name, layout }) => ({ id, name, layout }))
+    ? backup.boards.map(({ id, name, layout }) =>
+        ({ id, name, layout: fileLayout(layout) }))
     // Version 1. The board it held, unnamed, with an id minted by the store.
-    : backup.layout ? [{ name: "", layout: backup.layout }]
+    : backup.layout ? [{ name: "", layout: fileLayout(backup.layout) }]
       : [];
 
   let open: Layout | null = null;
@@ -295,7 +301,8 @@ export function readOneCollection(backup: Backup): OneCollection {
   // door is for, so it comes in - unnamed, which the caller answers with the
   // file name.
   if (!boards.length && backup.layout) {
-    return { name: "", layout: backup.layout, symbols: backup.symbols ?? [] };
+    return { name: "", layout: fileLayout(backup.layout),
+             symbols: backup.symbols ?? [] };
   }
   if (boards.length !== 1) {
     const refusal = new Error(NOT_ONE) as Error & { count: number };
@@ -304,8 +311,9 @@ export function readOneCollection(backup: Backup): OneCollection {
   }
 
   const only = boards[0]!;
-  // The id stays behind. See the note above: an import is a copy.
-  return { name: only.name ?? "", layout: only.layout,
+  // The id stays behind. See the note above: an import is a copy. The shape
+  // comes forward, for importBackup()'s reason one door along.
+  return { name: only.name ?? "", layout: fileLayout(only.layout),
            symbols: backup.symbols ?? [] };
 }
 

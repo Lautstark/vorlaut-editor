@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { KEY_CELL, cells, nameSet, put } from "./diy.js";
+import { KEY_CELL, PAGE_KEY, cells, nameSet, put } from "./diy.js";
 import { exportForTalker, openPanel, openSettings, openVoices } from "./sheets.js";
 
 /* Pressing ▶ twice on one key, and Microsoft only being asked once.
@@ -138,16 +138,23 @@ test("a Sammlung listened to is a Sammlung already spoken for", async ({ page })
   const said = await standIn(page);
   await fill(page);
 
+  /* Three keys rather than two, and the third is the point of the count.
+   *
+   * The key on the page-key panel says a word like any other now - the page's
+   * name, where it has none of its own - so the export needs a recording for
+   * it, and a test that listened to two keys and expected two recordings would
+   * be measuring the ring rather than the cache. PAGE_KEY. */
   await play(page, 0);
   await play(page, 1);
-  expect(said()).toBe(2);
+  await play(page, PAGE_KEY);
+  expect(said()).toBe(3);
 
-  /* No picture on either key, and that is not a shortcut. A reference that
+  /* No picture on any of them, and that is not a shortcut. A reference that
    * resolves to nothing is counted rather than refused - the compiler draws
-   * its grey cross - so a Sammlung of two sentences and no pictures writes a
+   * its grey cross - so a Sammlung of sentences and no pictures writes a
    * complete file, and what this test is about is the audio in it. */
   await exportForTalker(page);
-  // Nothing new was said. Both sentences were already in the store, under the
+  // Nothing new was said. Every sentence was already in the store, under the
   // names the export asks for.
-  expect(said()).toBe(2);
+  expect(said()).toBe(3);
 });

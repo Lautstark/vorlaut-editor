@@ -6,6 +6,7 @@ import {
   spokenTexts, symbolPlaces, symbolSource, type AppPackage, type PackageInput,
 } from "../../src/data/app_package.js";
 import { readPackage, readPackageFile, unzip } from "./obz.js";
+import { PAGE_KEY } from "../../src/core/types.js";
 import type {
   AppButton, AppLayout, AppPage, CollectionRef, DiyLayout, Layout,
 } from "../../src/core/types.js";
@@ -42,16 +43,35 @@ const layout = (): DiyLayout => ({
   sleep_timeout_seconds: 600,
   sets: [
     {
-      name: "Essen", symbol: "arasaac-31337.png",
+      // Five keys in reading order, the third of them on the panel the page's
+      // name is printed on - BoardSet.slots.
+      name: "Essen",
       slots: [slot("Ich habe Hunger", "arasaac-2462.png"), slot("Ich habe Durst"),
+              slot("", "arasaac-31337.png"),
               slot(""), slot("Mehr bitte", "arasaac-2462.png")],
     },
     {
-      name: "Spielen", symbol: "",
-      slots: [slot("Noch einmal"), slot(""), slot(""), slot("")],
+      name: "Spielen",
+      slots: [slot("Noch einmal"), slot(""), slot(""), slot(""), slot("")],
     },
   ],
 });
+
+/** Where a `goto` key on Essen points, and the id it points with. Written out
+ *  once because half a dozen cases below need a page to lead to. */
+const SPIELEN = "1f0a5c2e-0000-4000-8000-0000000000aa";
+
+/** The same Sammlung, chained the way data/upgrade.ts chains one that used to
+ *  ring: each page key at the next page, and the last back at the first. */
+const chained = (): DiyLayout => {
+  const held = layout();
+  held.sets[0]!.id = "1f0a5c2e-0000-4000-8000-0000000000bb";
+  held.sets[1]!.id = SPIELEN;
+  held.sets[0]!.slots[PAGE_KEY]!.act = { kind: "goto", set: SPIELEN };
+  held.sets[1]!.slots[PAGE_KEY]!.act =
+    { kind: "goto", set: held.sets[0]!.id };
+  return held;
+};
 
 const baked = (key: string) => ({
   key,
@@ -122,7 +142,9 @@ describe("a DIY Sammlung as a board package", () => {
     // in somebody's voice, and the flag is an instruction the viewer keeps.
     expect(buildAppPackage(input()).manifest.ext_lautstark_redistributable).toBe(false);
     const own = input({ layout: { ...layout(), sets: layout().sets.map((set) => ({
-      ...set, symbol: "metacom:ja", slots: set.slots.map((s) => ({ ...s, symbol: "" })),
+      ...set,
+      slots: set.slots.map((s, at) =>
+        ({ ...s, symbol: at === PAGE_KEY ? "metacom:ja" : "" })),
     })) } });
     const metacom = buildAppPackage({ ...own, images: new Map([["metacom:ja", baked("9999")]]) });
     expect(metacom.manifest.ext_lautstark_symbol_source).toBe("metacom");
@@ -142,8 +164,8 @@ describe("a DIY Sammlung as a board package", () => {
         ["set-1-set", null, "set-1-key-4"],
       ],
     });
-    // Slot three was empty, so its cell is empty and no button pretends to be
-    // there. Slot two has text and no picture and is still a button.
+    // The fourth key was empty, so its cell is empty and no button pretends to
+    // be there. The second has text and no picture and is still a button.
     expect(button(pkg, "set-1", "set-1-key-2").label).toBe("Ich habe Durst");
     expect(button(pkg, "set-1", "set-1-key-2").image_id).toBeUndefined();
   });
@@ -151,9 +173,12 @@ describe("a DIY Sammlung as a board package", () => {
   it("speaks at once rather than filling a message bar", () => {
     const pkg = buildAppPackage(input());
     expect(button(pkg, "set-1", "set-1-key-1").ext_lautstark_speak_immediately).toBe(true);
-    // The set key navigates, and §7.3 says navigation must not touch the bar,
-    // so it carries no speak flag at all.
-    expect(button(pkg, "set-1", "set-1-set").ext_lautstark_speak_immediately).toBeUndefined();
+    // A key that navigates carries no speak flag at all - §7.3 says navigation
+    // must not touch the bar - and the page key is one of the five, so it is
+    // the chain it was given that decides, not the panel it sits on.
+    const going = buildAppPackage(input({ layout: chained() }));
+    expect(button(going, "set-1", "set-1-set").ext_lautstark_speak_immediately)
+      .toBeUndefined();
   });
 
   it("maps each of the talker's three press modes to what §7.3 makes it", () => {
@@ -164,12 +189,12 @@ describe("a DIY Sammlung as a board package", () => {
      * key it has always been. */
     const held = layout();
     const spielen = held.sets[1]!;
-    spielen.id = "1f0a5c2e-0000-4000-8000-0000000000aa";
+    spielen.id = SPIELEN;
     const essen = held.sets[0]!;
     // Wort & weiter: says its word, then switches page. The game key.
     essen.slots[1]!.act = { kind: "goto", set: spielen.id, alsoSpeak: true };
     // weiter: switches and says nothing.
-    essen.slots[3]!.act = { kind: "goto", set: spielen.id };
+    essen.slots[4]!.act = { kind: "goto", set: spielen.id };
     // Wort, written out where the key above it leaves it absent.
     spielen.slots[0]!.act = { kind: "speak" };
 
@@ -210,7 +235,7 @@ describe("a DIY Sammlung as a board package", () => {
      * gets a sound_id, and a text recorded but not written is wasted work while
      * one written but not recorded is a button with no audio. */
     const held = layout();
-    held.sets[1]!.id = "1f0a5c2e-0000-4000-8000-0000000000aa";
+    held.sets[1]!.id = SPIELEN;
     held.sets[0]!.slots[0]!.act = { kind: "goto", set: held.sets[1]!.id };
 
     expect(spokenTexts(held)).not.toContain("Ich habe Hunger");
@@ -240,13 +265,27 @@ describe("a DIY Sammlung as a board package", () => {
       .toBe(true);
   });
 
-  it("cycles the sets the way the device does", () => {
-    const pkg = buildAppPackage(input());
+  it("writes the chain the page keys were given", () => {
+    /* It used to compute a ring here - the next page along, wrapping at the
+     * end - from where a page happened to sit. Nothing computes it now; the
+     * targets are in the Sammlung, data/upgrade.ts is where every stored ring
+     * became one, and this writes down what it is handed. */
+    const pkg = buildAppPackage(input({ layout: chained() }));
     expect(button(pkg, "set-1", "set-1-set").load_board)
       .toEqual({ id: "set-2", name: "Spielen", path: "boards/set-2.obf" });
-    // The ring wraps, which is the device's behaviour and not a mistake: the
-    // last set's key comes back round to the first.
     expect(button(pkg, "set-2", "set-2-set").load_board?.id).toBe("set-1");
+  });
+
+  it("draws a page key that leads nowhere, because the page's name is on it", () => {
+    /* A key with no word, no picture and no target is a cell rather than a
+     * button - except on this one panel, where the firmware prints the page's
+     * name. Leaving it out would take the name off the board; leaving out a
+     * key that leads somewhere would take away the only way off the page. */
+    const pkg = buildAppPackage(input());
+    const key = button(pkg, "set-2", "set-2-set");
+    expect(key.label).toBe("Spielen");
+    expect(key.load_board).toBeUndefined();
+    expect(key.vocalization).toBeUndefined();
   });
 
   it("gives a set no colour, on the board or on its buttons", () => {
@@ -767,11 +806,15 @@ describe("where a symbol sits, for the sentence that has to name it", () => {
     expect(symbolPlaces(talker).map((place) => place.reference)).toEqual(references(talker));
   });
 
-  it("names a key by its set and a button by its page", () => {
+  it("names a key by its page, on either kind of Sammlung", () => {
     expect(symbolPlaces(layout()).map((place) => place.where))
       .toContain('"Ich habe Hunger" in "Essen"');
+    /* The key on the page-key panel is named the same way as the other four,
+     * because it is one of them. Where it has no word of its own the page's
+     * name stands in, which is what is drawn on it - it used to read "the set
+     * key of Essen", from a walk that met it as a different kind of thing. */
     expect(symbolPlaces(layout()).map((place) => place.where))
-      .toContain('the set key of "Essen"');
+      .toContain('"Essen" in "Essen"');
     expect(symbolPlaces(tablet()).map((place) => place.where))
       .toContain('"Apfel" on page "Start"');
   });
@@ -785,7 +828,7 @@ describe("where a symbol sits, for the sentence that has to name it", () => {
 
   it("has a stand-in for a key nobody has named", () => {
     const blank = layout();
-    blank.sets[0]!.slots[2]!.symbol = "arasaac-1.png";
+    blank.sets[0]!.slots[3]!.symbol = "arasaac-1.png";
     expect(symbolPlaces(blank).map((place) => place.where))
       .toContain('an unnamed key in "Essen"');
   });
@@ -803,7 +846,6 @@ describe("where a symbol sits, for the sentence that has to name it", () => {
     // what lets the picker fall back to the machine setting for it.
     const uploads = layout();
     for (const set of uploads.sets) {
-      set.symbol = "";
       for (const one of set.slots) one.symbol = "oma.png";
     }
     expect(drawnFrom(uploads)).toEqual({ metacom: [], arasaac: [] });
@@ -971,7 +1013,7 @@ describe("the language a package says it is in", () => {
 describe("one symbol collection per package", () => {
   const withSymbols = (...refs: string[]): Layout => ({
     sets: [{
-      name: "Set", symbol: "",
+      name: "Set",
       slots: refs.map((symbol) => ({ text: "x", symbol })),
     }],
   });
@@ -1030,9 +1072,11 @@ describe("one symbol collection per package", () => {
 });
 
 describe("what the checker refuses", () => {
-  /** A package built and then broken on purpose. */
-  const broken = (damage: (pkg: AppPackage) => void): string[] => {
-    const pkg = buildAppPackage(input());
+  /** A package built and then broken on purpose. Takes the Sammlung, because
+   *  a link to break needs a Sammlung with a link in it. */
+  const broken = (damage: (pkg: AppPackage) => void,
+                  held: DiyLayout = layout()): string[] => {
+    const pkg = buildAppPackage(input({ layout: held }));
     damage(pkg);
     return checkPackage(pkg);
   };
@@ -1075,7 +1119,8 @@ describe("what the checker refuses", () => {
   });
 
   it("catches a link to a board that does not exist", () => {
-    expect(broken((pkg) => { button(pkg, "set-1", "set-1-set").load_board!.id = "set-9"; }))
+    expect(broken((pkg) => { button(pkg, "set-1", "set-1-set").load_board!.id = "set-9"; },
+                  chained()))
       .toEqual([expect.stringContaining("[load-board]")]);
   });
 

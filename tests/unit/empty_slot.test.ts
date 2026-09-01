@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildAppPackage, slotIsEmpty, type PackageInput }
   from "../../src/data/app_package.js";
+import { PAGE_KEY } from "../../src/core/types.js";
 import type { CollectionRef, DiyLayout } from "../../src/core/types.js";
 
 /* A talker key with nothing on it, on both sides of the seam.
@@ -43,19 +44,22 @@ const layout = (): DiyLayout => ({
   sleep_timeout_seconds: 600,
   sets: [
     {
-      name: "Essen", symbol: "arasaac-31337.png",
+      name: "Essen",
       slots: [
         slot("Ich habe Hunger", "arasaac-2462.png"),  // both
         slot("Ich habe Durst"),                        // a word, no picture
+        slot("", "arasaac-31337.png"),                 // the page-key panel
         slot("", "arasaac-2462.png"),                  // a picture, no word
         slot(""),                                      // neither
       ],
     },
     {
-      name: "Spielen", symbol: "",
+      name: "Spielen",
       // Whitespace is not a word. The export trims and the build asks the
-      // export, so this key is as empty as the one above it.
-      slots: [slot("   "), slot(""), slot(""), slot("")],
+      // export, so this key is as empty as the one above it. The page key
+      // holds nothing either, which is the case the assertions below are
+      // about: it is drawn anyway, because the page's name is printed on it.
+      slots: [slot("   "), slot(""), slot(""), slot(""), slot("")],
     },
   ],
 });
@@ -94,23 +98,30 @@ describe("the two halves agree", () => {
 
     for (const [index, set] of made.sets.entries()) {
       const board = pkg.boards[index]!;
-      // grid() puts the four keys at these cells and the set key at [1][0].
+      // grid() puts the five keys at these cells, in BoardSet.slots order.
       const cells = [board.grid.order[0]![1], board.grid.order[0]![2],
-                     board.grid.order[1]![1], board.grid.order[1]![2]];
+                     board.grid.order[1]![0], board.grid.order[1]![1],
+                     board.grid.order[1]![2]];
       for (const [at, one] of set.slots.entries()) {
         // The whole assertion: no cell is null unless the predicate says so,
-        // and none is filled where it does.
-        expect(cells[at] === null).toBe(slotIsEmpty(one));
+        // and none is filled where it does - with the one exception the panel
+        // carrying the page's name earns, because that name is drawn on it
+        // whether or not the key itself holds anything. PAGE_KEY.
+        expect(cells[at] === null).toBe(slotIsEmpty(one) && at !== PAGE_KEY);
       }
     }
   });
 
-  it("gives the second set four empty keys and one set key", () => {
+  it("gives the second page four empty keys and one still carrying its name", () => {
     // Guards the fixture rather than the code: a board whose keys are all
     // filled would let the assertion above pass while proving nothing.
     const pkg = buildAppPackage(input());
     const board = pkg.boards[1]!;
     expect(board.grid.order.flat().filter(Boolean)).toEqual(["set-2-set"]);
     expect(board.buttons.map((one) => one.id)).toEqual(["set-2-set"]);
+    // And what is on it is the page's name, which is the only reason it is
+    // there at all - the key itself has neither word nor picture.
+    expect(board.buttons[0]!.label).toBe("Spielen");
+    expect(Object.hasOwn(board.buttons[0]!, "vocalization")).toBe(false);
   });
 });

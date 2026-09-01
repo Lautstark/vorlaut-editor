@@ -43,6 +43,11 @@
  * rewrites them can. So rewriting is the exception, it carries its reason, and
  * its test asserts what came across rather than only how much did.
  *
+ * What a rewriting step must not do is decide the new shape here. The transform
+ * lives in data/upgrade.ts, is a pure function with no database in it, and is
+ * unit-tested without one; the step is what reads the records, calls it and
+ * puts back the ones that moved.
+ *
  * ## Preconditions, and why they are not the old shape-sniffing
  *
  * Each step says which stores it expects to find. That is an assertion, not a
@@ -62,6 +67,8 @@
  */
 
 import type { IDBPDatabase, IDBPTransaction } from "idb";
+
+import { bringTextForward } from "./upgrade.js";
 
 /** A database and a transaction whose stores are not the current schema's.
  *
@@ -103,6 +110,16 @@ interface StoredLayout {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+/** A record out of `layouts`, if it is one with bytes in it.
+ *
+ * asLayout() above answers for the pair a step *moves*; this answers for the
+ * whole record a step **rewrites**, keyed and all, because the put() has to
+ * carry every field back - `id` first among them, since the store is keyed on
+ * it and a record put without one would be refused. */
+const asRecord = (value: unknown): (Record<string, unknown> & { text: string }) | null =>
+  isRecord(value) && typeof value["text"] === "string"
+    ? (value as Record<string, unknown> & { text: string }) : null;
 
 const asLayout = (value: unknown): StoredLayout | null =>
   isRecord(value) && typeof value["text"] === "string"
@@ -232,6 +249,42 @@ export const STEPS: readonly Step[] = [
     expects: ["collections", "layouts"],
     async run(db) {
       db.createObjectStore("speech").createIndex("usage", ["usedAt", "size"]);
+    },
+  },
+  {
+    /* 5 -> 6: a page holds five equal keys, and the ring becomes targets.
+     *
+     * **The first step that opens a layout**, which is what adr/0023 is for -
+     * see the rule above. data/upgrade.ts holds what the new shape is and why;
+     * this is the walk that applies it.
+     *
+     * The stamp is left standing beside the new bytes, deliberately and not by
+     * omission: hashing is the one thing this transaction cannot wait for. It
+     * is a conflict marker rather than a checksum - "has anybody written since
+     * I read?" - so a stale one over new bytes still answers that question,
+     * and the next save lays both down together.
+     *
+     * A record whose text will not parse, or whose layout is already current,
+     * is left exactly as it is - put() is called only where something moved,
+     * so a Sammlung with nothing to bring forward keeps its `updatedAt` and
+     * its stamp untouched and reads back byte for byte.
+     */
+    to: 6,
+    expects: ["collections", "layouts"],
+    async run(_db, tx) {
+      const layouts = tx.objectStore("layouts");
+      /* getAll() rather than a cursor, and it is the shape of the data that
+       * decides: the cap is LIMITS.maxSets pages in one of at most a few dozen
+       * Sammlungen, which is a few megabytes at the outside, and a cursor
+       * whose every step is an await is a longer transaction for no gain. The
+       * step to 3 walks its records the same way for the same reason. */
+      for (const held of await layouts.getAll()) {
+        const record = asRecord(held);
+        if (!record) continue;
+        const next = bringTextForward(record.text);
+        if (next === null) continue;
+        await layouts.put({ ...held, text: next });
+      }
     },
   },
 ];

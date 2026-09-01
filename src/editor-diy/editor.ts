@@ -1,15 +1,40 @@
-// The five-key talker's editor: the set tabs, the board as the device really
-// lays it out, and the two sheets a press opens - one for a speech key, one
-// for the set.
+// The five-key talker's editor: the page tabs, the board as the device really
+// lays it out, and the two sheets a press opens - one for a key, one for the
+// page itself.
 //
-// This is the device-specific half. Four keys to a set, a hole where the
-// speaker is, and a cap on the sets that is the device's own: none of that is
+// This is the device-specific half. Five keys to a page, a hole where the
+// speaker is, and a cap on the pages that is the device's own: none of that is
 // true of AAC in general and all of it is true of this hardware, which is why
 // it sits under editor-diy/ and why nothing in the shell may import it. The
 // shell reaches it through core/editor.ts instead, and `diy` at the foot of
-// this file is what it reaches.
+// this file is what it reaches. The page graph is editor-diy/pages.ts, which
+// is where the walking and the two acts on it live.
 //
-// dragSet, dragSlot and `current` live here and nowhere else.
+// dragSlot and `current` live here and nowhere else.
+//
+// ## The five keys are one kind of thing
+//
+// There was a fifth here in another shape: a set key, drawn from `BoardSet`'s
+// own `name`, `symbol` and `key` rather than from a slot, opening a different
+// sheet, and doing one thing nothing else could do - go round to the next set,
+// for ever, in whatever order the sets happened to sit. vorlaut-diy-talker's
+// adr/0020 ended that on the device and core/types.ts is where it ended here.
+//
+// What that changes on this screen, in the order somebody would meet it:
+//
+//   Five cells open the same sheet. There is one key sheet and it has three
+//   answers on every one of the five.
+//
+//   The page's own card - its name, and deleting it - is behind the ... on the
+//   tab, and only there. It used to be behind the set key as well, which was
+//   two doors to one thing and made the fifth cell the only one that did not
+//   open what it was.
+//
+//   Nothing reorders the pages. Reordering was how the ring was steered, and
+//   the ring is gone; the strip draws them in the order the device reaches
+//   them instead - editor-diy/pages.ts's pageOrder(). Rearranging did not
+//   disappear, it moved: what used to be dragging a tab is now changing where
+//   a key points, and that can say things a list of positions never could.
 //
 // ## The board is 2x3 with a hole in it, and always was
 //
@@ -21,8 +46,9 @@
 // arrangement was wrong. The hole is drawn as the speaker rather than captioned
 // as an absence, because that is what is there.
 //
-// The hole and the set key are not drop targets and do not move: their
-// positions are the hardware's. Only the four speech keys trade places.
+// The hole is not a drop target and does not move: it is where the cone is.
+// All five keys trade places, which is what they did not do while one of them
+// was a different kind of thing.
 //
 // ## The tile is gone and there are two sheets instead
 //
@@ -42,9 +68,9 @@
 // difference is one fact about the hardware: there is no sentence bar, so
 // nothing composes. `append`, `clear`, `backspace` and `sayBar` are four of
 // Act's seven and all four are about a bar; `home` is the fifth and belongs to
-// the start page a ring of sets does not have. What is left is saying the key
-// and leading onward, which is three answers once the two are allowed to
-// happen on one press:
+// a start page this device reaches with an ordinary `goto` like any other.
+// What is left is saying the key and leading onward, which is three answers
+// once the two are allowed to happen on one press:
 //
 //   Wort            say it, and stay on this page
 //   Wort & weiter   say it, then switch to the page the key names
@@ -67,8 +93,11 @@ import { $, negationCross } from "../shell/dom.js";
 import { symbolInto } from "../backend/index.js";
 import { state } from "../core/state.js";
 import type { Editor } from "../core/editor.js";
-import { actOf, isDiy, says } from "../core/types.js";
+import { PAGE_KEY, actOf, isDiy, says } from "../core/types.js";
 import type { BoardSet, DiyLayout, Layout, SlotAct } from "../core/types.js";
+import { KEYS_PER_SET } from "../device/layout_facts.js";
+import { addPage, blankPage, deletePage, inboundTo, pageAt, pageOrder, unreachable }
+  from "./pages.js";
 import { LANG, limits } from "../core/boot.js";
 import { t } from "../core/texts.js";
 import { save } from "../core/save.js";
@@ -79,8 +108,7 @@ import { dropdown, formRow, hint, missing, openSheet, textField }
 import type { Choice, Left } from "../shell/sheet.js";
 import { confirmDialog } from "@lautstark/design/dialog";
 
-let dragSet: number | null = null;    // index of the dragged set
-let dragSlot: number | null = null;   // index of the dragged speech key
+let dragSlot: number | null = null;   // index of the dragged key
 /* Which set is being edited. It was `state.current` while the page held one
  * board and every module that touched a set index was allowed to know about
  * it. Now it is an index into whichever board is open, so it belongs to the
@@ -134,20 +162,35 @@ function commit(): void {
 /* --- The board ------------------------------------------------------------
  *
  * The six cells in reading order: `null` is the hole where the speaker sits,
- * `"set"` is the set key, and a number is that one of the four speech slots.
+ * and a number is that one of the five keys.
  *
- *     .        key 1    key 2
- *     set      key 3    key 4
+ *     .        slot 0   slot 1
+ *     slot 2   slot 3   slot 4
  *
  * The one place this arrangement is written down in this editor, so that the
  * grid, the drop targets and where Alt+Arrow may go cannot drift apart. It is
- * the same table data/obf.ts's grid() exports; the two agreeing is the point
- * of the change that made this file look like this.
+ * BoardSet.slots' own order and the table data/obf.ts's grid() exports; the
+ * three agreeing is what makes a document round trip go through the cells
+ * rather than through a rule about which key leads anywhere.
  */
-const CELLS: (null | "set" | number)[] = [null, 0, 1, "set", 2, 3];
+const CELLS: (null | number)[] = [null, 0, 1, 2, 3, 4];
 
-/** Which cell in the grid holds a speech slot. */
+/** Which cell in the grid holds a key. */
 const cellOf = (slot: number): number => CELLS.indexOf(slot);
+
+/** Where a key sits, as a row and a column of the 2x3. */
+const seatOf = (slot: number): readonly [number, number] => {
+  const cell = cellOf(slot);
+  return [Math.floor(cell / 3), cell % 3] as const;
+};
+
+/** Which key sits at a row and a column, or -1 for the speaker's corner and
+ *  for anywhere off the board. */
+const keyAt = (row: number, column: number): number => {
+  if (row < 0 || row > 1 || column < 0 || column > 2) return -1;
+  const place = CELLS[(row * 3) + column];
+  return typeof place === "number" ? place : -1;
+};
 
 /** The three answers a key's sheet offers, in the words on its list: **Wort**,
  *  **Wort & weiter**, **weiter**. Two members of SlotAct and the modifier on
@@ -156,29 +199,15 @@ type Does = "word" | "carry" | "goto";
 
 /** Which of the three an act reads as. Total, unlike editor-app's, because
  *  every act this device can hold is one of the three: there is no bar control
- *  a key could have been given before the list stopped offering it. */
+ *  a key could have been given before the list stopped offering it.
+ *
+ *  Three on all five keys. There was a fourth, **Reihum**, on the set key
+ *  alone - go to the next page, for ever, in whatever order the pages sat in -
+ *  and it went with the ring itself: what it meant is a target now, which is
+ *  what *Weiter* already said. data/upgrade.ts is where every stored Reihum
+ *  became one. */
 const chosenAs = (act: SlotAct): Does =>
   act.kind === "speak" ? "word" : act.alsoSpeak ? "carry" : "goto";
-
-/** The set key's answers, which are the four above's three and one more.
- *
- * **The ring is a fourth answer and not a spelling of the first.** On a speech
- * key an absent act means `speak`, which is why actOf() may default one; on
- * BoardSet.key absent means the ring - press it, next set, forever - and that
- * is what every Sammlung ever stored says. Reading the two as one would take
- * either shape out of reach: fold the ring into Wort and every existing
- * Sammlung becomes one whose set key stands still, so nobody can leave the set
- * they are on; fold Wort into the ring and a game's board cannot be written at
- * all, because the round's question has to speak *and stay*. Both of those go
- * wrong without a word on screen, which is why this is a type rather than a
- * boolean beside `Does`.
- */
-type SetDoes = "ring" | Does;
-
-/** Which of the four a set key reads as. `undefined` is the ring and is
- *  handed in as itself rather than defaulted away - see SetDoes. */
-const setChosenAs = (act: SlotAct | undefined): SetDoes =>
-  act ? chosenAs(act) : "ring";
 
 /** An id for a set, minted when a key first names one. crypto.randomUUID() for
  *  store.ts's reason at its own: two of them made in two tabs must not collide,
@@ -186,14 +215,9 @@ const setChosenAs = (act: SlotAct | undefined): SetDoes =>
  *  them at once - is unique enough to derive one from. */
 const mint = (): string => crypto.randomUUID();
 
-/** The set a `goto` names, or undefined where it names one that has been
- *  deleted since. */
-const setById = (layout: DiyLayout, id: string): BoardSet | undefined =>
-  (layout.sets ?? []).find((one) => one.id === id);
-
-/** What a set is called in a list, which is its name until somebody gives it
- *  one. The tab, the set key and the delete question all say this; so do the
- *  target list and the corner that follows it. */
+/** What a page is called in a list, which is its name until somebody gives it
+ *  one. The tab, the page-key panel and the delete question all say this; so do
+ *  the target list and the corner that follows it. */
 const setName = (entry: BoardSet, index: number): string =>
   entry.name || t("ui.set_n", { n: index + 1 });
 
@@ -203,21 +227,9 @@ function clearDragMarks(): void {
   }
 }
 
-// Where a set lands, whether dropped or moved by Alt+Arrow. The moved set
-// becomes the edited one, as it always has on drop; focus follows its tab
-// because render() rebuilds the row, and the keyboard would otherwise be
-// left standing on nothing.
-function moveSet(from: number, to: number): void {
-  const moved = board().sets.splice(from, 1)[0]!;
-  board().sets.splice(to, 0, moved);
-  current = to;
-  commit();
-  ($("tabs").children[to] as HTMLElement).focus();
-}
-
-/** Where a swap of two speech keys lands, whether dropped or made with
- *  Alt+Arrow. Focus follows the key rather than staying at the cell, which is
- *  what makes a run of presses carry one key across the block. */
+/** Where a swap of two keys lands, whether dropped or made with Alt+Arrow.
+ *  Focus follows the key rather than staying at the cell, which is what makes
+ *  a run of presses carry one key across the board. */
 function swapSlots(a: number, b: number): void {
   const slots = set().slots;
   [slots[a], slots[b]] = [slots[b]!, slots[a]!];
@@ -226,37 +238,7 @@ function swapSlots(a: number, b: number): void {
     ?.querySelector(".cell__open") as HTMLElement)?.focus();
 }
 
-/* A new set, made by the press on "+ Neue Seite".
- *
- * Nameless, and that is the change: it minted "Set 3" into the data, in a
- * product whose every word for the thing is Seite. It was the one English
- * string left on this screen and the only one a language switch could never
- * reach, because it was not a text key at all - it had been written into the
- * layout at the moment of the press and was still there in English after the
- * switch, on a tab beside four that had followed it.
- *
- * Every reader of a set's name already has the fallback: the tab, the set key
- * and the delete question all say `entry.name || t("ui.set_n", ...)`. So an
- * empty name is not a set without a name, it is a set that has not been
- * renamed - which is what it is - and it is drawn "Seite 3" in whichever
- * language the page is in. blank() at the foot of this file has made its one
- * set this way since it was written; this is the same set, made by a different
- * press, and the two agreeing is the point.
- *
- * What it costs is that an unnamed set is told apart by its position alone, so
- * reordering two of them changes nothing in the strip. That is honest rather
- * than regrettable - there is nothing else to call a set nobody has named -
- * and it is why e2e/happy.spec.ts names one before it moves it.
- *
- * The index went with the name. Nothing else in here numbered anything.
- */
-function emptySet(): BoardSet {
-  return {
-    name: "",
-    symbol: "",
-    slots: [0, 1, 2, 3].map(() => ({ text: "", symbol: "" })),
-  };
-}
+
 
 /* There was a toggle here that drew every key the way the display draws it -
  * scaled to 128x128, rounded to RGB565, life-size at 15.21 mm - and it is on
@@ -342,52 +324,30 @@ function holeCell(): HTMLElement {
   return box;
 }
 
-/** The set key, which is a display like the other four and is also the set
- *  itself: it carries the set's picture and name on the device, and a press on
- *  the device cycles to the next set. So pressing it here opens the set's own
- *  card - the same one the ⋯ on its tab opens, because they are one thing
- *  drawn twice. */
-function setCell(entry: BoardSet): HTMLElement {
-  const box = document.createElement("div");
-  box.className = "cell cell--setkey";
-
-  const name = setName(entry, current);
-  const hit = opener(t("ui.set_more"));
-  const open = () => { void openSetSheet(); };
-  hit.onclick = open;
-  hit.onkeydown = (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    open();
-  };
-  box.appendChild(hit);
-
-  const eyebrow = document.createElement("span");
-  eyebrow.className = "cell__eyebrow";
-  eyebrow.textContent = t("ui.set_key");
-  box.appendChild(eyebrow);
-
-  if (entry.symbol) box.appendChild(picture(entry.symbol));
-  const word = document.createElement("span");
-  word.className = "cell__word";
-  word.textContent = name;
-  box.appendChild(word);
-  return box;
-}
-
-/** One of the four speech keys. */
+/** One of the five keys.
+ *
+ * All five, and there is no second function for a fifth: what a key shows and
+ * what it does are the same questions on every panel. The one thing the seat
+ * still decides is the caption - a key on the page-key panel with no word of
+ * its own shows the page's name, because that is what the firmware prints
+ * there and this cell is meant to look like what is on the table. PAGE_KEY in
+ * core/types.ts is the seat, and both export doors write the same fallback.
+ */
 function keyCell(entry: BoardSet, index: number): HTMLElement {
   const slot = entry.slots[index]!;
-  const said = (slot.text || "").trim();
+  const own = (slot.text || "").trim();
+  // What the panel shows, and what ▶ would play: the key's own word, or the
+  // page's name where the page-key panel has none.
+  const said = own || (index === PAGE_KEY ? setName(entry, current) : "");
   const act = actOf(slot);
   const box = document.createElement("div");
   box.className = "cell";
+  if (index === PAGE_KEY) box.classList.add("cell--namepanel");
 
-  /* Every speech cell is a drop target, filled or not: the four slots always
-   * exist, so a drop is always a swap and the other key moves exactly where
-   * this one came from. The hole and the set key have no ondragover at all,
-   * which is what keeps them out of it - only a prevented dragover marks an
-   * element as a drop target. */
+  /* Every cell is a drop target, filled or not: the five keys always exist, so
+   * a drop is always a swap and the other key moves exactly where this one
+   * came from. The hole has no ondragover at all, which is what keeps it out
+   * of it - only a prevented dragover marks an element as a drop target. */
   box.ondragover = (event) => {
     if (dragSlot === null || dragSlot === index) return;
     event.preventDefault();
@@ -411,6 +371,17 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
   const hit = opener(said || (slot.symbol ? t("ui.key_n", { n: index + 1 })
                                           : t("ui.diy_key_add")));
   box.appendChild(hit);
+
+  /* The page's name showing through, said once where it happens rather than
+   * left for somebody to work out from a word they never typed. It goes as
+   * soon as the key has a word of its own, which is when there is nothing left
+   * to explain. */
+  if (index === PAGE_KEY && !own) {
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "cell__eyebrow";
+    eyebrow.textContent = t("ui.diy_page_name_here");
+    box.appendChild(eyebrow);
+  }
 
   if (slot.symbol) box.appendChild(picture(slot.symbol, slot.negated));
   if (said) {
@@ -442,9 +413,9 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
    * opens the sheet, for templates/board.ts's reason: a key that navigated when
    * pressed would be the one key on the board nobody could ever edit. */
   if (act.kind === "goto") {
-    const to = setById(board(), act.set);
+    const at = pageAt(board(), act.set);
+    const to = at < 0 ? undefined : board().sets[at];
     if (to) {
-      const at = board().sets.indexOf(to);
       const follow = document.createElement("button");
       follow.type = "button";
       follow.className = "cell__follow";
@@ -474,15 +445,16 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
   box.ondragend = () => { dragSlot = null; clearDragMarks(); };
 
   /* Alt and an arrow moves a key one place, which is the key editor-app uses
-   * for the same act and the one this editor already used to reorder sets. It
-   * replaces arm-with-Enter, drop-with-Enter: that gesture had two ends and a
-   * state between them, which needed a grip to hang the state on, a mark on
-   * the grip, a sentence in the status line and an Escape to let go - all of
-   * it for a swap inside a square of four.
+   * for the same act. It replaces arm-with-Enter, drop-with-Enter: that
+   * gesture had two ends and a state between them, which needed a grip to hang
+   * the state on, a mark on the grip, a sentence in the status line and an
+   * Escape to let go - all of it for a swap between two panels.
    *
-   * Within the 2x2 block only. Slot n sits at row n>>1, column n&1 of it, and
-   * a move that would leave the block does nothing: the cells around it are
-   * the speaker and the set key, and neither is a place a key can go.
+   * Over all five now, where it used to be the 2x2 block of speech keys: the
+   * one cell it could not reach was the set key, and there is no set key. A
+   * move onto the speaker's corner or off the board does nothing, which
+   * keyAt() is what answers - the same six cells CELLS states, so a step can
+   * never land somewhere there is no panel.
    *
    * Claimed even where the move has nowhere to go: Alt+Left is history-back in
    * some engines, and rearranging a board must never walk off the page. */
@@ -499,9 +471,10 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
                       event.key as "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"];
     if (!event.altKey || !step) return;
     event.preventDefault();
-    const to = [(index >> 1) + step[0], (index & 1) + step[1]] as const;
-    if (to[0] < 0 || to[0] > 1 || to[1] < 0 || to[1] > 1) return;
-    swapSlots(index, (to[0] * 2) + to[1]);
+    const [row, column] = seatOf(index);
+    const to = keyAt(row + step[0], column + step[1]);
+    if (to < 0) return;
+    swapSlots(index, to);
   };
   return box;
 }
@@ -511,7 +484,18 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
 function drawTabs(): void {
   const tabs = $("tabs");
   tabs.innerHTML = "";
-  board().sets.forEach((entry, index) => {
+  const layout = board();
+  /* The order the device meets the pages in, and then the ones nothing leads
+   * to - editor-diy/pages.ts says why the second half is there rather than
+   * left out. It was file order while the set key cycled in file order; a
+   * chain of targets has no such thing as "the next one along", so what the
+   * strip can honestly draw is the order somebody pressing keys would arrive
+   * in. The loader computes the same walk over a package, in the same words. */
+  const shown = pageOrder(layout);
+  const lost = new Set(unreachable(layout));
+
+  shown.forEach((index) => {
+    const entry = layout.sets[index]!;
     const tab = document.createElement("div");
     // Which tab is the open one is the stylesheet's now rather than a colour
     // written on the element: it was the set's own colour on the border, with
@@ -519,53 +503,62 @@ function drawTabs(): void {
     // and the square would have been the worse thing to keep - the same value
     // on every tab, saying only that a set is a set.
     tab.className = "tab" + (index === current ? " active" : "");
+    /* The mark on a page nothing leads to, which is editor-app's `.tab__lost`
+     * and the same warning triangle it puts on a crumb. Reported and never
+     * enforced - pages.ts has the argument - so it is a mark and not a refusal,
+     * and it names what is wrong on hover rather than only looking wrong. */
+    if (lost.has(index)) {
+      const warn = document.createElement("span");
+      warn.className = "tab__lost";
+      warn.textContent = "\u26a0";
+      warn.title = t("ui.diy_page_unreachable");
+      tab.appendChild(warn);
+    }
     const name = document.createElement("span");
     name.textContent = setName(entry, index);
     tab.appendChild(name);
     const open = () => { current = index; render(); };
     tab.onclick = open;
-    // Not a <button>, although it is pressed like one: the tab is dragged to
-    // reorder, and engines disagree on what dragging a button means. So the
-    // div stays, and the two things the element would have brought - a place
-    // in the tab order, acting on Enter and Space - are written out.
+    /* Not a <button>, although it is pressed like one: it holds the ... below,
+     * which is pressed itself, and a button inside a button is not a shape the
+     * engines agree about. So the div stays, and the two things the element
+     * would have brought - a place in the tab order, acting on Enter and
+     * Space - are written out.
+     *
+     * It is not dragged any more, and that is the change rather than an
+     * oversight. Dragging a tab reordered the pages, and reordering was how
+     * somebody steered the ring: the set key went to the next page along, so
+     * where a page sat *was* where its key led. With targets in the file
+     * instead, a drag would move a page in the strip and change nothing about
+     * where anything leads - a gesture that looks like it did something. What
+     * it did is done by pointing a key somewhere now. */
     tab.setAttribute("role", "button");
     tab.tabIndex = 0;
     if (index === current) tab.setAttribute("aria-current", "true");
-    tab.setAttribute("aria-keyshortcuts", "Alt+ArrowLeft Alt+ArrowRight");
     tab.onkeydown = (event) => {
-      if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-        // Claimed even when the move has nowhere to go: Alt+Left is history
-        // back in some engines, and reordering must never walk off the page.
-        event.preventDefault();
-        const to = index + (event.key === "ArrowRight" ? 1 : -1);
-        if (to >= 0 && to < board().sets.length) moveSet(index, to);
-        return;
-      }
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       open();
     };
 
-    /* The second way into the set's own card, on the tab that is already open.
+    /* The way into the page's own card, and now the only one.
      *
-     * The same ⋯ editor-app puts on the last crumb of its path, and the same
-     * card behind it. Here it is genuinely a second door - the set key opens
-     * the same thing - and that is not what conventions.md §3.2 forbids: the
-     * tab and the set key are the same set drawn twice, once as a card index
-     * and once as what is on the device. Both lead to the thing itself.
+     * The same ... editor-app puts on the last crumb of its path, and the same
+     * card behind it. It used to be a second door - the set key opened the
+     * same thing - and that was the fifth cell being the one cell on the board
+     * that did not open what it was. It opens its own key now, like the other
+     * four, so the page itself has one door and this is it.
      *
-     * A <span> wearing role="button" for the reason the tab is a <div>: it is
-     * inside something that is already pressed and dragged.
+     * A <span> wearing role="button" because it sits inside something that is
+     * already pressed.
      *
-     * Every set tab gets the element and only the current one gets the
-     * control, which is editor-app's drawPages() and the same reason: the
-     * strip reflowed on every switch, and here the tabs are also dragged to
-     * reorder, so a row that resizes under the pointer is a row that resizes
-     * mid-drag. The reserved copies are `visibility: hidden` - the box, and
-     * nothing in the accessibility tree or the tab order. */
+     * Every tab gets the element and only the current one gets the control,
+     * which is editor-app's drawPages() and the same reason: the strip
+     * reflowed on every switch. The reserved copies are `visibility: hidden` -
+     * the box, and nothing in the accessibility tree or the tab order. */
     const more = document.createElement("span");
     more.className = "tab__more";
-    more.textContent = "⋯";
+    more.textContent = "\u22ef";
     if (index === current) {
       more.setAttribute("role", "button");
       more.tabIndex = 0;
@@ -574,7 +567,7 @@ function drawTabs(): void {
         // Or the press falls through to the tab, which would redraw the strip
         // out from under the sheet that is opening.
         event.stopPropagation();
-        void openSetSheet();
+        void openPageSheet();
       };
       more.onclick = edit;
       more.onkeydown = (event) => {
@@ -588,45 +581,21 @@ function drawTabs(): void {
     }
     tab.appendChild(more);
 
-    // Reorder sets: the order determines how the set key cycles through, so on
-    // this device it is the navigation rather than the presentation - the
-    // firmware advances with `rtcCurrentSet = (rtcCurrentSet + 1) %
-    // layout.setCount`.
-    tab.draggable = true;
-    tab.ondragstart = (event) => {
-      dragSet = index;
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", String(index));
-      }
-    };
-    tab.ondragover = (event) => {
-      if (dragSet === null || dragSet === index) return;
-      event.preventDefault();
-      tab.classList.add("dragover");
-    };
-    tab.ondragleave = () => tab.classList.remove("dragover");
-    tab.ondrop = (event) => {
-      event.preventDefault();
-      clearDragMarks();
-      if (dragSet === null || dragSet === index) return;
-      const from = dragSet;
-      dragSet = null;
-      moveSet(from, index);
-    };
-    tab.ondragend = () => { dragSet = null; clearDragMarks(); };
-
     tabs.appendChild(tab);
   });
 
-  if (board().sets.length < limits.maxSets) {
+  if (layout.sets.length < limits.maxSets) {
     const add = document.createElement("button");
     add.className = "tab add";
     add.type = "button";
     add.textContent = t("ui.add_set");
     add.onclick = () => {
-      board().sets.push(emptySet());
-      current = board().sets.length - 1;
+      /* Appended, and nothing pointed at it - addPage() is where that decision
+       * is written out. So it arrives at the end of the strip wearing the mark
+       * for a page nothing leads to, which is what it is until somebody points
+       * a key at it, and it is opened at once so that the next press can. */
+      addPage(layout);
+      current = layout.sets.length - 1;
       commit();
     };
     tabs.appendChild(add);
@@ -641,10 +610,14 @@ function drawTabs(): void {
    * "nearest"` scrolls the strip and nothing else, so the page does not jump,
    * and on a strip short enough not to scroll it has nothing to do.
    *
+   * Found by where the open page was drawn rather than by its place in the
+   * layout: the strip is in reachability order and the two are not the same
+   * list any more.
+   *
    * Guarded rather than called outright: scrollIntoView is a layout call and
    * not every environment this module is loaded in has one, and nothing about
    * the strip depends on it having happened. */
-  const showing = tabs.children[current] as HTMLElement | undefined;
+  const showing = tabs.children[shown.indexOf(current)] as HTMLElement | undefined;
   if (typeof showing?.scrollIntoView === "function") {
     showing.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
@@ -653,7 +626,6 @@ function drawTabs(): void {
 export function render(): void {
   // A drag does not survive a redraw: the element that carried it is thrown
   // away with the rest of the board.
-  dragSet = null;
   dragSlot = null;
   drawTabs();
 
@@ -687,13 +659,17 @@ export function render(): void {
     return;
   }
   for (const place of CELLS) {
-    device.appendChild(place === null ? holeCell()
-      : place === "set" ? setCell(entry)
-      : keyCell(entry, place));
+    device.appendChild(place === null ? holeCell() : keyCell(entry, place));
   }
 }
 
 /* --- The two sheets -------------------------------------------------------
+ *
+ * One for a key - any of the five - and one for the page itself. That is the
+ * shape editor-app already has, and it is what the fifth key stopping being a
+ * special case left behind: there used to be a key sheet, a set sheet with the
+ * key sheet's rows in it and one answer more, and a fifth cell that opened the
+ * second when it should have opened the first.
  *
  * The frame is shell/sheet.ts's - the picture column with its search, the foot
  * with the destructive act on the left, and the promise that settles from the
@@ -707,7 +683,7 @@ export function render(): void {
  * there was nothing to dismiss.
  */
 
-/** One speech key: its picture, what it says, and hearing it.
+/** One key of the five: its picture, what it says, what it does, and hearing it.
  *
  * One text field and not two. A tablet button has an Aufschrift and a
  * Gesprochen because the tablet draws the one and says the other; this device
@@ -725,21 +701,37 @@ function openKeySheet(index: number): Promise<Left> {
 
   const spoken = textField(draft.text, (value) => { draft.text = value; });
   spoken.id = "diyKeyText";
+  /* The page's name as the placeholder on the panel the firmware prints it on,
+   * and only there.
+   *
+   * **The name is the placeholder and not the value.** Leaving the field empty
+   * has to go on meaning "say what the page is called", and filling the name
+   * in would write that sentence onto the key: a page somebody only looked at
+   * would come back out of Fertig carrying a word it never had. It would also
+   * come loose - renaming the page afterwards would leave the typed copy
+   * behind, still saying the old name with nothing on screen to say why. */
+  if (index === PAGE_KEY) spoken.placeholder = entry.name.trim();
   const play = document.createElement("button");
   play.type = "button";
   play.className = "btn";
   play.textContent = "▶";
   play.title = t("ui.play_title");
   play.setAttribute("aria-label", t("ui.play_title"));
+  /* What the device would say, which on that one panel is the field or the
+   * name behind it. Auditioning an empty field as silence would contradict the
+   * sentence under it; both empty is a key that genuinely says nothing. */
   play.onclick = () => {
-    const saying = draft.text.trim();
+    const saying = draft.text.trim()
+      || (index === PAGE_KEY ? entry.name.trim() : "");
     if (saying) void speak(saying, play);
   };
   const withPlay = document.createElement("div");
   withPlay.className = "form__withplay";
   withPlay.append(spoken, play);
   const spokenRow = formRow(t("ui.text_placeholder"), withPlay,
-                            t("ui.diy_key_spoken_note"), spoken.id);
+                            index === PAGE_KEY ? t("ui.diy_set_spoken_note")
+                                               : t("ui.diy_key_spoken_note"),
+                            spoken.id);
 
   /* --- what a press does, and the two rows that follow from it -----------
    *
@@ -769,10 +761,13 @@ function openKeySheet(index: number): Promise<Left> {
 
   /* Which page a key leads to.
    *
-   * Every set in the Sammlung and nothing else. There is no "Neue Seite …"
-   * entry the way the tablet's list has one: making a page is a press on the
-   * strip that is already on screen behind this sheet, and an entry that could
-   * be greyed out on the page past the cap is worse than no entry.
+   * Every page in the Sammlung, this one included: a key pointed at its own
+   * page is a press that does nothing, which is a board somebody may want and
+   * is nothing this list has to have an opinion about. There is no
+   * "Neue Seite …" entry the way the tablet's list has one: making a page is a
+   * press on the strip that is already on screen behind this sheet, and an
+   * entry that could be greyed out on the page past the cap is worse than no
+   * entry.
    *
    * Where the key already leads is where the list stands. Where it leads
    * nowhere - a page deleted since, which nothing in this change prevents -
@@ -897,11 +892,12 @@ function openKeySheet(index: number): Promise<Left> {
         },
       },
     } : {}),
-    /* The sheet's one cost bought back. Four keys is a smaller run than a
+    /* The sheet's one cost bought back. Five keys is a smaller run than a
      * tablet page of sixty-six, but it is still a run, and stopping at the
      * last one rather than wrapping is the same choice editor-app made:
      * walking off the end back to the first is a surprise. */
-    ...(index < 3 ? { next: { label: t("ui.diy_key_next"), onPress: keep } } : {}),
+    ...(index + 1 < KEYS_PER_SET
+      ? { next: { label: t("ui.diy_key_next"), onPress: keep } } : {}),
     done: { label: t("ui.done"), onPress: keep },
     /* No `focus`: the sheet opens in the picture column's search field. See
      * SheetSpec.focus - the word is typed once, and the picture it finds
@@ -914,232 +910,48 @@ function openKeySheet(index: number): Promise<Left> {
 async function editKey(index: number): Promise<void> {
   for (let at = index; ; at += 1) {
     const how = await openKeySheet(at);
-    if (how !== "next" || at + 1 >= 4) break;
+    if (how !== "next" || at + 1 >= KEYS_PER_SET) break;
   }
 }
 
 /**
- * The set itself: its picture, its name, what its key says and does, and
- * deleting it.
+ * The page itself: what it is called, and deleting it.
  *
- * Reached from the ⋯ on the current tab and from the set key on the board,
- * which are the same set drawn twice. Everything in it stood in a tile beside
- * the board before - a thumb, a name field, a row of swatches, a colour input,
- * a hex field and a red button under all of it - and none of it was a cell.
- * With it gone the board is tabs and a grid and nothing else, which is what
- * the mock's last note asks for.
+ * Reached from the ... on the current tab, and only from there. It was also
+ * behind the set key on the board, which was the one cell that did not open
+ * the thing under it; that cell opens its own key now like the other four, and
+ * what is left here is what belongs to the page rather than to any of them.
  *
- * **The colour has gone, and so has its row.** It was three controls in three
- * places, then one row of swatches held here until the firmware stopped
- * reading it. The firmware has, so the row went with it: what is left is a
- * name and a picture, which are what a set is told apart by on the device.
+ * **Two rows went out of this sheet on the day it stopped being the set key's
+ * as well**, and they are not lost - they are in openKeySheet(), on all five
+ * keys instead of on one. What a key says and what it does were asked here
+ * with one answer more than a speech key had, **Reihum**, and that answer is
+ * what the ring was; data/upgrade.ts turned every stored one into the target
+ * it meant. The picture column went with them, for the same reason: the
+ * picture on the page-key panel is that key's picture, edited where the other
+ * four are.
  *
- * BoardSet.color went with it, one change later. It outlived the row because
- * data/obf.ts wrote it into a .obf as ext_vorlaut_color and read it back, and
- * tests/reference/obf.lock.json froze both directions; narrowing that lock is
- * what let the field go.
+ * **The colour went first**, one change earlier: it was three controls in
+ * three places, then one row of swatches held here until the firmware stopped
+ * reading it, and `BoardSet.color` outlived the row only because data/obf.ts
+ * wrote it into a .obf and tests/reference/obf.lock.json froze both
+ * directions.
  *
- * **And then two rows arrived, which are the set key's own.** Since adr/0020
- * the fifth key is a key like the other four - it may say a sentence of its
- * own and it may lead somewhere it was pointed - and the device has spoken
- * both since 2026-08-31, the export has written them and the import has read
- * them back. This sheet was the only door left shut, so a joining game's board
- * - the round asking its compound word and standing still while the four
- * answers reply - could be exported and imported and not authored. The rows
- * are the key sheet's own two, in the key sheet's order, with one answer more
- * on the first of them: see SetDoes for why the ring has to be that fourth
- * answer rather than a spelling of Wort.
+ * What is left is a name and a way to delete, which is what a tablet's page
+ * card holds one editor along - and no picture column there either, for the
+ * mirror image of the reason: that device has no panel showing the page.
  */
-function openSetSheet(): Promise<void> {
-  const sets = board().sets;
+function openPageSheet(): Promise<void> {
   const entry = set();
-  /* The act as the model holds it, undefined and all - never through actOf(),
-   * which is the speech key's default and would read the ring as Wort. See
-   * SetDoes, which is where the whole of that argument is. */
-  const held = entry.key?.act;
-  const draft = {
-    name: entry.name,
-    symbol: entry.symbol,
-    // What the key says, where it says something other than the set's name.
-    // Absent is the name - BoardSet.key - so the empty string is what an
-    // untouched set key starts from and what it goes back to being.
-    text: entry.key?.text ?? "",
-  };
+  const draft = { name: entry.name };
 
-  const name = textField(draft.name, (value) => {
-    draft.name = value;
-    followName();
-  });
+  const name = textField(draft.name, (value) => { draft.name = value; });
   name.id = "diySetName";
   name.placeholder = t("ui.set_name");
 
-  /* --- what the key says ---------------------------------------------------
-   *
-   * The key sheet's row, for the key sheet's reason: this device draws no
-   * caption at all - the key is the picture - so there is one thing to type
-   * and not an Aufschrift beside a Gesprochen.
-   *
-   * **The name is the placeholder and not the value.** Leaving it empty has to
-   * go on meaning "say what the set is called", and filling the field in with
-   * the name would write that sentence into the Sammlung: a set somebody only
-   * looked at would come back out of Fertig carrying a `key.text` it never had,
-   * which is the one thing the byte-for-byte promise on BoardSet.key forbids.
-   * It would also come loose - renaming the set afterwards would leave the
-   * typed copy behind, still saying the old name with nothing on screen to say
-   * why. A placeholder follows the name instead, which is what followName()
-   * below is for.
-   */
-  const spoken = textField(draft.text, (value) => { draft.text = value; });
-  spoken.id = "diySetText";
-  const play = document.createElement("button");
-  play.type = "button";
-  play.className = "btn";
-  play.textContent = "▶";
-  play.title = t("ui.play_title");
-  play.setAttribute("aria-label", t("ui.play_title"));
-  /* What the device would say, which is the field or the name behind it - not
-   * the field alone. Auditioning an empty field as silence would contradict
-   * the sentence under it. Both empty is a key that genuinely says nothing:
-   * the device falls back to the name and the name is not there either. */
-  play.onclick = () => {
-    const saying = draft.text.trim() || draft.name.trim();
-    if (saying) void speak(saying, play);
-  };
-  const withPlay = document.createElement("div");
-  withPlay.className = "form__withplay";
-  withPlay.append(spoken, play);
-  const spokenRow = formRow(t("ui.text_placeholder"), withPlay,
-                            t("ui.diy_set_spoken_note"), spoken.id);
-
-  /** The placeholder, kept on the name as it is typed.
-   *
-   * Empty where the name is, rather than falling back to "Seite 3" the way the
-   * tab and the delete question do: those name a set for a reader, and this
-   * one is a quotation of what the device will say. A nameless set's key says
-   * nothing at all - device_package.ts falls back to `set.name` and stops - so
-   * a placeholder promising "Seite 3" would be the field lying about the
-   * sound. */
-  function followName(): void {
-    spoken.placeholder = draft.name.trim();
-  }
-  followName();
-
-  /* --- what the key does, and the row that follows from it -----------------
-   *
-   * Asked above the field it governs, which is the key sheet's order and its
-   * argument: a key that only leads onward says nothing, and asked afterwards
-   * the Was gesagt wird field was dead in silence.
-   *
-   * Four answers where a speech key has three, and the extra one is Reihum.
-   * SetDoes carries why it cannot be folded into either neighbour; what it
-   * costs here is one entry and one sentence, and the sentence is the part
-   * that matters - Reihum and Weiter both lead onward, and only the note says
-   * that one of them goes wherever the set happens to sit next while the other
-   * goes where it was pointed.
-   */
-  const kinds: Choice[] = [
-    { value: "ring", label: t("ui.diy_set_does_ring") },
-    ...(["word", "carry", "goto"] as const)
-      .map((kind) => ({ value: kind, label: t(`ui.diy_does_${kind}`) })),
-  ];
-  const note = hint();
-  note.id = "diySetDoesNote";
-  const does = dropdown(kinds, setChosenAs(held), () => { follow(); });
-  does.button.id = "diySetDoes";
-  // Named to the trigger by hand, for the key sheet's reason: this row's
-  // sentence is rewritten on every choice and cannot be handed to formRow()
-  // once, and "Reihum" on its own does not say what going round is.
-  does.button.setAttribute("aria-describedby", note.id);
-  const actRow = formRow(t("ui.button_act"), does.anchor, "", does.button);
-  actRow.classList.add("form__row--caption");
-  actRow.appendChild(note);
-
-  /* Which set the key leads to, when it leads to one it was pointed at.
-   *
-   * Every set in the Sammlung, this one included: a set key pointed at its own
-   * set is a press that does nothing, which is a board somebody may want and
-   * is nothing this list has to have an opinion about.
-   *
-   * Where it already leads is where the list stands, and where it leads
-   * nowhere the list stands on the set being edited - the key sheet's
-   * fallback, unchanged. Not on the *next* set, which would be the tempting
-   * one: that is the ring's behaviour written out as a target, so a list
-   * standing there would make Weiter and Reihum the same answer for as long as
-   * nobody moved it, which is the confusion this row exists to end.
-   */
-  const where: Choice[] = sets.map((one, at) =>
-    ({ value: String(at), label: setName(one, at) }));
-  const leadsTo = held?.kind === "goto"
-    ? sets.findIndex((one) => one.id === held.set) : -1;
-  const targets = dropdown(where, String(leadsTo < 0 ? current : leadsTo),
-                           () => {});
-  targets.button.id = "diySetGoto";
-  const targetRow = formRow(t("ui.goto_page"), targets.anchor, "",
-                            targets.button);
-
-  /** The two rows that depend on the answer above them, and its note.
-   *
-   * Hidden rather than disabled and nothing cleared on a change of answer,
-   * both for the key sheet's reasons. The one reading that is this sheet's
-   * own: Reihum hides *both*, because the ring neither speaks nor is pointed
-   * anywhere - data/obf.ts states the first half of that in the sentence "the
-   * ring never speaks", and device_package.ts writes no vocalization onto a
-   * set key whose `does` is "go".
-   */
-  function follow(): void {
-    note.textContent = does.value === "ring"
-      ? t("ui.diy_set_does_ring_note")
-      : t(`ui.diy_does_${does.value}_note`);
-    targetRow.hidden = does.value === "ring" || does.value === "word";
-    spokenRow.hidden = does.value === "ring" || does.value === "goto";
-  }
-  follow();
-
-  /** What the two lists come to, or undefined for the ring.
-   *
-   *  Undefined rather than `{kind: "speak"}`: absent is the ring, and the two
-   *  are different keys. The id is minted here for the key sheet's reason and
-   *  on the same press - a sheet somebody closes another way leaves the
-   *  Sammlung exactly as they found it, ids included. */
-  const chosen = (): SlotAct | undefined => {
-    if (does.value === "ring") return undefined;
-    if (does.value === "word") return { kind: "speak" };
-    const to = sets[Number(targets.value)] ?? entry;
-    to.id ??= mint();
-    // Absent rather than false where the key only leads onward - SlotAct's own
-    // note, and what keeps a key written before this existed byte-identical.
-    return does.value === "carry"
-      ? { kind: "goto", set: to.id, alsoSpeak: true }
-      : { kind: "goto", set: to.id };
-  };
-
   return openSheet({
     title: t("ui.set_title"),
-    /* A picture column, where the tablet's page card has none: this page has a
-     * key on the device that shows one. */
-    pick: {
-      symbol: draft.symbol,
-      seed: draft.name,
-      // What was typed before what the collection calls it - see the key
-      // sheet above, which has the argument.
-      onPick: (symbol, caption, typed) => {
-        draft.symbol = symbol;
-        const word = typed || caption;
-        if (word && !draft.name.trim()) {
-          draft.name = word;
-          name.value = word;
-          // The placeholder quotes the name, so a name filled in from the
-          // picture has to move it too.
-          followName();
-        }
-      },
-    },
-    rows: [
-      formRow(t("ui.set_name"), name, t("ui.set_name_note")),
-      actRow,
-      targetRow,
-      spokenRow,
-    ],
+    rows: [formRow(t("ui.set_name"), name, t("ui.set_name_note"), name.id)],
     remove: {
       label: t("ui.remove_set"),
       // The question is askDelete's, and it draws a dialog of its own over
@@ -1153,30 +965,17 @@ function openSetSheet(): Promise<void> {
       label: t("ui.done"),
       onPress: () => {
         entry.name = draft.name;
-        entry.symbol = draft.symbol;
-        /* Built whole and then kept or dropped, which is data/obf.ts's
-         * keyShape() rule written on the other side of the same field: `{}`
-         * and absent both mean the ring and the set's own name, so a set key
-         * nobody has given anything to is written as no field at all. That is
-         * what makes opening this sheet on an untouched Sammlung and pressing
-         * Fertig export the file it exported before. */
-        const act = chosen();
-        const word = draft.text.trim();
-        const key = {
-          ...(word ? { text: word } : {}),
-          ...(act ? { act } : {}),
-        };
-        if (Object.keys(key).length) entry.key = key;
-        else delete entry.key;
         commit();
       },
     },
-    // No `focus`: the search field, as on every sheet with a picture column.
+    // The one field, so the sheet opens in it. Every sheet with a picture
+    // column opens in the search instead, and this one has none.
+    focus: name,
   }).then(() => undefined);
 }
 
 /**
- * The question asked before a set goes.
+ * The question asked before a page goes.
  *
  * A `<dialog>`, and this is the change: it was `window.confirm`, which
  * conventions.md §3.4 forbids outright - the browser's own chrome is the one
@@ -1190,26 +989,46 @@ function openSetSheet(): Promise<void> {
  * fact that could change their mind; and the confirming button said OK, which
  * asks the reader to hold what it refers to in their head.
  *
- * What is counted is the keys with something on them rather than the four
- * slots, which are always four. An empty set is the case where there is
- * genuinely nothing to lose, and it says so instead of counting to zero.
+ * What is counted is the keys with something on them rather than the five,
+ * which are always five. An empty page is the case where there is genuinely
+ * nothing to lose, and it says so instead of counting to zero.
  *
- * The same shape as editor-app's page delete, deliberately: they are the same
- * act on the same kind of object, one editor apart.
+ * **And a second number, which is the one somebody cannot see.** What is *on*
+ * this page is on the screen behind the dialog; what points *at* it is on five
+ * other pages, and after the delete every one of those keys says its word and
+ * stays where it is. That was harmless while the ring was a rule - it was
+ * worked out afresh from the pages that were left and could not point at
+ * nothing - and it stopped being harmless the moment targets went into the
+ * file. Somebody deleting round 7 of a twelve-round game would otherwise get
+ * no message and a dead end in round 6, visible for the first time on the
+ * device.
+ *
+ * Said rather than mended, and deletePage() carries that argument: pulling the
+ * chain together would repair a speech Sammlung and silently rewrite a game.
+ *
+ * The same shape as editor-app's page delete, deliberately - down to counting
+ * the inbound edges in the question - because they are the same act on the
+ * same kind of object, one editor apart.
  */
 async function askDelete(): Promise<boolean> {
-  const sets = board().sets;
+  const layout = board();
+  const sets = layout.sets;
   if (!sets.length) return false;
   const entry = sets[current]!;
   const name = setName(entry, current);
   const n = (entry.slots || []).filter(
     (slot) => (slot.text || "").trim() || (slot.symbol || "").trim()).length;
+  const leading = entry.id ? inboundTo(layout, entry.id).length : 0;
 
   if (!await confirmDialog({
     title: t("ui.remove_set"),
     body: t(n === 0 ? "ui.set_delete_ask_none"
              : n === 1 ? "ui.set_delete_ask_one" : "ui.set_delete_ask",
-            { name, n }),
+            { name, n })
+          + (leading
+            ? " " + t(leading === 1 ? "ui.set_delete_leads_one"
+                                    : "ui.set_delete_leads", { n: leading })
+            : ""),
     confirmLabel: t("ui.set_delete_go"),
     cancelLabel: t("ui.cancel"),
     // Never the same word as the button beside it: two dismissals sharing an
@@ -1218,8 +1037,8 @@ async function askDelete(): Promise<boolean> {
     danger: true,
   })) return false;
 
-  sets.splice(current, 1);
-  current = Math.max(0, current - 1);
+  deletePage(layout, current);
+  current = Math.min(Math.max(0, current - 1), sets.length - 1);
   commit();
   return true;
 }
@@ -1240,8 +1059,8 @@ async function askDelete(): Promise<boolean> {
  * tests/unit/layers.test.ts is what says so.
  */
 export const diy: Editor = {
-  /* What a new board starts as, and it is a fact about this hardware: one set
-   * of four empty keys. app.py seeded
+  /* What a new board starts as, and it is a fact about this hardware: one page
+   * of five empty keys. app.py seeded
    * content/ from example/ so that nobody met an empty screen; this is that
    * idea at its smallest, because the examples are pictures and recordings
    * that would have to be fetched, and an empty board somebody can type into
@@ -1264,15 +1083,13 @@ export const diy: Editor = {
        * level: LANG is a live binding and a language switch moves it, so a
        * board made after the switch is made in the language on screen. */
       language: LANG,
-      sets: [{
-        name: "",
-        symbol: "",
-        slots: [0, 1, 2, 3].map(() => ({ text: "", symbol: "" })),
-      }],
+      // blankPage()'s, so that the first page a person meets and the page the
+      // "+ Neue Seite" press makes are the same page made two ways.
+      sets: [blankPage()],
     };
   },
 
-  /* A different board is in force. Back to its first set rather than clamped
+  /* A different board is in force. Back to its first page rather than clamped
    * to where the last board happened to be standing: set three of the kitchen
    * board and set three of the nursery board have nothing to do with each
    * other, and landing on one because the other was open reads as the page
@@ -1308,10 +1125,10 @@ export const diy: Editor = {
     return isDiy(layout) ? layout.sets?.length ?? 0 : 0;
   },
 
-  /* Sets, because a set is a fixed four keys here: the number of sets and the
-   * amount of work in a Sammlung move together, so one number does both of the
-   * jobs conventions.md §1.8 gives it. That is not true on a tablet, where a
-   * page holds anything from nothing to sixty-six - see editor-app. */
+  /* Sets, because a page is a fixed five keys here: the number of pages and
+   * the amount of work in a Sammlung move together, so one number does both of
+   * the jobs conventions.md §1.8 gives it. That is not true on a tablet, where
+   * a page holds anything from nothing to sixty-six - see editor-app. */
   unit: "set",
 
   /* The fixed words on the controls this editor owns, re-read on every

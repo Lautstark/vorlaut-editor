@@ -27,8 +27,29 @@
 
 /** Four keys to a set - the stride every layout fixture was laid out from.
  *
+ * The four the file calls slots, which is four of the five panels: a set entry
+ * in `layout.bin` is a name, one key, and then these - see KEYS_PER_SET below.
+ *
  * Authority: `device/fixtures/layout/*`. */
 export const SLOTS_PER_SET = 4;
+
+/** Five keys to a page, which is the same fact counted the way a person sees it.
+ *
+ * **Not an eighth number.** It is SLOTS_PER_SET and the one key beside it,
+ * written as a sum so that the two cannot drift: `layout.bin` lays a set entry
+ * out as a name, one key, and SLOTS_PER_SET more, and every panel on the case
+ * is one of those five. The editor holds a page as five equal keys, so this is
+ * the length of that array and the count the board draws.
+ *
+ * It is here rather than in the editor because the number it is derived from
+ * is here, and a derivation that sits away from its input is the copy that
+ * goes stale. vorlaut-diy-talker's adr/0020 is the decision that made the five
+ * one kind of thing - "A set holds five keys" - and the fixtures show it as
+ * `key` beside `slots`.
+ *
+ * Authority: `device/fixtures/layout/*` - the `key` each entry carries beside
+ * its slots. */
+export const KEYS_PER_SET = SLOTS_PER_SET + 1;
 
 /** Sixteen bytes of a digest, everywhere a layout points at a file.
  *
