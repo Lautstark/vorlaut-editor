@@ -95,15 +95,22 @@
 // images[].path, sounds[].path - and §1 of SPEC.md puts the talker's .obz out
 // of its scope entirely, so none of §5.3's PNG-and-1024 rules reach here.
 //
-// It also does not need one for Slot.act, and that is a boundary rather than an
-// omission. The three press modes the five-key editor offers - say it, say it
-// and lead onward, lead onward - are two behaviours the firmware does not have:
-// a speech key that switches set, and speaking before it does. Writing either
-// here would put a package in front of loader/'s compileDevice() that it has
-// never been asked to read, and what a talker did with it would be decided by
-// whichever half was updated second. So the field waits for the other half, and
-// a Sammlung using it compiles to the board it was before - every key speaking.
-// data/app_package.ts is the door those acts do go through today.
+// It needs one for Slot.act, and since 2026-09-01 it writes it. That was a
+// boundary and not an omission while it lasted: the three press modes the
+// five-key editor offers - say it, say it and lead onward, lead onward - were
+// two behaviours the firmware did not have, so writing them here would have put
+// a package in front of loader/'s compileDevice() that it had never been asked
+// to read, and what a talker did with it would have been decided by whichever
+// half was updated second. **The other half arrived on 2026-08-31**, in
+// vorlaut-diy-talker's adr/0020, and this is the wait ending rather than the
+// rule being broken: `does` and `target` per key, the set key among them.
+//
+// What that cost while it lasted is worth knowing, because it is the shape of
+// every boundary like it: a Sammlung authored with `weiter` keys compiled to a
+// board where every key merely spoke, silently and correctly, and the person
+// who set them had no way to find out. The wait was right and it was not free.
+//
+// data/app_package.ts is the door the same acts go through for the tablet.
 //
 // A marker field saying "this one is compilable" was considered and left out.
 // readDevicePackage() refuses a package it cannot compile by looking at what is
@@ -139,7 +146,8 @@ import {
  * is what holds them to it. */
 import { HASH_BYTES, SLOTS_PER_SET } from "../device/layout_facts.js";
 import { zipBytes, type ZipMember } from "./zip.js";
-import type { DiyLayout } from "../core/types.js";
+import { actOf } from "../core/types.js";
+import type { DiyLayout, SlotAct } from "../core/types.js";
 
 export const FORMAT = "open-board-0.1";
 const MANIFEST = "manifest.json";
@@ -158,11 +166,40 @@ const AUDIO_NAME = new RegExp(`^a[0-9a-f]{${HASH_BYTES * 2}}\\.wav$`);
 /* ------------------------------------------------------------- reading --- */
 
 /** One slot, as the device build reads it. */
+/** What one press does, in the device interface's own three words.
+ *
+ * `Slot.act` is the editor's vocabulary and this is the file format's, and the
+ * translation between them is devicePlan()'s and nowhere else's: `speak`,
+ * `goto`, and `goto` carrying its word through become `speak`, `go` and
+ * `speak-and-go`. data/app_package.ts makes the same translation into the
+ * tablet's - `load_board` and `ext_lautstark_append_on_navigate` - which is
+ * why neither of them is `Act` narrowed. */
+export type DeviceDoes = "speak" | "speak-and-go" | "go";
+
+/** The set index a key leads to, meaningless where it leads nowhere.
+ *
+ * A position and not a BoardSet.id, because that is what the file holds: one
+ * byte, and the sets are written in order. The editor stores an id for the
+ * reason BoardSet.id gives - a target that followed a drag would point
+ * somewhere else after a reorder - and this is where the one becomes the
+ * other, at the last moment before the bytes. A key naming a set that is no
+ * longer there leads nowhere, which is `speak` and 0. */
+export interface DeviceKey {
+  text: string;
+  /** The picture reference, "" for none. Not crossed out: see `negated`. */
+  symbol: string;
+  negated: boolean;
+  does: DeviceDoes;
+  target: number;
+}
+
 export interface DeviceSlot {
   text: string;
   /** The picture reference, "" for none. Not crossed out: see `negated`. */
   symbol: string;
   negated: boolean;
+  does: DeviceDoes;
+  target: number;
   /** slotIsEmpty(), asked once and carried.
    *
    *  Carried rather than re-derived at each of the three places that want it,
@@ -175,8 +212,14 @@ export interface DeviceSlot {
 
 export interface DeviceSet {
   name: string;
-  /** The set key's picture reference, "" for none. */
+  /** The set key's picture reference, "" for none.
+   *
+   *  Kept beside `key` rather than folded into it, because it is where it was
+   *  before the set key had anything else and moving it would rewrite every
+   *  caller to say the same thing. `key.symbol` carries the same string. */
   symbol: string;
+  /** The set key, which is a key like the other four since adr/0020. */
+  key: DeviceKey;
   slots: DeviceSlot[];
 }
 
@@ -206,18 +249,58 @@ export interface DevicePlan {
 }
 
 export function devicePlan(layout: DiyLayout, voice: string): DevicePlan {
+  const sets = layout.sets ?? [];
+  /* Where each set sits, so that a target stored as an id becomes the byte the
+   * file holds. Built once for the whole layout rather than searched per key:
+   * sixty-four sets and five keys each is a walk nobody needs to make 320
+   * times. */
+  const at = new Map<string, number>();
+  for (const [index, set] of sets.entries()) {
+    if (set?.id) at.set(set.id, index);
+  }
+
+  /** One act, in the file's words.
+   *
+   * A key naming a set that is not there leads nowhere and speaks instead. It
+   * is the ordinary consequence of deleting a set that something pointed at,
+   * not a corruption: the editor mints an id when a key first points at a set
+   * and does not go hunting for the pointers when that set goes. Speaking is
+   * the safe half of what the key was doing - a key that fell silent AND
+   * stayed put would be a key that does nothing at all. */
+  const acted = (act: SlotAct): { does: DeviceDoes; target: number } => {
+    if (act.kind !== "goto") return { does: "speak", target: 0 };
+    const target = at.get(act.set);
+    if (target === undefined) return { does: "speak", target: 0 };
+    return { does: act.alsoSpeak ? "speak-and-go" : "go", target };
+  };
+
   return {
     language: String(layout.language ?? ""),
     voice: String(voice ?? ""),
     sleepTimeoutSeconds: Number(layout.sleep_timeout_seconds ?? 0),
-    sets: (layout.sets ?? []).map((set) => ({
+    sets: sets.map((set, index) => ({
       name: String(set?.name ?? ""),
       symbol: String(set?.symbol ?? ""),
+      /* The set key. **Absent `key.act` is the ring** - BoardSet.key says why -
+       * so a Sammlung written before the set key could do anything else
+       * exports exactly the file it exported, with every set key going on to
+       * the next. The ring is computed here rather than stored, because it is
+       * a fact about the order and would be wrong the moment somebody drags a
+       * set. */
+      key: {
+        text: String(set?.key?.text ?? "") || String(set?.name ?? ""),
+        symbol: String(set?.symbol ?? ""),
+        negated: false,
+        ...(set?.key?.act
+          ? acted(set.key.act)
+          : { does: "go" as const, target: (index + 1) % (sets.length || 1) }),
+      },
       slots: (set?.slots ?? []).slice(0, SLOTS_PER_SET).map((slot) => ({
         text: String(slot?.text ?? ""),
         symbol: String(slot?.symbol ?? ""),
         negated: Boolean(slot?.negated),
         empty: slotIsEmpty(slot),
+        ...acted(actOf(slot)),
       })),
     })),
   };
@@ -274,6 +357,12 @@ export interface DeviceSound {
 
 export interface DeviceInput {
   layout: DiyLayout;
+  /** The Sammlung this is, from the store's own CollectionRef.
+   *
+   * Passed in rather than derived: the layout does not know which Sammlung
+   * holds it, and the whole point of the id is that it is stable across every
+   * rename and every edit. See ext_lautstark_package_id on DeviceBoard. */
+  collection: { id: string; name: string };
   /** chosenVoice(layout) - see DevicePlan.voice. */
   voice: string;
   /** Sources by reference. */
@@ -312,6 +401,15 @@ export interface DeviceButton {
   load_board?: { id: string; name: string; path: string };
   /** Slot.negated. Form rule 2 - the flag, not a baked cross. */
   ext_vorlaut_negated?: boolean;
+  /** The key says its own word before it leads onward.
+   *
+   * `SlotAct`'s `alsoSpeak`, and exchange/SPEC.md's own field rather than an
+   * `ext_vorlaut_*` one: the tablet writes the sibling
+   * `ext_lautstark_append_on_navigate` for the same shape of button, and
+   * saying the same thing twice in two namespaces is what adr/0001 keeps them
+   * apart to avoid. Written only when true, so a key that merely leads onward
+   * is the file it always was. */
+  ext_lautstark_speak_on_navigate?: boolean;
 }
 
 export interface DeviceBoard {
@@ -329,6 +427,23 @@ export interface DeviceBoard {
    *  obf.ts puts them in the same place for the same reason. */
   ext_vorlaut_sleep_timeout_seconds?: number;
   ext_vorlaut_voice?: string;
+  /** **Which Sammlung this is, and what it is called.**
+   *
+   * OBF identifies boards and never packages, which exchange/SPEC.md says
+   * outright where it defines these two: "A package with three pages has three
+   * names and no name." A device-shaped export had neither until 2026-09-01,
+   * and both absences turned into faults the moment a talker could hold more
+   * than one collection: without the id every export landed on the same file
+   * on the device, because boardId() below calls every root board `set-1`;
+   * without the name the talker's menu had only the first set's name to show.
+   *
+   * SPEC.md's own words rather than a third `ext_vorlaut_*` one for a thing
+   * that already has one - adr/0001 keeps the namespaces apart because they
+   * describe different things, and a package's identity is not a device-only
+   * setting. On the board rather than in the manifest, which is where SPEC.md
+   * puts them, for the reason above about manifests being rebuilt. */
+  ext_lautstark_package_id?: string;
+  ext_lautstark_package_name?: string;
 }
 
 export interface DeviceManifest {
@@ -562,7 +677,6 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
 
   for (const [index, set] of plan.sets.entries()) {
     const id = ids[index]!;
-    const following = ids[(index + 1) % ids.length]!;
     const images = new Map<string, DeviceImageEntry>();
     const sounds = new Map<string, DeviceSoundEntry>();
     const buttons: DeviceButton[] = [];
@@ -634,6 +748,28 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
       return entry.id;
     };
 
+    /** Where a key that leads onward leads, as OBF says it.
+     *
+     * `load_board` plus, where the key carries its word through,
+     * exchange/SPEC.md's `ext_lautstark_speak_on_navigate`. Written on any of
+     * the five keys now: until adr/0020 the set key was the only one that
+     * could lead anywhere, and the ring was the only place it led. */
+    const leadsTo = (button: DeviceButton, does: DeviceDoes, target: number) => {
+      if (does === "speak") return;
+      const to = ids[target];
+      // A target past the end is a set that is not there. devicePlan() already
+      // turns that into `speak`, so nothing reaches here - and if the two ever
+      // disagree, a button naming a board the package does not hold is the one
+      // shape readDevicePackage() refuses outright.
+      if (to === undefined) return;
+      button.load_board = {
+        id: to,
+        name: plan.sets[target]!.name,
+        path: boardPath(to),
+      };
+      if (does === "speak-and-go") button.ext_lautstark_speak_on_navigate = true;
+    };
+
     for (const [at, slot] of set.slots.entries()) {
       const button: DeviceButton = {
         id: `${id}-key-${at + 1}`,
@@ -652,20 +788,28 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
       if (slot.negated) button.ext_vorlaut_negated = true;
       const recording = putSound(slot.text);
       if (recording) button.sound_id = recording;
+      leadsTo(button, slot.does, slot.target);
       buttons.push(button);
     }
 
+    // The set key, which is a key like the other four since adr/0020: it may
+    // say its own word, lead onward, or do both, and where it leads is no
+    // longer always the next set. A Sammlung that says nothing about it gets
+    // the ring, which devicePlan() is where that is decided.
     const switchKey: DeviceButton = {
       id: `${id}-set`,
       label: set.name,
-      load_board: {
-        id: following,
-        name: plan.sets[(index + 1) % plan.sets.length]!.name,
-        path: boardPath(following),
-      },
     };
     const setPicture = putImage(set.symbol);
     if (setPicture) switchKey.image_id = setPicture;
+    // What it says, if it says anything. The text is the key's own rather than
+    // the set's name, which is what it falls back to - see BoardSet.key.
+    if (set.key.does !== "go" && set.key.text) {
+      switchKey.vocalization = set.key.text;
+      const spoken = putSound(set.key.text);
+      if (spoken) switchKey.sound_id = spoken;
+    }
+    leadsTo(switchKey, set.key.does, set.key.target);
     buttons.push(switchKey);
 
     const board: DeviceBoard = {
@@ -681,6 +825,8 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
     if (index === 0) {
       board.ext_vorlaut_sleep_timeout_seconds = plan.sleepTimeoutSeconds;
       board.ext_vorlaut_voice = plan.voice;
+      board.ext_lautstark_package_id = input.collection.id;
+      board.ext_lautstark_package_name = input.collection.name;
     }
     boards.push(board);
   }
@@ -792,13 +938,24 @@ export function readDevicePackage(pkg: DevicePackage): ReadDevicePackage {
   const rootId = stemOf(String(pkg.manifest.root ?? ""));
   const walked: DeviceBoard[] = [];
   const seen = new Set<string>();
-  let at: string | undefined = rootId;
-  while (at && !seen.has(at)) {
+  // Every board a key can reach, breadth first from the root, because a set is
+  // no longer reached only by the set key: since adr/0020 any of the four
+  // speech keys may carry a `load_board` too. Following one edge per board -
+  // which is what this did while the set key was the only key that led
+  // anywhere - now stops at whichever button happens to be first, and reports
+  // a Sammlung with unreachable sets in it.
+  const queue: string[] = [rootId];
+  while (queue.length) {
+    const at = queue.shift()!;
+    if (seen.has(at)) continue;
     const board = byBoardId.get(at);
     if (!board) throw new Error(`This package names a board it does not hold: ${at}`);
     seen.add(at);
     walked.push(board);
-    at = board.buttons.find((one) => one.load_board)?.load_board?.id;
+    for (const button of board.buttons ?? []) {
+      const next = button.load_board?.id;
+      if (next && !seen.has(next)) queue.push(next);
+    }
   }
   if (walked.length !== byBoardId.size) {
     throw new Error(
@@ -811,6 +968,42 @@ export function readDevicePackage(pkg: DevicePackage): ReadDevicePackage {
   const sounds = new Map<string, DeviceSound>();
   const root = walked[0]!;
   const sets: DeviceSet[] = [];
+  /** Where each board sits in the order above, so a `load_board` becomes the
+   *  set index the file holds. */
+  const indexOf = new Map(walked.map((board, index) => [board.id, index]));
+
+  /** Which button is the set key: the one in the last row's first cell.
+   *
+   * By where it sits and no longer by its being the only button that leads
+   * anywhere - a speech key may lead somewhere now, and a set key may lead
+   * nowhere. The grid is what the device reads it from, so it is what this
+   * reads it from too. */
+  const setKeyOf = (board: DeviceBoard): DeviceButton | undefined => {
+    const rows = board.grid?.order ?? [];
+    const named = rows.length ? rows[rows.length - 1]?.[0] : null;
+    if (!named) return undefined;
+    const found = board.buttons?.find((one) => one.id === named);
+    if (!found) {
+      throw new Error(
+        `${board.id} puts a button in the set key's cell that the board does ` +
+        `not hold: ${named}. Every other button would then be a speech key, ` +
+        "and the device would show five words and no set.");
+    }
+    return found;
+  };
+
+  /** What a button does, out of what it carries. */
+  const actOfButton = (button: DeviceButton | undefined)
+      : { does: DeviceDoes; target: number } => {
+    const next = button?.load_board?.id;
+    if (!next) return { does: "speak", target: 0 };
+    const target = indexOf.get(next);
+    if (target === undefined) return { does: "speak", target: 0 };
+    return {
+      does: button?.ext_lautstark_speak_on_navigate === true ? "speak-and-go" : "go",
+      target,
+    };
+  };
 
   for (const board of walked) {
     const images = new Map(board.images?.map((one) => [one.id, one]) ?? []);
@@ -860,9 +1053,10 @@ export function readDevicePackage(pkg: DevicePackage): ReadDevicePackage {
       return reference;
     };
 
+    const setKey = setKeyOf(board);
     const slots: DeviceSlot[] = [];
     for (const button of board.buttons ?? []) {
-      if (button.load_board) continue;               // the set key, taken below
+      if (button === setKey) continue;               // the set key, taken below
       const text = String(button.vocalization ?? button.label ?? "");
       const symbol = referenceOf(button);
       if (button.sound_id) {
@@ -905,6 +1099,7 @@ export function readDevicePackage(pkg: DevicePackage): ReadDevicePackage {
         text,
         symbol,
         negated: button.ext_vorlaut_negated === true,
+        ...actOfButton(button),
         // Asked of the shape the slot came back as, rather than carried in the
         // file. The predicate is the authority and a stored answer could
         // disagree with it - which is the divergence this whole file is the
@@ -913,10 +1108,15 @@ export function readDevicePackage(pkg: DevicePackage): ReadDevicePackage {
       });
     }
 
-    const setKey = board.buttons?.find((one) => one.load_board);
     sets.push({
       name: String(board.name ?? ""),
       symbol: referenceOf(setKey),
+      key: {
+        text: String(setKey?.vocalization ?? setKey?.label ?? ""),
+        symbol: referenceOf(setKey),
+        negated: setKey?.ext_vorlaut_negated === true,
+        ...actOfButton(setKey),
+      },
       slots,
     });
   }
