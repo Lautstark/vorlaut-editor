@@ -691,6 +691,11 @@ test("a key can say its word, lead onward, or do both", async ({ page }) => {
   const carrying = cells(page).nth(KEY_CELL[0]!);
   await expect(carrying.locator(".cell__play")).toHaveCount(1);
   await expect(carrying.locator(".cell__follow")).toHaveCount(1);
+  /* And which page, over the picture. The corner says *that* it leads onward
+   * and only its title says where, which on a Sammlung of twelve rounds is the
+   * half of the question that was a hover away. */
+  await expect(carrying.locator(".cell__eyebrow"))
+    .toHaveText(label("ui.diy_leads_to", { name: "Essen" }));
 
   // The corner follows it, which is what it is for: the strip lands on the
   // page the key names, without the sheet being opened to find out which.
@@ -712,6 +717,11 @@ test("a key can say its word, lead onward, or do both", async ({ page }) => {
   const leading = cells(page).nth(KEY_CELL[1]!);
   await expect(leading.locator(".cell__follow")).toHaveCount(1);
   await expect(leading.locator(".cell__play")).toHaveCount(0);
+  // It leads to the same page and says so the same way. The two answers differ
+  // by the play control and by nothing else, which is the reading: one speaks
+  // on the way through and one is silent.
+  await expect(leading.locator(".cell__eyebrow"))
+    .toHaveText(label("ui.diy_leads_to", { name: "Essen" }));
 
   // And Wort, which is what a key with no answer chosen has always been: the
   // target list goes away with it, and the word comes back.
@@ -723,6 +733,10 @@ test("a key can say its word, lead onward, or do both", async ({ page }) => {
   await press(box, "ui.done");
   await expect(box).toHaveCount(0);
   await expect(cells(page).nth(KEY_CELL[1]!).locator(".cell__follow")).toHaveCount(0);
+  // The line over the picture goes with the corner: a key that stays put has
+  // nowhere to name.
+  await expect(cells(page).nth(KEY_CELL[1]!).locator(".cell__eyebrow"))
+    .toHaveCount(0);
 
   // Key 1 kept its answer across every press above, which is the assertion
   // that it was written rather than merely drawn.
@@ -860,6 +874,112 @@ test("the key under the speaker asks a round's question and stands still",
   await page.keyboard.press("Escape");
   await expect(cells(page).nth(KEY_CELL[PAGE_KEY]!).locator(".cell__word"))
     .toHaveText("Runde 2");
+});
+
+test("the board says which keys carry the page on, and to which page",
+     async ({ page }) => {
+  /* The other shape a game has, and the one the round test does not cover.
+   *
+   * Spiegel-und-Ei-device.obz is one of five keys leading on and four staying
+   * put; Plauderbuch-device.obz is the inverse - four keys that each say a
+   * different thing and all four go to the same next page, and a fifth that
+   * asks the question and stands still. Both run on the real device, and the
+   * thing being asserted is that somebody looking at the board can tell them
+   * apart without opening a single sheet.
+   *
+   * What the cell answers, and the mark that answers it:
+   *
+   *   leads onward           the corner arrow, and the page named over it
+   *   speaks on the way      the play control beside them
+   *   speaks and stays put   the play control alone
+   *
+   * The name over the picture is the half that used to be a hover. A tablet
+   * button is usually *called* the page it opens, so editor-app leaves it at
+   * the corner; a talker key says "Rate mal!" and goes to "Tafel 2", and on
+   * twelve rounds of those an arrow alone says only that one of them carries
+   * on.
+   */
+  await openBoard(page);
+  await nameSet(page, "Tafel 1");
+  await page.locator("#tabs .tab.add").click();
+  const tabs = page.locator("#tabs .tab:not(.add)");
+  await expect(tabs).toHaveCount(2);
+  await nameSet(page, "Tafel 2");
+  await tabs.first().click();
+
+  const asked = "Ich will dir was sagen.";
+  await put(page, PAGE_KEY, asked);
+  const onward = [0, 1, 3, 4];
+  const words = [
+    "Rate mal!",
+    "Pass auf!",
+    "Danach?",
+    "Alles klar!",
+  ];
+  for (const [n, slot] of onward.entries()) {
+    await put(page, slot, words[n]!);
+    await key(page, slot).click();
+    const box = keySheet(page);
+    await expect(box).toBeVisible();
+    await choose(page, "#diyDoes", "ui.diy_does_carry");
+    await chooseNamed(page, "#diyGoto", "Tafel 2");
+    await press(box, "ui.done");
+    await expect(box).toHaveCount(0);
+  }
+
+  // Four of the five carry the page on, and every one of them names where to.
+  for (const slot of onward) {
+    const cell = cells(page).nth(KEY_CELL[slot]!);
+    await expect(cell.locator(".cell__follow")).toHaveCount(1);
+    await expect(cell.locator(".cell__play")).toHaveCount(1);
+    await expect(cell.locator(".cell__eyebrow"))
+      .toHaveText(label("ui.diy_leads_to", { name: "Tafel 2" }));
+  }
+
+  /* And the fifth says its word and stands still, which is the whole of what
+   * the board has to show for it: something to hear, and no way out of the
+   * page. It has a word of its own, so the panel's caption line is away. */
+  const asking = cells(page).nth(KEY_CELL[PAGE_KEY]!);
+  await expect(asking.locator(".cell__play")).toHaveCount(1);
+  await expect(asking.locator(".cell__follow")).toHaveCount(0);
+  await expect(asking.locator(".cell__eyebrow")).toHaveCount(0);
+  await expectSaid(page, PAGE_KEY, asked);
+
+  /* The one cell where the two lines want the same seat: the panel the device
+   * prints the page's name on, holding a key with no word of its own that
+   * leads onward.
+   *
+   * The caption keeps it. It explains a word that is drawn on the cell and
+   * would otherwise read as one somebody typed, and it has nowhere else to go;
+   * the target has the corner, which is still there and still names the page
+   * to anybody who follows it. A second line would push the picture down on
+   * one cell of five and make the board disagree with the device about how a
+   * key is laid out.
+   */
+  await key(page, PAGE_KEY).click();
+  const box = keySheet(page);
+  await expect(box).toBeVisible();
+  await box.locator("#diyKeyText").fill("");
+  await choose(page, "#diyDoes", "ui.diy_does_goto");
+  await chooseNamed(page, "#diyGoto", "Tafel 2");
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
+
+  await expect(asking.locator(".cell__follow")).toHaveCount(1);
+  await expect(asking.locator(".cell__follow"))
+    .toHaveAttribute("aria-label", label("ui.page_follow", { name: "Tafel 2" }));
+  /* The name is still drawn, because all three export doors write that label
+   * whatever the key does - the firmware prints it on this panel either way,
+   * so a cell without it would be a board that is not the one on the table.
+   * What the line above it says is which of the two this is: *shows*, not
+   * *says*, on a key that only leads onward. Everywhere else on this board a
+   * word on a cell is a word the key speaks, and this is the one seat where
+   * the two come apart. */
+  await expect(asking.locator(".cell__eyebrow"))
+    .toHaveText(label("ui.diy_page_name_shows"));
+  await expectSaid(page, PAGE_KEY, "Tafel 1");
+  // And nothing to audition, which is the same fact by the other mark.
+  await expect(asking.locator(".cell__play")).toHaveCount(0);
 });
 
 test("a Sammlung of two dozen pages leaves the board on screen", async ({ page }) => {

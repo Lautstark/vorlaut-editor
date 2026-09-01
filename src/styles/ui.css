@@ -1145,6 +1145,14 @@ a.factlinks__line:hover { text-decoration: underline; }
    what a 120px cell and everything above it gets. Nothing here can reach the
    word: it is a flex item at the foot of the cell and this is absolutely
    positioned above it. */
+/* How much of the top row a corner control takes, written once because two
+   things now measure from it: the controls themselves, and the line between
+   them - .cell__eyebrow keeps clear of exactly this. It was two literals and
+   the second one was wrong, which is invisible until it is not: these carry a
+   surface and sit above the line, so a line that reaches under one is a line
+   with its first word painted over. */
+.cell { --cell-corner: clamp(26px, 30cqw, 36px); }
+
 /* The two corners of a cell: hear it, and follow it.
  *
  * **One shape, two icons.** They sit in the same seats, are the same size and
@@ -1171,7 +1179,7 @@ a.factlinks__line:hover { text-decoration: underline; }
 .cell__play,
 .cell__follow {
   position: absolute; top: 4px; z-index: 2;
-  width: clamp(26px, 30cqw, 36px); height: clamp(26px, 30cqw, 36px);
+  width: var(--cell-corner); height: var(--cell-corner);
   padding: 0; line-height: 1;
   display: grid; place-items: center;
   /* Transparent rather than none, so that the ring below can colour it without
@@ -1481,16 +1489,36 @@ a.factlinks__line:hover { text-decoration: underline; }
    The class is renamed rather than kept, because a stylesheet that goes on
    saying "set key" is where the idea grows back. */
 .cell--namepanel { border-color: var(--line); border-width: 3px; }
-/* Where the page's name comes from, said over the cell it is drawn on. Small
-   and shouted, which is what a few words have to be to sit above a picture
-   without competing with it - and the shouting is here rather than in the
-   table, where a capitalised string is read out letter by letter by a screen
-   reader.
+/* The one line over the picture, for a fact about the cell that is not its
+   word: where the page's name comes from on the panel that prints one, and
+   where the key leads on a key that leads anywhere. Small and shouted, which
+   is what a few words have to be to sit above a picture without competing with
+   it - and the shouting is here rather than in the table, where a capitalised
+   string is read out letter by letter by a screen reader.
 
-   It is on the name panel and only while the key there has no word of its own:
-   once it has one there is nothing left to explain. */
+   Both facts and one line, so keyCell() picks; what this file settles is that
+   there is room for exactly one.
+
+   Inset by the two corner controls' seats rather than run to the cell's edges
+   - .cell__play left, .cell__follow right, both of them 4px in and both of
+   them --cell-corner wide - so the line stops before it reaches either. Not a
+   matter of taste: those controls carry a surface and sit at z-index 2, so a
+   line running under one is not crowded by it, it is painted over by it, and
+   the word that goes is the first one. The 2px on top is the gap.
+
+   A page with a long name is then trimmed from the end with an ellipsis, which
+   is a line somebody can still read the beginning of; the alternative is a
+   second line, and a second line pushes the picture down on one cell of five
+   and makes the board disagree with the device about how a key is laid out.
+
+   Both ends and not one, although a key that only leads onward has no control
+   on the left: the line is centred, so an inset on one side alone would move
+   it off the middle of the cell on every key that has a short name and no
+   reason to. */
 .cell__eyebrow {
-  position: absolute; top: 4px; left: 0; right: 0; text-align: center;
+  position: absolute; top: 4px; text-align: center;
+  left: calc(6px + var(--cell-corner)); right: calc(6px + var(--cell-corner));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
   color: var(--text-faint); pointer-events: none;
 }
