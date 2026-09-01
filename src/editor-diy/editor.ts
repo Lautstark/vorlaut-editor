@@ -160,6 +160,26 @@ type Does = "word" | "carry" | "goto";
 const chosenAs = (act: SlotAct): Does =>
   act.kind === "speak" ? "word" : act.alsoSpeak ? "carry" : "goto";
 
+/** The set key's answers, which are the four above's three and one more.
+ *
+ * **The ring is a fourth answer and not a spelling of the first.** On a speech
+ * key an absent act means `speak`, which is why actOf() may default one; on
+ * BoardSet.key absent means the ring - press it, next set, forever - and that
+ * is what every Sammlung ever stored says. Reading the two as one would take
+ * either shape out of reach: fold the ring into Wort and every existing
+ * Sammlung becomes one whose set key stands still, so nobody can leave the set
+ * they are on; fold Wort into the ring and a game's board cannot be written at
+ * all, because the round's question has to speak *and stay*. Both of those go
+ * wrong without a word on screen, which is why this is a type rather than a
+ * boolean beside `Does`.
+ */
+type SetDoes = "ring" | Does;
+
+/** Which of the four a set key reads as. `undefined` is the ring and is
+ *  handed in as itself rather than defaulted away - see SetDoes. */
+const setChosenAs = (act: SlotAct | undefined): SetDoes =>
+  act ? chosenAs(act) : "ring";
+
 /** An id for a set, minted when a key first names one. crypto.randomUUID() for
  *  store.ts's reason at its own: two of them made in two tabs must not collide,
  *  and nothing about a set - not its name, which may be empty on every one of
@@ -899,7 +919,8 @@ async function editKey(index: number): Promise<void> {
 }
 
 /**
- * The set itself: its picture, its name, its colour and deleting it.
+ * The set itself: its picture, its name, what its key says and does, and
+ * deleting it.
  *
  * Reached from the ⋯ on the current tab and from the set key on the board,
  * which are the same set drawn twice. Everything in it stood in a tile beside
@@ -917,14 +938,180 @@ async function editKey(index: number): Promise<void> {
  * data/obf.ts wrote it into a .obf as ext_vorlaut_color and read it back, and
  * tests/reference/obf.lock.json froze both directions; narrowing that lock is
  * what let the field go.
+ *
+ * **And then two rows arrived, which are the set key's own.** Since adr/0020
+ * the fifth key is a key like the other four - it may say a sentence of its
+ * own and it may lead somewhere it was pointed - and the device has spoken
+ * both since 2026-08-31, the export has written them and the import has read
+ * them back. This sheet was the only door left shut, so a joining game's board
+ * - the round asking its compound word and standing still while the four
+ * answers reply - could be exported and imported and not authored. The rows
+ * are the key sheet's own two, in the key sheet's order, with one answer more
+ * on the first of them: see SetDoes for why the ring has to be that fourth
+ * answer rather than a spelling of Wort.
  */
 function openSetSheet(): Promise<void> {
+  const sets = board().sets;
   const entry = set();
-  const draft = { name: entry.name, symbol: entry.symbol };
+  /* The act as the model holds it, undefined and all - never through actOf(),
+   * which is the speech key's default and would read the ring as Wort. See
+   * SetDoes, which is where the whole of that argument is. */
+  const held = entry.key?.act;
+  const draft = {
+    name: entry.name,
+    symbol: entry.symbol,
+    // What the key says, where it says something other than the set's name.
+    // Absent is the name - BoardSet.key - so the empty string is what an
+    // untouched set key starts from and what it goes back to being.
+    text: entry.key?.text ?? "",
+  };
 
-  const name = textField(draft.name, (value) => { draft.name = value; });
+  const name = textField(draft.name, (value) => {
+    draft.name = value;
+    followName();
+  });
   name.id = "diySetName";
   name.placeholder = t("ui.set_name");
+
+  /* --- what the key says ---------------------------------------------------
+   *
+   * The key sheet's row, for the key sheet's reason: this device draws no
+   * caption at all - the key is the picture - so there is one thing to type
+   * and not an Aufschrift beside a Gesprochen.
+   *
+   * **The name is the placeholder and not the value.** Leaving it empty has to
+   * go on meaning "say what the set is called", and filling the field in with
+   * the name would write that sentence into the Sammlung: a set somebody only
+   * looked at would come back out of Fertig carrying a `key.text` it never had,
+   * which is the one thing the byte-for-byte promise on BoardSet.key forbids.
+   * It would also come loose - renaming the set afterwards would leave the
+   * typed copy behind, still saying the old name with nothing on screen to say
+   * why. A placeholder follows the name instead, which is what followName()
+   * below is for.
+   */
+  const spoken = textField(draft.text, (value) => { draft.text = value; });
+  spoken.id = "diySetText";
+  const play = document.createElement("button");
+  play.type = "button";
+  play.className = "btn";
+  play.textContent = "▶";
+  play.title = t("ui.play_title");
+  play.setAttribute("aria-label", t("ui.play_title"));
+  /* What the device would say, which is the field or the name behind it - not
+   * the field alone. Auditioning an empty field as silence would contradict
+   * the sentence under it. Both empty is a key that genuinely says nothing:
+   * the device falls back to the name and the name is not there either. */
+  play.onclick = () => {
+    const saying = draft.text.trim() || draft.name.trim();
+    if (saying) void speak(saying, play);
+  };
+  const withPlay = document.createElement("div");
+  withPlay.className = "form__withplay";
+  withPlay.append(spoken, play);
+  const spokenRow = formRow(t("ui.text_placeholder"), withPlay,
+                            t("ui.diy_set_spoken_note"), spoken.id);
+
+  /** The placeholder, kept on the name as it is typed.
+   *
+   * Empty where the name is, rather than falling back to "Seite 3" the way the
+   * tab and the delete question do: those name a set for a reader, and this
+   * one is a quotation of what the device will say. A nameless set's key says
+   * nothing at all - device_package.ts falls back to `set.name` and stops - so
+   * a placeholder promising "Seite 3" would be the field lying about the
+   * sound. */
+  function followName(): void {
+    spoken.placeholder = draft.name.trim();
+  }
+  followName();
+
+  /* --- what the key does, and the row that follows from it -----------------
+   *
+   * Asked above the field it governs, which is the key sheet's order and its
+   * argument: a key that only leads onward says nothing, and asked afterwards
+   * the Was gesagt wird field was dead in silence.
+   *
+   * Four answers where a speech key has three, and the extra one is Reihum.
+   * SetDoes carries why it cannot be folded into either neighbour; what it
+   * costs here is one entry and one sentence, and the sentence is the part
+   * that matters - Reihum and Weiter both lead onward, and only the note says
+   * that one of them goes wherever the set happens to sit next while the other
+   * goes where it was pointed.
+   */
+  const kinds: Choice[] = [
+    { value: "ring", label: t("ui.diy_set_does_ring") },
+    ...(["word", "carry", "goto"] as const)
+      .map((kind) => ({ value: kind, label: t(`ui.diy_does_${kind}`) })),
+  ];
+  const note = hint();
+  note.id = "diySetDoesNote";
+  const does = dropdown(kinds, setChosenAs(held), () => { follow(); });
+  does.button.id = "diySetDoes";
+  // Named to the trigger by hand, for the key sheet's reason: this row's
+  // sentence is rewritten on every choice and cannot be handed to formRow()
+  // once, and "Reihum" on its own does not say what going round is.
+  does.button.setAttribute("aria-describedby", note.id);
+  const actRow = formRow(t("ui.button_act"), does.anchor, "", does.button);
+  actRow.classList.add("form__row--caption");
+  actRow.appendChild(note);
+
+  /* Which set the key leads to, when it leads to one it was pointed at.
+   *
+   * Every set in the Sammlung, this one included: a set key pointed at its own
+   * set is a press that does nothing, which is a board somebody may want and
+   * is nothing this list has to have an opinion about.
+   *
+   * Where it already leads is where the list stands, and where it leads
+   * nowhere the list stands on the set being edited - the key sheet's
+   * fallback, unchanged. Not on the *next* set, which would be the tempting
+   * one: that is the ring's behaviour written out as a target, so a list
+   * standing there would make Weiter and Reihum the same answer for as long as
+   * nobody moved it, which is the confusion this row exists to end.
+   */
+  const where: Choice[] = sets.map((one, at) =>
+    ({ value: String(at), label: setName(one, at) }));
+  const leadsTo = held?.kind === "goto"
+    ? sets.findIndex((one) => one.id === held.set) : -1;
+  const targets = dropdown(where, String(leadsTo < 0 ? current : leadsTo),
+                           () => {});
+  targets.button.id = "diySetGoto";
+  const targetRow = formRow(t("ui.goto_page"), targets.anchor, "",
+                            targets.button);
+
+  /** The two rows that depend on the answer above them, and its note.
+   *
+   * Hidden rather than disabled and nothing cleared on a change of answer,
+   * both for the key sheet's reasons. The one reading that is this sheet's
+   * own: Reihum hides *both*, because the ring neither speaks nor is pointed
+   * anywhere - data/obf.ts states the first half of that in the sentence "the
+   * ring never speaks", and device_package.ts writes no vocalization onto a
+   * set key whose `does` is "go".
+   */
+  function follow(): void {
+    note.textContent = does.value === "ring"
+      ? t("ui.diy_set_does_ring_note")
+      : t(`ui.diy_does_${does.value}_note`);
+    targetRow.hidden = does.value === "ring" || does.value === "word";
+    spokenRow.hidden = does.value === "ring" || does.value === "goto";
+  }
+  follow();
+
+  /** What the two lists come to, or undefined for the ring.
+   *
+   *  Undefined rather than `{kind: "speak"}`: absent is the ring, and the two
+   *  are different keys. The id is minted here for the key sheet's reason and
+   *  on the same press - a sheet somebody closes another way leaves the
+   *  Sammlung exactly as they found it, ids included. */
+  const chosen = (): SlotAct | undefined => {
+    if (does.value === "ring") return undefined;
+    if (does.value === "word") return { kind: "speak" };
+    const to = sets[Number(targets.value)] ?? entry;
+    to.id ??= mint();
+    // Absent rather than false where the key only leads onward - SlotAct's own
+    // note, and what keeps a key written before this existed byte-identical.
+    return does.value === "carry"
+      ? { kind: "goto", set: to.id, alsoSpeak: true }
+      : { kind: "goto", set: to.id };
+  };
 
   return openSheet({
     title: t("ui.set_title"),
@@ -941,11 +1128,17 @@ function openSetSheet(): Promise<void> {
         if (word && !draft.name.trim()) {
           draft.name = word;
           name.value = word;
+          // The placeholder quotes the name, so a name filled in from the
+          // picture has to move it too.
+          followName();
         }
       },
     },
     rows: [
       formRow(t("ui.set_name"), name, t("ui.set_name_note")),
+      actRow,
+      targetRow,
+      spokenRow,
     ],
     remove: {
       label: t("ui.remove_set"),
@@ -961,6 +1154,20 @@ function openSetSheet(): Promise<void> {
       onPress: () => {
         entry.name = draft.name;
         entry.symbol = draft.symbol;
+        /* Built whole and then kept or dropped, which is data/obf.ts's
+         * keyShape() rule written on the other side of the same field: `{}`
+         * and absent both mean the ring and the set's own name, so a set key
+         * nobody has given anything to is written as no field at all. That is
+         * what makes opening this sheet on an untouched Sammlung and pressing
+         * Fertig export the file it exported before. */
+        const act = chosen();
+        const word = draft.text.trim();
+        const key = {
+          ...(word ? { text: word } : {}),
+          ...(act ? { act } : {}),
+        };
+        if (Object.keys(key).length) entry.key = key;
+        else delete entry.key;
         commit();
       },
     },
