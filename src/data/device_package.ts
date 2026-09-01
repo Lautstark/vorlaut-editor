@@ -837,7 +837,7 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
     const setPicture = putImage(set.symbol);
     if (setPicture) switchKey.image_id = setPicture;
     // What it says, if it says anything. The text is the key's own rather than
-    // the set's name, which is what it falls back to - see BoardSet.key.
+    // the page's name, which is what it falls back to - see PAGE_KEY.
     if (set.key.does !== "go" && set.key.text) {
       switchKey.vocalization = set.key.text;
       const spoken = putSound(set.key.text);

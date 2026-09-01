@@ -113,8 +113,9 @@ export type SlotAct =
  *
  * **The five are one kind of thing.** There was a fifth key here in another
  * shape - `symbol`, `name` and `key` beside four `slots` - because the device
- * had a set key that only ever switched sets. It has not had one since
- * vorlaut-diy-talker's adr/0020 ("A set holds five keys") and `0ac0465` there
+ * had a set key that only ever switched sets. adr/0024 is the decision here; it
+ * has not had one on the device since vorlaut-diy-talker's adr/0020 ("A set
+ * holds five keys") and `0ac0465` there
  * ("the set key is a key like the other four with a sound of its own"), and
  * this was the last place holding the distinction. What it cost while it
  * lasted is in data/obf.ts's history: a reader that had to *guess* which of

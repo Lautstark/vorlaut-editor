@@ -1,8 +1,8 @@
 /* What is *inside* a stored layout, brought forward one shape at a time.
  *
  * data/migrations.ts moves records between stores; this moves the fields
- * inside one. The two are deliberately separate files and the reason is in
- * adr/0023: a step in that file runs inside a `versionchange` transaction and
+ * inside one. What the one transform below is *for* is adr/0024; that the
+ * step calling it is allowed to exist at all is adr/0023: a step in that file runs inside a `versionchange` transaction and
  * may await nothing but a request on it, so it can call one of these and put
  * the result back, and it cannot hash the result. What that leaves broken -
  * the stamp beside the bytes - is what the ADR is about.

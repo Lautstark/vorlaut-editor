@@ -26,8 +26,9 @@
  *
  * It was a ring until 2026-09-01: the fifth key cycled, always, and the file
  * order was the order it cycled in. data/upgrade.ts wrote that rule out as the
- * targets it had always meant. What replaced the ring is not a second rule -
- * it is the absence of one.
+ * targets it had always meant - adr/0024, which is also where making a page and
+ * deleting one are decided. What replaced the ring is not a second rule; it is
+ * the absence of one.
  *
  * ## Reachability is reported, never enforced
  *
