@@ -927,8 +927,10 @@ export async function exportDevicePackage(
   const voice = chosenVoice(layout);
   const plan = devicePackage.devicePlan(layout, voice);
 
-  // Every distinct reference once, sources and set keys alike. The set key's
-  // picture is a tile like any other on the device, so it travels the same way.
+  // Every distinct reference once, all five keys alike. DevicePlan keeps the
+  // page key beside the four the file calls slots - the format's own shape,
+  // see DeviceSet - so both are walked here; on the device it is a tile like
+  // any other.
   const sources = new Map<string, devicePackage.DeviceSource>();
   let missing = 0;
   const references = new Set<string>();
@@ -964,9 +966,21 @@ export async function exportDevicePackage(
         azure: { key: settings.azureSecret, region: settings.azureRegion } }
     : { ...VORLAUT, ownsInference: true };
 
+  /* Every sentence the package will carry a recording for, and the page key's
+   * is one of them.
+   *
+   * It was not, and that was the last place the fifth key was still assumed to
+   * be silent: writeDevicePackage() has put a sound behind it since it gained
+   * a voice, so a key set to say a word got a `sound_id` naming a recording
+   * nothing had synthesised. Asked the way that writer asks it - a key whose
+   * `does` is "go" says nothing, so recording its word would be a file the
+   * device can never play. The four are taken unconditionally because that is
+   * what the writer does with them. */
   const spoken = voice
-    ? [...new Set(plan.sets.flatMap((set) =>
-        set.slots.map((slot) => slot.text).filter(Boolean)))]
+    ? [...new Set(plan.sets.flatMap((set) => [
+        ...(set.key.does === "go" ? [] : [set.key.text]),
+        ...set.slots.map((slot) => slot.text),
+      ]).filter(Boolean))]
     : [];
   for (const [done, text] of spoken.entries()) {
     // Stopping is somebody deciding not to, which is not a failure and must

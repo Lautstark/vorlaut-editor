@@ -14,8 +14,8 @@ import { diy } from "./layout.js";
 const board = (name: string): DiyLayout => ({
   sleep_timeout_seconds: 600,
   sets: [{
-    name, symbol: "",
-    slots: [0, 1, 2, 3].map(() => ({ text: "", symbol: "" })),
+    name,
+    slots: [0, 1, 2, 3, 4].map(() => ({ text: "", symbol: "" })),
   }],
 });
 

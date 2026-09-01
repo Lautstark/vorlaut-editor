@@ -37,30 +37,34 @@
 // **The device.** layout.bin stays exactly what layout_format.js writes. This
 // replaces the document somebody edits, not the file that gets flashed.
 //
-// **What a press does.** Slot.act arrived after this file and does not travel
-// through it: a key that leads onward is written here as the speaking key it
-// used to be, and comes back as one. That is a real loss on a round trip and
-// it is named rather than hidden - this door and the device package next to it
-// are the two the talker's own acts have not been taken through, because both
-// are read by something outside this repository. The loader compiles the
-// device package and the firmware runs what it compiles, so a speech key that
-// switches page is a device behaviour rather than a field, and adding the
-// field on this side first would write a file the other half cannot honour -
-// which is the shape CLAUDE.md's rule about the device format exists to stop.
-// data/app_package.ts is where the acts do reach a running product: a talker
-// Sammlung opened on a tablet, against exchange/SPEC.md 7.3.
+// **What a press does, and the wait that is over.** Slot.act arrived after
+// this file and did not travel through it for a while: a key that led onward
+// was written here as the speaking key it used to be. That was a boundary
+// rather than an omission - this door is read by software outside this
+// repository, and writing a field the other half could not honour is the shape
+// CLAUDE.md's rule about the device format exists to stop. The other half
+// arrived in vorlaut-diy-talker's adr/0020 on 2026-08-31, and both fields are
+// plain OBF anyway: a key that goes somewhere carries a `load_board`, and
+// `ext_lautstark_speak_on_navigate` beside it says whether it speaks on the way
+// through - exchange/SPEC.md 7.3, the sibling of the flag a tablet's carrier
+// phrase already rides on. So all five keys write and read what they do, and a
+// joining game survives a round trip through this file.
+//
+// data/app_package.ts is the same acts one door along: a talker Sammlung
+// opened on a tablet.
 
 import { LIMITS } from "../core/boot_data.js";
 import { reason } from "../core/errors.js";
 import {
 
   DEFAULT_LANGUAGE,
+  KEYS_PER_SET,
   LANGUAGE_CODES,
-  SLOTS_PER_SET,
   SLEEP_MIN,
   SLEEP_MAX,
   SLEEP_DEFAULT,
 } from "../device/layout_facts.js";
+import { PAGE_KEY, actOf } from "../core/types.js";
 import type { BoardSet, DiyLayout, Slot, SlotAct } from "../core/types.js";
 
 /* The Open Board Format shapes this reads and writes.
@@ -96,6 +100,15 @@ export interface ObfButton {
    * The app package needs no field at all - it bakes the cross into the PNG,
    * because §5 has it carry every image as a file anyway. */
   ext_vorlaut_negated?: boolean;
+  /** Whether a key that leads onward says its word first - SlotAct.alsoSpeak.
+   *
+   * `ext_lautstark_`, that list rather than this file's own, and it is the one
+   * field here that belongs to it: exchange/SPEC.md 7.3 defines it and the
+   * Android viewer reads its sibling `ext_lautstark_append_on_navigate`. So it
+   * is not the talker's private business the way the cross above is - it says
+   * what one press does, which is the thing every reader of an .obz has an
+   * opinion about. Absent rather than false where it is not wanted. */
+  ext_lautstark_speak_on_navigate?: boolean;
 }
 
 /** What a .obz's manifest names. */
@@ -314,8 +327,10 @@ export function order(document) {
 
 /** The whole of a layout as linked boards.
  *
- * Every set becomes a board. The ring runs through all of them in file order
- * and wraps at the end, which is the order the device cycles them in.
+ * Every page becomes a board and every key becomes a button, in the cell the
+ * board puts it in. Where the links run is what the keys say: a `goto` becomes
+ * a `load_board`, and a Sammlung nobody has pointed anywhere is a document
+ * with no links in it at all.
  */
 export async function layoutToDocument(
   layout: DiyLayout,
@@ -327,12 +342,18 @@ export async function layoutToDocument(
   const ids = entries.map((_, index) => `set-${index + 1}`);
   const boards = {};
 
+  /* Where each page sits, so a target stored as an id becomes the board that
+   * names it. Built once for the whole layout rather than searched per key -
+   * data/device_package.ts's devicePlan() keeps the same map for the same
+   * reason one door along. */
+  const placeOf = new Map<string, number>();
+  for (const [index, one] of entries.entries()) {
+    if (one && one.id) placeOf.set(String(one.id), index);
+  }
+
   for (let index = 0; index < entries.length; index++) {
     const entry = entries[index];
     const boardId = ids[index];
-    // The ring: the set key switches to the next set and the last one comes
-    // back round to the first, which is what the device does.
-    const following = ids[(index + 1) % ids.length];
     const buttons: ObfButton[] = [];
     const images: Record<string, unknown> = {};
 
@@ -347,39 +368,51 @@ export async function layoutToDocument(
       return entryFor.id;
     };
 
-    for (let slotIndex = 0; slotIndex < entry.slots.length; slotIndex++) {
-      const slot = entry.slots[slotIndex];
+    for (const at of WRITE_ORDER) {
+      const slot = (entry.slots || [])[at];
+      // A page shorter than five keys writes the buttons it has. normalizeLayout()
+      // is what pads one on the way in, and correcting it here would make the
+      // document disagree with the layout it was written from.
+      if (!slot) continue;
+      const act = actOf(slot);
+      /* Where this key leads, if the page it names is still in the Sammlung.
+       *
+       * A key naming a page that has been deleted since leads nowhere and
+       * says its word instead - the same fallback devicePlan() gives, and for
+       * the same reason: a key that fell silent AND stayed put would be a key
+       * that does nothing at all. */
+      const goes = act.kind === "goto" && placeOf.has(act.set);
+      const speaks = !goes || act.alsoSpeak === true;
       const button: ObfButton = {
-        id: `${boardId}-key-${slotIndex + 1}`,
-        // Both, and the same text in both. The label is what any other editor
-        // shows on the key; the vocalization is what gets spoken. They are one
-        // sentence here because the device writes no caption - but saying it
-        // twice is what keeps the spoken half right if somebody later shortens
-        // the label.
-        label: slot.text,
-        vocalization: slot.text,
+        id: buttonIdOf(boardId, at),
+        /* What another editor shows on the key. The key's own word, and on
+         * the page-key panel the page's name where the key has no word of its
+         * own - see PAGE_KEY, and ourGrid() for the reading back. */
+        label: slot.text || (at === PAGE_KEY ? entry.name : ""),
       };
+      // What gets spoken, written where the key says anything. The same
+      // sentence as the label when it is there, which is what keeps the spoken
+      // half right if somebody later shortens the label; absent on a key that
+      // only leads onward, because there is nothing for it to say.
+      if (speaks) button.vocalization = slot.text;
       const picture = await remember(slot.symbol);
       if (picture) button.image_id = picture;
       // Written only when it is true, which is what keeps every board that has
       // no crossed-out key byte for byte the document it was before this
       // existed - tests/reference/obf.lock.json included.
       if (slot.negated) button.ext_vorlaut_negated = true;
+      if (goes && act.kind === "goto") {
+        const to = placeOf.get(act.set)!;
+        button.load_board = {
+          id: ids[to],
+          name: entries[to].name,
+          path: boardPath(ids[to]),
+        };
+        // 7.3's modifier, absent rather than false where it is not wanted.
+        if (act.alsoSpeak) button.ext_lautstark_speak_on_navigate = true;
+      }
       buttons.push(button);
     }
-
-    const switchKey: ObfButton = {
-      id: `${boardId}-set`,
-      label: entry.name,
-      load_board: {
-        id: following,
-        name: entries[(index + 1) % entries.length].name,
-        path: boardPath(following),
-      },
-    };
-    const picture = await remember(entry.symbol);
-    if (picture) switchKey.image_id = picture;
-    buttons.push(switchKey);
 
     boards[boardId] = {
       format: FORMAT,
@@ -419,6 +452,27 @@ export async function layoutToDocument(
   return document;
 }
 
+/** What each of the five keys is called on a board this file writes.
+ *
+ * BoardSet.slots order, which is reading order across the board. The names are
+ * the ones already in every .obz this project has ever written and they are
+ * kept for exactly that reason: the fifth is `-set` because that is what it
+ * has always been called, not because it is a different kind of key.
+ */
+const KEY_IDS = ["key-1", "key-2", "set", "key-3", "key-4"] as const;
+
+/** One key's button id. */
+const buttonIdOf = (boardId: string, at: number): string =>
+  `${boardId}-${KEY_IDS[at]}`;
+
+/** The order buttons[] holds the five in.
+ *
+ * The four speech keys and then the page key, which is where they were before
+ * the five became one array and is what keeps a document this file writes
+ * byte for byte the one it wrote - tests/reference/obf.lock.json compares the
+ * array. Reading order is grid.order's job below and this is not it. */
+const WRITE_ORDER = [0, 1, 3, 4, 2];
+
 /** The five keys where they really sit.
  *
  * Two rows of three, and the top left cell is empty because that is where the
@@ -430,52 +484,51 @@ export async function layoutToDocument(
  * A grid with a hole in it is what grid.order's nulls are for, and it beats a
  * tidy 1x5 that no renderer could turn back into the thing on the table.
  *
- * Something downstream does depend on it now, and it did not use to. The
- * importer found the set key by its `load_board` and the speech keys by not
- * having one, which held for exactly as long as a speech key could not lead
- * anywhere. Slot.act and BoardSet.key ended it: in a game the key that asks
- * the round's question speaks and stays put, and one of the four answers
- * carries the link, so the old rule reads such a board back inside out.
- * setKeyCell() below reads the place instead - this shape, and the leftmost
- * cell of the second row.
+ * **This is how a board is read back, and it is the whole of how.** The
+ * importer used to find the set key by its `load_board` and the speech keys by
+ * not having one, which held for exactly as long as a speech key could not
+ * lead anywhere; a joining game - where the key asking the round's question
+ * stays put and one of the four answers carries the link - was read back
+ * inside out by it, with the question in an answer's panel and the winning
+ * answer gone. There is nothing left to guess: the five keys are the cells in
+ * this order, and what each one does it says for itself.
  */
 export function grid(boardId) {
+  const at = (index: number) => buttonIdOf(boardId, index);
   return {
     rows: 2,
     columns: 3,
     order: [
-      [null, `${boardId}-key-1`, `${boardId}-key-2`],
-      [`${boardId}-set`, `${boardId}-key-3`, `${boardId}-key-4`],
+      [null, at(0), at(1)],
+      [at(2), at(3), at(4)],
     ],
   };
 }
 
-/** The set key's button id on a board this project wrote, and "" on any other.
+/** Whether this board is one this file wrote, by the shape of its grid.
  *
- * The shape is the evidence: two rows, three columns and a null in the corner
- * where the speaker is, which is grid() above and deviceGrid() in
- * data/device_package.ts and nothing else.
+ * Two rows, three columns and a null in the corner where the speaker is, which
+ * is grid() above and deviceGrid() in data/device_package.ts and nothing else.
  *
- * Tighter than the rule that file's own reader keeps - it takes the last row's
- * first cell off any grid it is handed - and deliberately so, because the two
- * are asked different questions. That reader has already established it is
- * holding a device package. This one is handed whatever somebody dropped on
- * the page: a phone's board of sixty buttons has a grid too, and reading a set
- * key out of its bottom-left corner would be inventing one. About those boards
- * this says nothing, and they go on being read by the rule that has always
- * read them.
+ * Asked for one thing only, and it is worth saying what it is *not* asked for
+ * any more: which button is the page key. That is the cell now, on every board
+ * alike. What is left is a caption - a key on the page-key panel with no word
+ * of its own is written out carrying the page's name, because that is what the
+ * firmware prints there, and only a board written under that convention may
+ * have the name read back off it as nothing. On a phone's board of sixty
+ * buttons a label that happens to match the board's name is a word somebody
+ * typed, and it stays one.
  */
-export function setKeyCell(board) {
+export function ourGrid(board) {
   const grid = (board || {}).grid;
-  if (!isObject(grid) || grid.rows !== 2 || grid.columns !== 3) return "";
+  if (!isObject(grid) || grid.rows !== 2 || grid.columns !== 3) return false;
   const cells = grid.order;
-  if (!Array.isArray(cells) || cells.length !== 2) return "";
+  if (!Array.isArray(cells) || cells.length !== 2) return false;
   const [top, bottom] = cells;
-  if (!Array.isArray(top) || !Array.isArray(bottom)) return "";
+  if (!Array.isArray(top) || !Array.isArray(bottom)) return false;
   // The hole, and it has to be a hole: a board with something in that corner
   // is not the one this project draws, whatever else about it lines up.
-  if ((top[0] ?? null) !== null) return "";
-  return text(bottom[0]);
+  return (top[0] ?? null) === null && !!text(bottom[0]);
 }
 
 // --- document -> layout.json -------------------------------------------------
@@ -499,6 +552,35 @@ export function gridOrder(board) {
     if (buttonId && !ordered.includes(buttonId)) ordered.push(buttonId);
   }
   return ordered;
+}
+
+/** The five keys of a board, in the cells the board puts them in.
+ *
+ * `undefined` where a cell is empty, which is a hole and has to stay one: a
+ * page whose second key was never filled in writes four buttons and a grid
+ * with a null in it, and reading that back by shuffling the buttons up would
+ * move every key after the gap onto the wrong panel. It is the same failure
+ * the load_board rule used to make, one cell along.
+ *
+ * On a board this file did not write there is no such table, so the buttons
+ * come back in their own reading order and fill the keys from the first - and
+ * a board with more of them than there are keys is refused by the caller
+ * rather than half-read.
+ */
+export function keysInCells(board) {
+  const held = buttonsInOrder(board);
+  if (!ourGrid(board)) return held;
+  const cells = board.grid.order;
+  const named = [cells[0]![1], cells[0]![2],
+                 cells[1]![0], cells[1]![1], cells[1]![2]].map((one) => text(one));
+  const byId = {};
+  for (const button of board.buttons || []) byId[text(button.id)] = button;
+  const placed = named.map((id) => (id && id in byId ? byId[id] : undefined));
+  // Buttons the grid leaves out are appended rather than dropped, which is
+  // gridOrder()'s own rule and for its own reason: OBF lets a board carry more
+  // buttons than the grid shows, and losing one silently on import is how a
+  // sentence disappears without an error.
+  return [...placed, ...held.filter((one) => !named.includes(text(one.id)))];
 }
 
 export function buttonsInOrder(board) {
@@ -564,64 +646,76 @@ export function documentToLayout(document) {
   const sets: BoardSet[] = [];
   const rootBoard = document.boards[document.root] || {};
   const ids = order(document);
-  /* Which boards a key names, so that only those sets are given an id.
+  /* Which boards a key names, so that only those pages are given an id.
    *
-   * BoardSet.id is minted when something first points at a set and not before,
-   * and an import is no reason to break that rule: a document where nobody led
-   * anywhere comes back with the ids it had, which is none, and every Sammlung
-   * imported until now goes on reading exactly as it did. The board's own id
-   * is what a set that IS pointed at gets - unique within the document by
-   * construction, since these are the keys of an object, and stable if the
-   * same Sammlung goes back out and comes in again. */
+   * BoardSet.id is minted when something first points at a page and not
+   * before, and an import is no reason to break that rule: a document where
+   * nobody led anywhere comes back with the ids it had, which is none. The
+   * board's own id is what a page that IS pointed at gets - unique within the
+   * document by construction, since these are the keys of an object, and
+   * stable if the same Sammlung goes back out and comes in again. */
   const pointedAt = new Set<string>();
 
-  for (const [at, boardId] of ids.entries()) {
+  for (const boardId of ids) {
     const board = document.boards[boardId];
     const images = imagesById(board);
+    const name = text(board.name) || boardId;
+    /* Whether this board was written under this file's own caption
+     * convention. The only thing it decides - see ourGrid(). */
+    const ours = ourGrid(board);
     const slots: Slot[] = [];
-    /* The set's own key. A symbol, and now also the button it came off,
-       because what that button does is read below. */
-    let switchKey: { symbol: string; button } | null = null;
-    /* Which button that is, and by what rule.
-     *
-     * On a board this project wrote, the cell: the four speech keys may lead
-     * anywhere they like now, so a link is no longer what tells the fifth key
-     * apart from them. On anybody else's board, the old rule and nothing else
-     * - the first link out is the set key and every other one is a page this
-     * device cannot reach, which is what a board of sixty buttons and eleven
-     * links means when it is read onto five keys. */
-    const cell = setKeyCell(board);
-    const ours = cell !== ""
-      && (board.buttons || []).some((one) => text(one.id) === cell);
 
-    for (const button of buttonsInOrder(board)) {
-      const symbol = symbolOf(images[text(button.image_id)] || {});
-      if (ours ? text(button.id) === cell : isObject(button.load_board)) {
-        if (switchKey === null) switchKey = { symbol, button };
+    /* The buttons as the grid puts them, which is the whole of the mapping.
+     *
+     * On a board this file wrote that is the five cells in BoardSet.slots
+     * order, page key included, by construction: grid() and KEY_IDS are one
+     * table. On anybody else's it is their own reading order, and a board with
+     * more buttons than there are keys is refused below rather than half-read. */
+    for (const [at, button] of keysInCells(board).entries()) {
+      if (!button) {
+        // A cell with nothing in it. Written out as the empty key it is rather
+        // than skipped, so that every key after it stays on its own panel.
+        slots.push({ text: "", symbol: "" });
         continue;
       }
-      /* What one press does, out of the two fields §7.3 puts it in.
+      const symbol = symbolOf(images[text(button.image_id)] || {});
+      /* What one press does, out of the two fields 7.3 puts it in.
        *
-       * Only on our own boards, and that is the whole of why `ours` exists: a
-       * foreign board's links were skipped above and never reach here, because
-       * reading them as acts would turn a phone's page tree into four keys
-       * pointing at pages this device has no way to show.
-       *
-       * A link that leads nowhere in this document reads as a key that speaks.
-       * linkTarget() already answers "" for one, and it is the answer the
-       * device door gives to the mirror of the same gap - a key whose target
-       * is gone is a key that says its word. */
-      const target = ours ? linkTarget(document, button) : "";
+       * On every board alike now. It used to be read on this file's own boards
+       * only, because a foreign board's links were a page tree this device had
+       * no way to show; a talker holds sixty-four pages and any key may lead to
+       * any of them, so a link into this document is a link this device can
+       * follow. A link out of it is not - linkTarget() answers "" for one, and
+       * a key that leads nowhere says its word, which is the same answer both
+       * export doors give to the mirror of the gap. */
+      const target = linkTarget(document, button);
       if (target) pointedAt.add(target);
       const act: SlotAct | null = !target ? null
         : button.ext_lautstark_speak_on_navigate === true
           ? { kind: "goto", set: target, alsoSpeak: true }
           : { kind: "goto", set: target };
+      /* What the key says. The vocalization is what gets spoken and therefore
+       * what a key's text is; the label stands in when there is none, which is
+       * the common case in boards written elsewhere.
+       *
+       * And the one place the page-key panel is different, on this file's own
+       * boards: a key there with no word of its own was written out carrying
+       * the page's name, because that is what the firmware prints on it. Read
+       * back as the nothing it was, or a round trip would quietly type the
+       * name onto the key - and renaming the page afterwards would leave the
+       * copy behind, still saying what the page used to be called.
+       *
+       * Asked of the word rather than of which field it arrived in, because
+       * the device door writes it into both: devicePlan() resolves that
+       * fallback before the writer sees it, so a page key that speaks carries
+       * the name as its vocalization too. What comes back is a key saying the
+       * page's name either way, since the same fallback runs on the way out
+       * again - so the reading that keeps the field empty is the one that
+       * leaves a Sammlung exactly as it was found. */
+      const word = text(button.vocalization || button.label);
+      const captioned = ours && at === PAGE_KEY && word === name;
       slots.push({
-        // The vocalization is what gets spoken and therefore what a slot's
-        // text is. The label stands in when there is none, which is the common
-        // case in boards written elsewhere.
-        text: text(button.vocalization || button.label),
+        text: captioned ? "" : word,
         symbol,
         // Absent for the ordinary key rather than false, so a slot read back
         // out of a document is the shape a slot written by the editor is. A
@@ -633,62 +727,14 @@ export function documentToLayout(document) {
       });
     }
 
-    if (slots.length > SLOTS_PER_SET) {
+    if (slots.length > KEYS_PER_SET) {
       // build.err.too_many_slots, in the words texts.py gives it.
       throw new Error(
         `Set ${text(board.name) || boardId} has ${slots.length} slots, ` +
-        `exactly ${SLOTS_PER_SET} are allowed.`);
+        `exactly ${KEYS_PER_SET} are allowed.`);
     }
 
-    const name = text(board.name) || boardId;
-    /* What the set key itself does, and what it says while doing it.
-     *
-     * **Absent is the ring**, which BoardSet.key states and which is what the
-     * fifth key did on every board written before 2026-09-01. So a set key
-     * leading to the set after this one comes back as nothing at all, and a
-     * Sammlung that has never used this reads exactly as it always did.
-     *
-     * An explicit `goto` at the next set is written by the device door in the
-     * same two bytes as the ring and cannot be told from it here. Read as the
-     * ring, deliberately: the two do the same thing on the device, and the
-     * reading that leaves every existing Sammlung alone is the right one of
-     * two that behave alike. `alsoSpeak` beside it is a different key though -
-     * the ring never speaks - so that one stays an act.
-     *
-     * A set key with no link at all is a key that says its word and stays put,
-     * which is the arrangement a joining game needs and the reason all of this
-     * had to be read by the place rather than by the link.
-     *
-     * `text` is the round's question, and absent means the set's name - so it
-     * is written only where the two differ. That sentence had nowhere to go
-     * until BoardSet.key gained a field for it, and it was dropped on every
-     * import until now. */
-    let key: BoardSet["key"];
-    if (ours && switchKey) {
-      const button = switchKey.button;
-      const target = linkTarget(document, button);
-      const alsoSpeak = button.ext_lautstark_speak_on_navigate === true;
-      const ring = ids[(at + 1) % ids.length];
-      const act: SlotAct | null = !target ? { kind: "speak" }
-        : target === ring && !alsoSpeak ? null
-          : alsoSpeak ? { kind: "goto", set: target, alsoSpeak: true }
-            : { kind: "goto", set: target };
-      // The ring points at a position rather than at a set, so it mints no id.
-      if (act?.kind === "goto") pointedAt.add(target);
-      const word = text(button.vocalization || button.label);
-      const parts = {
-        ...(word && word !== name ? { text: word } : {}),
-        ...(act ? { act } : {}),
-      };
-      if (Object.keys(parts).length) key = parts;
-    }
-
-    sets.push({
-      name,
-      symbol: switchKey === null ? "" : switchKey.symbol,
-      ...(key ? { key } : {}),
-      slots,
-    });
+    sets.push({ name, slots });
   }
 
   // Second pass, because a key on the first board may name the last: which
@@ -734,10 +780,13 @@ export function localeToLanguage(locale) {
 // It lives in this module rather than in a layout.js that does not exist yet.
 // Whoever writes that module takes this with them.
 //
-// The promise, one field shorter than it was: every set has a name and exactly
-// four slots, and every slot has a text and a symbol, whatever the document
-// happened to be missing. A colour used to be in that list, and the palette
-// was imported here to supply one; it is gone from the talker entirely.
+// The promise, two fields shorter than it was: every page has a name and
+// exactly KEYS_PER_SET keys, and every key has a text and a symbol, whatever
+// the document happened to be missing. A colour used to be in that list, and
+// the palette was imported here to supply one; it is gone from the talker
+// entirely. A `symbol` and a `key` beside the slots were in it too, and they
+// are what the fifth key was before the five became one array - data/upgrade.ts
+// is where a Sammlung that still says it that way is brought forward, once.
 
 // What layout.py says, read where the page already reads it: the cap comes out
 // of boot_data.js, which tools/bootdata.py writes from layout.py itself. One
@@ -796,9 +845,11 @@ function pyInt(value, fallback) {
  * checked is that the thing is an act at all, since this is the gate a foreign
  * file comes through and `act: 7` must not reach the key sheet.
  *
- * `speak` comes back as itself rather than as null, because on BoardSet.key
- * absent means the ring and `speak` is a different thing. Slot.act's absent
- * does mean `speak`, and the caller there drops it - see below.
+ * `speak` comes back as itself rather than as null so that the caller can tell
+ * a stored `{kind: "speak"}` from a field that was not there. Both mean the
+ * same thing on a slot - absent is what `speak` means - and the caller drops
+ * it, which is what keeps a key nobody has given a second job to written the
+ * way it always was.
  */
 function actShape(value): SlotAct | null {
   if (!isObject(value)) return null;
@@ -811,19 +862,6 @@ function actShape(value): SlotAct | null {
   // compare unequal while meaning the same thing.
   return value.alsoSpeak === true
     ? { kind: "goto", set, alsoSpeak: true } : { kind: "goto", set };
-}
-
-/** A stored set key, brought to the shape the key sheet writes, or undefined.
- *
- * Undefined for an empty one as well as a missing one: `{}` and absent both
- * mean the ring and the set's own name, and carrying an empty object through
- * would put a field on every set that has never had one. */
-function keyShape(value): BoardSet["key"] {
-  if (!isObject(value)) return undefined;
-  const word = text(value.text).trim();
-  const act = actShape(value.act);
-  const parts = { ...(word ? { text: word } : {}), ...(act ? { act } : {}) };
-  return Object.keys(parts).length ? parts : undefined;
 }
 
 /** layout.py's normalize_layout(): the file, brought into a complete shape. */
@@ -862,14 +900,13 @@ export function normalizeLayout(raw) {
     const entry = isObject(given) ? given : {};
     let slots = entry.slots || [];
     if (!Array.isArray(slots)) slots = [];
-    // Exactly four slots: pad the missing ones, surplus ones are an error.
-    if (slots.length > SLOTS_PER_SET) {
+    // Exactly five keys: pad the missing ones, surplus ones are an error.
+    if (slots.length > KEYS_PER_SET) {
       throw new Error(`Set ${index + 1} has ${slots.length} slots, exactly ` +
-                      `${SLOTS_PER_SET} are allowed.`);
+                      `${KEYS_PER_SET} are allowed.`);
     }
     slots = [...slots];
-    while (slots.length < SLOTS_PER_SET) slots.push({ text: "", symbol: "" });
-    const key = keyShape(entry.key);
+    while (slots.length < KEYS_PER_SET) slots.push({ text: "", symbol: "" });
     return {
       // Carried where there is one, and never invented: BoardSet.id is minted
       // by whatever first points at the set, so a set nobody leads to has none
@@ -877,10 +914,6 @@ export function normalizeLayout(raw) {
       // store to say something none of them had been asked.
       ...(text(entry.id) ? { id: text(entry.id) } : {}),
       name: text(entry.name || `Set ${index + 1}`).trim(),
-      symbol: text(entry.symbol).trim(),
-      // Absent is the ring and the set's own name, so an untouched set key
-      // goes on being nothing at all here.
-      ...(key ? { key } : {}),
       slots: slots.map((slot) => {
         const one = isObject(slot) ? slot : {};
         const act = actShape(one.act);

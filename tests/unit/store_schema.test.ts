@@ -29,7 +29,14 @@ import type { Migrated } from "../../src/data/store.js";
 
 const DB_NAME = "vorlaut";
 
-const board: Layout = {
+/* A layout as version 2 stored one, and deliberately not a `Layout`.
+ *
+ * These bytes are what is already on somebody's disk, so they are written the
+ * way that version wrote them: four slots, with the set key beside them as a
+ * `symbol` and a `name`. core/types.ts describes what a layout is *now* and
+ * would refuse this, which is the point - the step to 6 is what brings it
+ * forward, and a fixture that had been quietly modernised would test nothing. */
+const board = {
   sleep_timeout_seconds: 600,
   language: "de",
   sets: [{
@@ -145,7 +152,7 @@ describe("opening a database left behind by version 2", () => {
 
   it("says so", async () => {
     await store.readCollections();
-    expect(announced).toEqual([{ from: 2, to: 5, boards: 1 }]);
+    expect(announced).toEqual([{ from: 2, to: 6, boards: 1 }]);
   });
 
   /* And it is an ordinary database afterwards: a second Sammlung is made the

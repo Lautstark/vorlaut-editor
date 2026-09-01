@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-/* What a key does, coming back IN - the import door's half of Slot.act and
- * BoardSet.key.
+/* What a key does, coming back IN - the import door's half of Slot.act.
  *
  * ## Why this is a separate half, and a separate file
  *
@@ -22,10 +21,15 @@ import { describe, expect, it } from "vitest";
  *
  * Measured on three hand-built games that have run on the device.
  * Spiegel-und-Ei-device.obz came back with the round's question sitting in an
- * answer slot, the winning answer gone entirely and every act absent. The
- * boards below are written in those files' shape rather than in the editor's
- * own, because the editor's own writer cannot produce a set key that stays put
- * and that is exactly the board that broke.
+ * answer slot, the winning answer gone entirely and every act absent.
+ *
+ * **The boards below used to have to be hand-written**, because "the editor's
+ * own writer cannot produce a set key that stays put" - the fifth key had no
+ * shape that could say it. It has one: it is a key. The boards stay written
+ * out even so, in the files' own shape rather than in this repository's,
+ * because a reader asked only about documents it wrote is a reader compared
+ * against itself. The GAME below goes the other way, out of the device door
+ * and back, and the two halves are deliberately different.
  *
  * The reader is asked here about documents this file STATES, never about
  * documents this file wrote - the discipline a fixture keeps, in the one place
@@ -35,7 +39,7 @@ import {
   buildDevicePackage, devicePackageBytes,
 } from "../../src/data/device_package.js";
 import { documentToLayout, importObz } from "../../src/data/obf.js";
-import { actOf } from "../../src/core/types.js";
+import { PAGE_KEY, actOf } from "../../src/core/types.js";
 import type { DiyLayout, Slot } from "../../src/core/types.js";
 
 /** One board of a game, in the shape all three hand-built ones are written in.
@@ -64,10 +68,11 @@ const round = (at: number, next: number, answer: number, speaks = true) => ({
           }
         : {}),
     })),
-    /* The round's question. A word rather than the sentence a real game
-     * carries, because what it says is asserted only as "not the set's name" -
-     * and tests/german.py draws its line at exactly that: German is allowed
-     * where it is the input under test, which "Antwort 1" beside it is. */
+    /* The round's question, on the panel the page's name is printed on. A word
+     * rather than the sentence a real game carries, because what it says is
+     * asserted only as "not the page's name" - and tests/german.py draws its
+     * line at exactly that: German is allowed where it is the input under
+     * test, which "Antwort 1" beside it is. */
     { id: `runde-${at}-set`, label: `Runde ${at}`, vocalization: `Frage ${at}` },
   ],
   grid: {
@@ -91,17 +96,18 @@ const documentOf = (boards: any[]) => ({
   files: {},
 });
 
-describe("the import door finds the set key by where it sits", () => {
+describe("the import door reads the five keys off the grid", () => {
   it("reads a hand-built game the right way up", () => {
     const layout = documentToLayout(documentOf(THREE)) as DiyLayout;
     expect(layout.sets.map((one) => one.name))
       .toEqual(["Runde 1", "Runde 2", "Runde 3"]);
-    // Four answers in the four slots, and none of them the question. Under the
-    // old rule the first set came back with the answer key as its set key and
-    // the question sitting in a slot.
-    for (const set of layout.sets) {
-      expect(set.slots.map((one) => one.text))
-        .toEqual(["Antwort 1", "Antwort 2", "Antwort 3", "Antwort 4"]);
+    /* Five keys in the five cells, each where the grid put it: the question on
+     * the page-key panel and the four answers around it. Under the old rule
+     * the first page came back with the answer key mistaken for the set key
+     * and the question sitting in an answer's slot. */
+    for (const [at, set] of layout.sets.entries()) {
+      expect(set.slots.map((one) => one.text)).toEqual(
+        ["Antwort 1", "Antwort 2", `Frage ${at + 1}`, "Antwort 3", "Antwort 4"]);
     }
   });
 
@@ -116,12 +122,14 @@ describe("the import door finds the set key by where it sits", () => {
     expect(layout.sets[0]!.slots[1]!.act).toBeUndefined();
   });
 
-  it("brings the set key back speaking, and standing still", () => {
-    /* The half that BoardSet.key gained on 2026-09-01 and that this door threw
-     * away until now: a set key that stays put, and the round's question it
-     * asks while doing it. Both were lost on every import of every game. */
+  it("brings the question back speaking, and standing still", () => {
+    /* The key on the page-key panel is a key: it asks the round's question and
+     * it leads nowhere, which is a whole slot with a word and no act. Both
+     * halves were lost on every import of every game until 2026-09-01, and the
+     * shape that held them was a field of its own until today. */
     const layout = documentToLayout(documentOf(THREE)) as DiyLayout;
-    expect(layout.sets[0]!.key).toEqual({ text: "Frage 1", act: { kind: "speak" } });
+    expect(layout.sets[0]!.slots[PAGE_KEY])
+      .toEqual({ text: "Frage 1", symbol: "" });
   });
 
   it("gives an id only to the sets a key actually names", () => {
@@ -139,17 +147,20 @@ describe("the import door finds the set key by where it sits", () => {
       .map((one) => one.id)).toEqual(["runde-1", "runde-2", "runde-3"]);
   });
 
-  it("reads a set key that rings as the ring, which is absent", () => {
+  it("reads a chained page key as the target it names, and as nothing else", () => {
     /* What the editor's own writer produces, as against what a hand-built game
-     * holds. **Absent is the ring** - BoardSet.key's own rule - so a Sammlung
-     * that has never used any of this has to come back with no `key` at all,
-     * or every set in the store gains a field none of them was asked. */
-    const ringing = THREE.map((board, at) => ({
+     * holds: a page key with a link and no word of its own. It used to come
+     * back as no field at all, because a link at the next page along was the
+     * ring and the ring was absent - a reading that was right while the rule
+     * existed and would now quietly drop the target. It comes back as the
+     * target, and the word stays empty because the page's own name is what was
+     * printed on it. */
+    const chained = THREE.map((board, at) => ({
       ...board,
       buttons: board.buttons.map((button: any) => button.id.endsWith("-set")
         ? {
             ...button,
-            vocalization: board.name,          // the set's name, so no `text`
+            vocalization: board.name,          // the page's name, so no word
             load_board: {
               id: `runde-${(at + 1) % 3 + 1}`,
               name: `Runde ${(at + 1) % 3 + 1}`,
@@ -158,19 +169,23 @@ describe("the import door finds the set key by where it sits", () => {
           }
         : button),
     }));
-    for (const set of (documentToLayout(documentOf(ringing)) as DiyLayout).sets) {
-      expect(set.key, set.name).toBeUndefined();
-    }
+    const layout = documentToLayout(documentOf(chained)) as DiyLayout;
+    expect(layout.sets.map((one) => one.slots[PAGE_KEY])).toEqual([
+      { text: "", symbol: "", act: { kind: "goto", set: "runde-2" } },
+      { text: "", symbol: "", act: { kind: "goto", set: "runde-3" } },
+      { text: "", symbol: "", act: { kind: "goto", set: "runde-1" } },
+    ]);
   });
 
-  it("leaves a foreign board read exactly as it was read before", () => {
-    /* A phone's board: several links out, no grid of this shape, and no way to
-     * tell which of them a five-key device should call its set key. The rule
-     * there is the one that has always answered for one - the first link is
-     * the set key and the rest are pages this device cannot reach - and
-     * reading those as acts instead would put four keys on a talker pointing
-     * at a page tree it has no way to show. tests/reference/obf.lock.json
-     * freezes this case; the check here is that it is deliberate. */
+  it("reads a foreign board as the keys it has, links and all", () => {
+    /* A phone's board: several links out and no grid of this shape. There used
+     * to be a rule for it - the first link is the set key and the rest are
+     * pages this device cannot reach - because a talker held five sets in a
+     * ring and had no way to show a page tree. It holds sixty-four pages and
+     * any key may lead to any of them, so a link into the document is a link
+     * this device can follow and the rule has nothing left to buy. What is
+     * left is the grid's own reading order and a refusal for a board with more
+     * buttons than there are keys. */
     const foreign = documentToLayout({
       root: "a",
       boards: {
@@ -191,19 +206,23 @@ describe("the import door finds the set key by where it sits", () => {
       files: {},
     }) as DiyLayout;
     expect(foreign.sets[0]!.slots.map((one) => one.text))
-      .toEqual(["Words", "", "", ""]);
-    for (const set of foreign.sets) {
-      expect(set.id).toBeUndefined();
-      expect(set.key).toBeUndefined();
-      for (const slot of set.slots) expect(slot.act).toBeUndefined();
-    }
+      .toEqual(["First", "Second", "Words", "", ""]);
+    expect(foreign.sets[0]!.slots[0]!.act).toEqual({ kind: "goto", set: "b" });
+    expect(foreign.sets[0]!.slots[1]!.act).toEqual({ kind: "goto", set: "c" });
+    expect(foreign.sets[0]!.slots[2]!.act).toBeUndefined();
+    // The two boards those keys name are pointed at, so they get ids; the
+    // board nothing names does not - BoardSet.id's rule, unchanged.
+    expect(foreign.sets.map((one) => one.id)).toEqual([undefined, "b", "c"]);
   });
 });
 
 /* ------------------- out the device door and back in the import door --- */
 
-/** A Sammlung with all three press modes on it, and a set key that is not the
- *  ring. Two sets, because a `goto` needs somewhere to go. */
+/** A Sammlung with all three press modes on it, and a page key that leads
+ *  nowhere. Two pages, because a `goto` needs somewhere to go.
+ *
+ *  Written in BoardSet.slots order: the two keys of the top row, the key on
+ *  the page-key panel, then the two beside it. */
 const GAME: DiyLayout = {
   language: "de",
   voice: "azure:de-DE-GiselaNeural",
@@ -212,16 +231,16 @@ const GAME: DiyLayout = {
     {
       id: "first",
       name: "Runde 1",
-      // The set key's own picture, which is the symptom the mis-identification
-      // showed first: pick the wrong button and the set key wears the winning
-      // answer's tile. No bytes behind it - putImage() records the reference
-      // and notes the gap - and the reference is what has to survive.
-      symbol: "vorlaut:aufgabe-1",
-      key: { text: "Frage eins", act: { kind: "speak" } },
       slots: [
         { text: "Spiegelei", symbol: "metacom:Spiegelei",
           act: { kind: "goto", set: "second", alsoSpeak: true } },
         { text: "Goldfisch", symbol: "metacom:Goldfisch" },
+        /* The question, on its own panel, with a picture of its own - which is
+         * the symptom the mis-identification showed first: pick the wrong
+         * button and this key wears the winning answer's tile. No bytes behind
+         * it - putImage() records the reference and notes the gap - and the
+         * reference is what has to survive. */
+        { text: "Frage eins", symbol: "vorlaut:aufgabe-1" },
         { text: "Handtuch", symbol: "", act: { kind: "goto", set: "second" } },
         { text: "Ohrring", symbol: "" },
       ],
@@ -229,11 +248,14 @@ const GAME: DiyLayout = {
     {
       id: "second",
       name: "Runde 2",
-      symbol: "vorlaut:aufgabe-2",
       slots: [
         { text: "Nachtisch", symbol: "" },
         { text: "Nachthemd", symbol: "",
           act: { kind: "goto", set: "first", alsoSpeak: true } },
+        // No word of its own, so the panel shows "Runde 2" - and it has to
+        // come back with the field still empty rather than with the name
+        // typed into it. See PAGE_KEY.
+        { text: "", symbol: "vorlaut:aufgabe-2" },
         { text: "Nachbar", symbol: "" },
         { text: "Nachricht", symbol: "" },
       ],
@@ -290,34 +312,38 @@ describe("out of the device door and back in through the import door", () => {
     sameActs(GAME, back);
   });
 
-  it("brings the set keys back too, the standing one and the ringing one", () => {
-    /* Both halves of BoardSet.key across the seam: set 1 asks a question and
-     * stays put, set 2 was never given one and is therefore the ring - and the
-     * ring has to come back as absent rather than as a written-out act. */
+  it("brings both page keys back, the one with a word and the one without", () => {
+    /* The two shapes across the seam: page 1 asks a question and stays put,
+     * page 2 has no word of its own so the panel carries the page's name - and
+     * that name must come back as the empty field it was, or the second export
+     * would have typed it into the Sammlung. */
     return bytesOf(GAME)
       .then((bytes) => importObz(bytes, "game.obz"))
       .then((back: any) => {
-        expect(back.sets[0]!.key)
-          .toEqual({ text: "Frage eins", act: { kind: "speak" } });
-        expect(back.sets[1]!.key).toBeUndefined();
+        expect(back.sets[0]!.slots[PAGE_KEY])
+          .toEqual({ text: "Frage eins", symbol: "vorlaut:aufgabe-1" });
+        expect(back.sets[1]!.slots[PAGE_KEY])
+          .toEqual({ text: "", symbol: "vorlaut:aufgabe-2" });
       });
   });
 
-  it("keeps the set key a set key, picture and all", async () => {
+  it("keeps every key on the panel it was on, picture and all", async () => {
     /* The symptom before the tiles and the acts: pick the wrong button and the
-     * set key wears the winning answer's picture and the answer is gone from
-     * the board entirely. Asserted as well as the acts, because a check that
-     * compares only acts goes green through exactly that mistake - the four
-     * slots would still hold four acts, just not the four keys. */
+     * key on the page-key panel wears the winning answer's picture and the
+     * answer is gone from the board entirely. Asserted as well as the acts,
+     * because a check that compares only acts goes green through exactly that
+     * mistake - the five slots would still hold five acts, just not the five
+     * keys. */
     const back = await importObz(await bytesOf(GAME), "game.obz") as DiyLayout;
-    expect(back.sets.map((one) => one.symbol))
+    expect(back.sets.map((one) => one.slots[PAGE_KEY]!.symbol))
       .toEqual(["vorlaut:aufgabe-1", "vorlaut:aufgabe-2"]);
-    // The winning answer is on the board rather than mistaken for the set key,
-    // and it keeps its own tile.
+    // The winning answer is where it was authored rather than mistaken for the
+    // page key, and it keeps its own tile.
     expect(back.sets[0]!.slots[0]!.text).toBe("Spiegelei");
     expect(back.sets[0]!.slots[0]!.symbol).toBe("metacom:Spiegelei");
-    // And the question is nowhere among the four.
-    expect(back.sets[0]!.slots.map((one) => one.text)).not.toContain("Frage eins");
+    // And the question is on its own panel and nowhere else.
+    expect(back.sets[0]!.slots.filter((one) => one.text === "Frage eins"))
+      .toHaveLength(1);
   });
 
   it("closes again on the second trip, ids and all", async () => {

@@ -30,7 +30,14 @@ import type { Migrated } from "../../src/data/store.js";
 
 const DB_NAME = "vorlaut";
 
-const board = (name: string, says: string): Layout => ({
+/* A layout as version 3 stored one, and deliberately not a `Layout`.
+ *
+ * These bytes are what is already on somebody's disk: four slots, with the set
+ * key beside them as a `symbol` and a `name`. core/types.ts describes what a
+ * layout is *now* and would refuse this, which is the point - the step to 6 is
+ * what brings it forward, and a fixture quietly modernised to please the
+ * compiler would test nothing at all. */
+const board = (name: string, says: string) => ({
   sleep_timeout_seconds: 600,
   language: "de",
   sets: [{
@@ -138,7 +145,7 @@ beforeAll(async () => {
   store.onMigrated((what) => { announced.push(what); });
 });
 
-describe("a version 3 database opened by version 5", () => {
+describe("a version 3 database opened by version 6", () => {
   it("keeps every Sammlung, in the order the sidebar draws", async () => {
     const list = await store.readCollections();
     expect(list.collections.map((one) => one.name)).toEqual(["Bedroom", "Kitchen"]);
@@ -148,16 +155,37 @@ describe("a version 3 database opened by version 5", () => {
   it("keeps what is on them, and the stamp over it", async () => {
     const open = await store.readLayout();
     expect(diy(open.layout).sets[0]?.name).toBe("Morning");
+    // Where the two keys of the top row were and still are. The step to 6 puts
+    // the page key in the middle of them - see PAGE_KEY - so the four that
+    // were there keep their reading order.
     expect(diy(open.layout).sets[0]?.slots[0]?.text).toBe("I want to go outside");
-    // Verbatim, not recomputed: the bytes did not change, so neither may the
-    // stamp over them - adr/0015 says why nothing on this path may re-hash.
+    // Verbatim, not recomputed. The step to 6 rewrote these bytes and left the
+    // stamp exactly as it found it, which adr/0023 is the decision behind:
+    // there is nowhere in a versionchange to make a crypto.subtle call.
     expect(open.version).toBe(KITCHEN_STAMP);
 
     const other = await store.readLayoutOf(BEDROOM);
     expect(diy(other).sets[0]?.slots[0]?.text).toBe("story please");
   });
 
-  it("leaves the stamp and the bytes still a matched pair, so a save is not a conflict",
+  it("brings every page up to five keys, with the ring written out as targets",
+     async () => {
+       const open = await store.readLayout();
+       const page = diy(open.layout).sets[0]!;
+       expect(page.slots).toHaveLength(5);
+       // What was BoardSet.symbol, on the panel it was always drawn on.
+       expect(page.slots[2]).toEqual({
+         text: "", symbol: "arasaac-2483.png",
+         act: { kind: "goto", set: page.id },
+       });
+       // One page, so the ring pointed at itself: the press that did nothing
+       // before and does nothing now. And it is pointed at, so it has an id.
+       expect(page.id).toBeTruthy();
+       expect(Object.hasOwn(page, "symbol")).toBe(false);
+       expect(Object.hasOwn(page, "key")).toBe(false);
+     });
+
+  it("leaves the stamp and the bytes a pair a save can still move, rather than a conflict",
      async () => {
        const open = await store.readLayout();
        // The carried board rather than whatever a first visit would have
@@ -167,6 +195,9 @@ describe("a version 3 database opened by version 5", () => {
        const saved = await store.writeLayout(changed, open.version);
        expect(saved.conflict).toBeFalsy();
        expect(diy((await store.readLayout()).layout).sleep_timeout_seconds).toBe(900);
+       // And the pair is matched again: the stale stamp was a marker for "has
+       // anybody written since I read", which this write has just answered.
+       expect((await store.readLayout()).version).not.toBe(KITCHEN_STAMP);
      });
 
   it("keeps the pictures", async () => {
@@ -188,7 +219,7 @@ describe("a version 3 database opened by version 5", () => {
      async () => {
        await store.readCollections();
        const seen = await inspect();
-       expect(seen.version).toBe(5);
+       expect(seen.version).toBe(6);
        // `data` is gone with the build that wrote it (adr/0011), and nothing
        // from version 3's shape survives except its contents. `speech` is what
        // the step to 5 added: a cache of what a synthesis cost, which adr/0016
@@ -200,6 +231,6 @@ describe("a version 3 database opened by version 5", () => {
   it("says so, rather than moving somebody's boards in silence", async () => {
     await store.readCollections();
     expect(announced).toHaveLength(1);
-    expect(announced[0]).toEqual({ from: 3, to: 5, boards: 2 });
+    expect(announced[0]).toEqual({ from: 3, to: 6, boards: 2 });
   });
 });

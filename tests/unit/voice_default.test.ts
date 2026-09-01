@@ -35,8 +35,8 @@ const catalogued = (id: string) =>
 const board = (extra: Partial<DiyLayout> = {}): DiyLayout => ({
   sleep_timeout_seconds: 600,
   sets: [{
-    name: "Set", symbol: "",
-    slots: [0, 1, 2, 3].map(() => ({ text: "", symbol: "" })),
+    name: "Set",
+    slots: [0, 1, 2, 3, 4].map(() => ({ text: "", symbol: "" })),
   }],
   ...extra,
 });

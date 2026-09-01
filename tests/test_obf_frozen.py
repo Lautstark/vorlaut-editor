@@ -43,12 +43,14 @@ What this cannot do is answer for a case nobody recorded. If the mapping grows
 a field, this file cannot say what the new right answer is; obf.py has to come
 back to say it. See docs/frozen-references.md.
 
-Two narrowings, both of them the price of a deliberate mapping change - which
-is the case obf.lock.json's own invalidated_by anticipates ("a change to the
-mapping in obf.py"). The lock is not touched and is not refrozen: its oracle is
-gone, so the only thing left that could write it is src/data/obf.ts, and a lock
-written by the module it checks is the browser compared against itself. What is
-narrowed is what gets compared. See ACTIVE_IS_GONE and THE_CAP_MOVED below.
+Three narrowings and one transformation, all of them the price of a deliberate
+mapping change - which is the case obf.lock.json's own invalidated_by
+anticipates ("a change to the mapping in obf.py"). The lock is not touched and
+is not refrozen: its oracle is gone, so the only thing left that could write it
+is src/data/obf.ts, and a lock written by the module it checks is the browser
+compared against itself. What is narrowed is what gets compared, and what is
+transformed is stated in one function that a reader can check by eye. See
+ACTIVE_IS_GONE, THE_CAP_MOVED and THE_KEYS_ARE_FIVE below.
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ import subprocess
 import tempfile
 import sys
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -87,6 +90,9 @@ MODULE = ROOT / "src" / "data" / "obf.ts"
 DRIVER = ROOT / "tests" / "obf_node.mjs"
 
 failures: list[str] = []
+# THE_KEYS_ARE_FIVE: the imports whose slot lists were set aside, named at the
+# end of that section rather than filtered in silence.
+setaside: list[str] = []
 
 # --- what the lock can no longer answer for ----------------------------------
 
@@ -195,6 +201,178 @@ against itself. tests/unit/collection_cap.test.ts carries that property
 instead, as an authored check rather than a recorded answer. The check below
 stays, so a lock that ever gains a case past the cap is still held to it."""
 
+THE_KEYS_ARE_FIVE = """a page holding four keys beside a set key, rather than five.
+
+A BoardSet was four `slots` and, beside them, a `symbol` and a `key` for the
+fifth panel. It is five equal slots in reading order now - core/types.ts says
+why, and vorlaut-diy-talker's adr/0020 is where the device settled it. Every
+frozen layout in this lock is written the old way, so every one of them has to
+be brought to the new shape before it can be compared with anything.
+
+**The direction decides what this costs, and the two directions are not alike.**
+
+*A layout becoming a document.* Transformed, and it loses nothing at all. The
+lock's input layout is brought forward exactly as data/upgrade.ts brings a
+stored one forward - the set key becomes the slot at PAGE_KEY, and the ring
+becomes a `goto` at the following page - and **the frozen document is compared
+unchanged**. That is the whole byte-for-byte claim of this change, held against
+obf.py's own answers: a Sammlung nobody has touched exports the file it
+exported. The eight exports and the eight zips are checked that way, members
+and all, and a single byte moving anywhere in them fails here.
+
+*A document becoming a layout.* Two things in the frozen answer cannot be
+brought forward, and they are narrowed rather than guessed at.
+
+  `sets[N].id`. Which pages get an id is decided by which pages a key names,
+  and the ring is a key that names one now - so a document this file wrote
+  comes back with an id on every page where it used to come back with none.
+  The rule itself did not change and tests/unit/import_acts.test.ts holds it
+  ("gives an id only to the pages a key actually names"); what changed is how
+  many keys there are to do the naming.
+
+  `sets[N].slots[PAGE_KEY].act`. The ring's target is a board id out of the
+  document, and Python cannot say which board that is without walking the
+  links - which would be this file re-implementing the reader it is checking,
+  and then agreeing with itself. The `text` and the `symbol` of that key ARE
+  compared, because both are re-derivable: they were `key.text` and `symbol` on
+  the frozen set.
+
+*And a document written by other software is set aside entirely.* The old
+reader took a foreign board's first link as its set key and dropped the rest;
+the new one reads the cells in order and reads every link. That is a different
+answer to a different rule, so those frozen slot lists describe something that
+is gone rather than something that moved, and no transformation can reach them.
+They are named and counted below. What carries the new rule instead is an
+authored check - "reads a foreign board as the keys it has, links and all" in
+tests/unit/import_acts.test.ts - which is the arrangement THE_CAP_MOVED already
+uses for its own lost coverage.
+
+*The 54 normalizeLayout answers* are transformed on both sides: the argument is
+brought forward and so is the frozen result. What that stops measuring is the
+padding of a short page, because the argument arrives already five keys long -
+tests/unit/upgrade.test.ts carries the padding as an authored check.
+
+The refusals about slot counts are rewritten by the same rule, since a page
+that held one too many now holds one too many of five: `has N slots, exactly 4`
+becomes `has N+1 slots, exactly 5`. Nothing else in any sentence is touched."""
+
+# The two counts inside a refusal about how many keys a page holds. Rewritten
+# rather than set aside, because the sentence still says exactly what it said -
+# there is one key more in the page and one more allowed.
+A_SLOT_REFUSAL = re.compile(r"has (\d+) slots, exactly (\d+) are allowed\.")
+
+# core/types.ts's PAGE_KEY: which of the five sits on the panel the device
+# prints the page's name on. Written here rather than read out of the module,
+# because a frozen answer transformed by a number the module under test
+# supplies is a transformation the module could quietly move.
+PAGE_KEY = 2
+
+# What the ring's target is called, where the frozen layout named no page at
+# all. Any string will do - it never reaches a document, because a document
+# names boards by their own ids - but it has to be the same on both sides of a
+# comparison, so it is derived from the position.
+def _lock_id(at: int) -> str:
+    return f"lock-page-{at + 1}"
+
+
+def _page_key_slot(page: dict, ring: dict) -> dict:
+    """The set key of an old page, as the slot it becomes.
+
+    data/upgrade.ts's keyAsSlot(), written again here rather than ported: the
+    whole value of a frozen reference is that the two sides were arrived at
+    separately.
+
+    `text` and `symbol` are carried across raw, whatever they are. A frozen
+    argument may hold a number or a null where a string belongs - four of the
+    54 normalizeLayout cases do - and it is normalizeLayout's own business what
+    those become. Tidying them here would be this file answering the question
+    it is asking.
+    """
+    key = page.get("key") if isinstance(page.get("key"), dict) else {}
+    act = key.get("act") if isinstance(key.get("act"), dict) else ring
+    slot = {"text": key.get("text", ""), "symbol": page.get("symbol", "")}
+    if act.get("kind") != "speak":
+        slot["act"] = act
+    return slot
+
+
+def five_keys(layout, pad: bool = False):
+    """One layout, brought forward to five keys a page. THE_KEYS_ARE_FIVE.
+
+    The four keys keep their reading order and the fifth goes in at PAGE_KEY,
+    which is the cell it was always drawn on. A page with fewer than four keys
+    gets nulls in the gaps rather than empty keys: a short page wrote fewer
+    buttons than five and has to go on writing fewer, so the hole has to stay a
+    hole. src/data/obf.ts skips a slot that is not there for the same reason.
+
+    `pad` fills a short page up to four keys instead, which is what an
+    *argument to normalizeLayout* needs: that function pads on the way through,
+    so an argument left sparse would come back with keys where this put holes.
+    A frozen *answer* has been padded already by the normalize that produced it.
+    """
+    if not isinstance(layout, dict) or not isinstance(layout.get("sets"), list):
+        return layout
+    pages = [one for one in layout["sets"] if isinstance(one, dict)]
+    ids = [one.get("id") if isinstance(one.get("id"), str) and one.get("id")
+           else _lock_id(at) for at, one in enumerate(pages)]
+    for at, page in enumerate(pages):
+        held = page.get("slots")
+        slots = list(held) if isinstance(held, list) else []
+        if pad:
+            slots = slots + [{"text": "", "symbol": ""}] * max(0, 4 - len(slots))
+        else:
+            slots = slots + [None] * max(0, PAGE_KEY - len(slots))
+        ring = {"kind": "goto", "set": ids[(at + 1) % len(ids)]}
+        page["slots"] = slots[:PAGE_KEY] + [_page_key_slot(page, ring)] + slots[PAGE_KEY:]
+        page["id"] = ids[at]
+        page.pop("symbol", None)
+        page.pop("key", None)
+    return layout
+
+
+def our_grid(board) -> bool:
+    """Whether a board is one src/data/obf.ts wrote, by the shape of its grid.
+
+    ourGrid() over there, and the same three facts: two rows, three columns,
+    and a hole in the corner where the speaker is. Stated rather than ported,
+    for five_keys()'s reason.
+    """
+    if not isinstance(board, dict):
+        return False
+    grid = board.get("grid")
+    if not isinstance(grid, dict) or grid.get("rows") != 2 or grid.get("columns") != 3:
+        return False
+    order = grid.get("order")
+    if not isinstance(order, list) or len(order) != 2:
+        return False
+    top, bottom = order
+    return (isinstance(top, list) and isinstance(bottom, list)
+            and (top[0] if top else None) is None
+            and bool(bottom[0] if bottom else None))
+
+
+def ours_throughout(document) -> bool:
+    """Whether every board in a document is one this file wrote."""
+    boards = (document or {}).get("boards")
+    if not isinstance(boards, dict) or not boards:
+        return False
+    return all(our_grid(one) for one in boards.values())
+
+
+def shift_a_slot_refusal(message: str, counting: bool = True) -> str:
+    """A frozen refusal about how many keys a page holds, one key along.
+
+    Two shifts, because the two refusals count different things. normalizeLayout
+    counts the keys it was handed, and the argument gained one - so both numbers
+    move. documentToLayout counts the buttons on a board, and it counts the same
+    buttons it always did; what moved there is only how many are allowed.
+    """
+    def moved(found: re.Match) -> str:
+        held = int(found.group(1)) + (1 if counting else 0)
+        return f"has {held} slots, exactly {int(found.group(2)) + 1} are allowed."
+    return A_SLOT_REFUSAL.sub(moved, message)
+
+
 # A refusal obf.py gave about the number of sets, in the two shapes it had: the
 # total cap, and the separate cap on the active ones. Matched on the frozen
 # sentence rather than on the argument, because what makes these unanswerable
@@ -266,6 +444,23 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 COLOUR_WRITTEN = frozenset({"ext_vorlaut_color", "border_color"})
 
 
+# THE_KEYS_ARE_FIVE: what a frozen layout cannot say about the new shape. The
+# id of a page, because the ring now names every page; and the act of the key
+# on the page-key panel, because the ring's target is a board id this file
+# would have to walk the document to know.
+UNREACHABLE_AFTER_FIVE = (
+    re.compile(r"^sets\[\d+\]$"),
+    re.compile(rf"^sets\[\d+\]\.slots\[{PAGE_KEY}\]$"),
+)
+
+
+def moved_with_the_fifth_key(key: str, path: str) -> bool:
+    """Whether this field is one THE_KEYS_ARE_FIVE cannot answer for."""
+    if key == "id" and UNREACHABLE_AFTER_FIVE[0].fullmatch(path):
+        return True
+    return key == "act" and UNREACHABLE_AFTER_FIVE[1].fullmatch(path)
+
+
 def difference(want, got, path: str = "", ours: bool = False) -> str | None:
     """Where two answers stop agreeing, as one line naming the field.
 
@@ -289,6 +484,11 @@ def difference(want, got, path: str = "", ours: bool = False) -> str | None:
                     and re.fullmatch(r"sets\[\d+\]", path)):
                 continue
             if ours and key in COLOUR_WRITTEN:
+                continue
+            # THE_KEYS_ARE_FIVE, by where it sits and not by name alone, like
+            # the two above: an `id` anywhere but on a set entry is still
+            # compared, and so is an `act` on any of the other four keys.
+            if moved_with_the_fifth_key(key, path):
                 continue
             if key not in want:
                 return f"{where}: JavaScript adds {key!r}"
@@ -350,6 +550,50 @@ def set_aside_by_the_cap(one: dict, cap: int) -> bool:
     return (one["call"] == "normalizeLayout" and "error" in one
             and bool(A_CAP_REFUSAL.match(one["error"]))
             and not over_the_cap(one["args"], cap))
+
+
+def compare_import(name: str, want: dict, answer: dict) -> None:
+    """One frozen document-to-layout answer, brought forward - THE_KEYS_ARE_FIVE.
+
+    Three shapes, and which one this is decided by the document rather than by
+    the answer:
+
+    *A refusal* about how many keys a page holds moves one key along; any other
+    refusal is compared word for word as it always was.
+
+    *A document this file wrote* has its frozen layout brought forward, and
+    difference() drops the two fields that cannot be. Everything else - the
+    names, the order, the language, the voice, the other four keys - is held to
+    obf.py exactly as before.
+
+    *Anybody else's document* keeps every field except the pages' keys, which
+    describe a placement rule that is gone rather than one that moved.
+    """
+    if "error" in want:
+        want = {**want, "error": shift_a_slot_refusal(want["error"], counting=False)}
+        compare(name, want, answer)
+        return
+    if ours_throughout(want.get("document")):
+        compare(name, {"value": five_keys(deepcopy(want["value"]))}, answer)
+        return
+    setaside.append(name)
+    compare(name, {"value": without_the_pages_keys(want["value"])},
+            {**answer, "value": without_the_pages_keys(answer.get("value"))}
+            if "value" in answer else answer)
+
+
+def without_the_pages_keys(layout):
+    """A layout with every page's keys taken out, and nothing else touched."""
+    if not isinstance(layout, dict) or not isinstance(layout.get("sets"), list):
+        return layout
+    stripped = deepcopy(layout)
+    for page in stripped["sets"]:
+        if isinstance(page, dict):
+            page.pop("slots", None)
+            page.pop("symbol", None)
+            page.pop("key", None)
+            page.pop("id", None)
+    return stripped
 
 
 def compare(name: str, want: dict, answer: dict, ours: bool = False) -> None:
@@ -480,12 +724,19 @@ def main() -> int:
         return 1 if failures else 0
 
     answers = ask_node({
-        "helpers": [{"call": one["call"], "args": one["args"]}
+        # THE_KEYS_ARE_FIVE. A normalizeLayout argument is padded on the way
+        # through, so its pages are brought forward with `pad`; everything else
+        # here is a layout that has already been normalized.
+        "helpers": [{"call": one["call"],
+                     "args": ([five_keys(deepcopy(one["args"][0]), pad=True)]
+                              + one["args"][1:]
+                              if one["call"] == "normalizeLayout" and one["args"]
+                              else one["args"])}
                     for one in lock["helpers"]],
-        "exports": [one["layout"] for one in lock["exports"]],
+        "exports": [five_keys(deepcopy(one["layout"])) for one in lock["exports"]],
         "imports": [one["document"] for one in lock["imports"]],
         "licensing": [one["document"] for one in lock["licensing"]],
-        "obz": [one["layout"] for one in lock["zips"]],
+        "obz": [five_keys(deepcopy(one["layout"])) for one in lock["zips"]],
         "unobz": [{"name": Path(one["file"]).name,
                    "base64": base64.b64encode(
                        (REFERENCE / one["file"]).read_bytes()).decode("ascii")}
@@ -525,9 +776,20 @@ def main() -> int:
         # over a cap that has since moved, has nothing left to say.
         if set_aside_by_the_cap(one, cap):
             continue
+        # THE_KEYS_ARE_FIVE, on the answer this time: the frozen layout is
+        # brought forward the same way the argument was, and a refusal about
+        # how many keys a page holds is moved one key along with it.
+        if one["call"] == "normalizeLayout":
+            one = dict(one)
+            if "value" in one:
+                one["value"] = five_keys(deepcopy(one["value"]))
+            elif "error" in one:
+                one["error"] = shift_a_slot_refusal(one["error"])
         compare(name, one, answer)
 
     print("\n--- a layout becomes the frozen document -----------------------")
+    print("        THE_KEYS_ARE_FIVE: the layout going in was brought forward, "
+          "the document is compared as frozen")
     for one, answer in zip(lock["exports"], answers["exports"]):
         # ours=True: this is the writer's own output, so THE_COLOUR_IS_GONE's
         # two fields are not compared. The import and container comparisons
@@ -537,8 +799,12 @@ def main() -> int:
 
     print("\n--- and a document the frozen layout ---------------------------")
     for one, answer in zip(lock["imports"], answers["imports"]):
-        compare(one["name"], one, answer)
+        compare_import(one["name"], one, answer)
 
+    if setaside:
+        print(f"  --    {len(setaside)} foreign document(s): the pages' keys "
+              f"set aside, the placement rule they describe is gone "
+              f"(THE_KEYS_ARE_FIVE)")
     print("\n--- METACOM cannot be handed over as pixels --------------------")
     for one, answer in zip(lock["licensing"], answers["licensing"]):
         compare(one["name"], one, answer)
@@ -568,8 +834,11 @@ def main() -> int:
         found = difference(one["document"],
                            {k: v for k, v in got.items() if k != "layout"})
         check(f"{name}: the same document", found is None, found or "")
-        found = difference(one["layout"], got["layout"])
-        check(f"{name}: and the same layout", found is None, found or "")
+        # THE_KEYS_ARE_FIVE, the same reading the imports get one section up:
+        # the layout inside a container is documentToLayout's answer.
+        compare_import(f"{name}: and the same layout",
+                       {"document": one["document"], "value": one["layout"]},
+                       {"value": got["layout"]})
 
     # The whole way round, through the real container: the browser's own zip,
     # read by the browser. Circular on its own, and not circular after the
@@ -593,7 +862,12 @@ def main() -> int:
             if "error" in answer:
                 check(one["name"], False, f"refused its own file: {answer['error']}")
                 continue
-            found = difference(one["layout"], answer["value"]["layout"])
+            # THE_KEYS_ARE_FIVE. The layout that went in is the frozen one
+            # brought forward, exactly as it was handed to the writer above -
+            # so this is still "what went in came back", with the two fields
+            # difference() cannot answer for dropped.
+            found = difference(five_keys(deepcopy(one["layout"])),
+                               answer["value"]["layout"])
             check(f"{one['name']}: comes back as the layout that went in",
                   found is None, found or "")
 

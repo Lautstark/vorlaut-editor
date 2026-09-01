@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
-import { key, keySheet, press, put, setCard, setKey } from "./diy.js";
+import { PAGE_KEY, key, keySheet, pageMore, press, put, setCard } from "./diy.js";
 
 /* Not a test. A camera.
  *
@@ -82,10 +82,15 @@ test("the five-key editor, four states", async ({ page }) => {
 
   /* Each sentence goes in through the sheet a press opens, which is the same
      handgrip the tablet below uses - that sameness is now half of what these
-     eight pictures are for. The set's name and picture are its own card, the
-     one the set key and the ⋯ on the tab both open. */
-  for (const [at, word] of WORDS.entries()) await put(page, at, word);
-  await setKey(page).click();
+     eight pictures are for. The page's name is its own card, behind the ⋯ on
+     the tab - every cell opens its own key. */
+  /* The four words go on the four keys around the name panel, and the panel
+     under the speaker is left carrying the page's name - which is what the
+     device draws there and what the picture is meant to show. PAGE_KEY. */
+  for (const [at, word] of WORDS.entries()) {
+    await put(page, at < PAGE_KEY ? at : at + 1, word);
+  }
+  await pageMore(page).click();
   await setCard(page).locator("#diySetName").fill(SCREEN);
   await press(setCard(page), "ui.done");
   // Nothing focused, to match the tablet shot where nothing is selected: this
@@ -105,7 +110,7 @@ test("the five-key editor, four states", async ({ page }) => {
   await shot(page, "diy-3-editing");
   await page.keyboard.press("Escape");
 
-  await setKey(page).click();
+  await pageMore(page).click();
   await press(setCard(page), "ui.remove_set");
   await expect(page.getByRole("dialog", { name: label("ui.remove_set") })).toBeVisible();
   await shot(page, "diy-4-delete");

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { documentToLayout, layoutToDocument, normalizeLayout } from "../../src/data/obf.js";
 import { pictureKey, symbolPlaces } from "../../src/data/app_package.js";
+import { PAGE_KEY } from "../../src/core/types.js";
 import type { AppLayout, DiyLayout } from "../../src/core/types.js";
 
 /* Crossing a picture out, on every side of the seam that has to agree about it.
@@ -28,12 +29,22 @@ import type { AppLayout, DiyLayout } from "../../src/core/types.js";
 
 /* ------------------------------------------------------------- the keys --- */
 
-const talker = (slots: { text: string; symbol: string; negated?: boolean }[]): DiyLayout =>
-  normalizeLayout({
+/** One page whose keys are the ones handed in, with a picture on the panel the
+ *  page's name is printed on so that every walk here meets one of those too.
+ *
+ *  The keys handed in land in the cells before it, which is why "set.png" is
+ *  spliced in at PAGE_KEY rather than pushed: BoardSet.slots is reading order,
+ *  and the caller's first key has to stay the first key. */
+const talker = (slots: { text: string; symbol: string; negated?: boolean }[]): DiyLayout => {
+  const keys = [...slots];
+  while (keys.length < PAGE_KEY) keys.push({ text: "", symbol: "" });
+  keys.splice(PAGE_KEY, 0, { text: "", symbol: "set.png" });
+  return normalizeLayout({
     sleep_timeout_seconds: 600,
     language: "de",
-    sets: [{ name: "Set", color: "#3B5BDB", symbol: "set.png", slots }],
+    sets: [{ name: "Set", color: "#3B5BDB", slots: keys }],
   }) as DiyLayout;
+};
 
 const tablet = (buttons: { symbol: string; negated?: boolean }[]): AppLayout => ({
   target: "app",
@@ -75,12 +86,18 @@ describe("the picture a place wants", () => {
       .toEqual(new Set(["brot.png"]));
   });
 
-  it("says a set key is not crossed out, because there is nothing on it to be", () => {
-    // A set key is navigation rather than a word - there is no field on
-    // BoardSet and the picture column offers no control for one.
-    const places = symbolPlaces(talker([{ text: "Ja", symbol: "ja.png", negated: true }]));
-    const setKey = places.find((one) => one.where.includes("set key"));
-    expect(setKey?.negated).toBe(false);
+  it("crosses out the key on the page-key panel like any of the other four", () => {
+    /* It could not be, and that was the shape of the old distinction rather
+     * than a fact about the key: `BoardSet.symbol` had nowhere to say it and
+     * the sheet that edited it had no control for one, so the one panel a
+     * person could not cross out was the one that was not a slot. It is a slot
+     * now, it opens the same sheet, and it wears the same cross. */
+    const page = talker([{ text: "Ja", symbol: "ja.png" }]);
+    page.sets[0]!.slots[PAGE_KEY]!.negated = true;
+    const places = symbolPlaces(page);
+    const key = places.find((one) => one.reference === "set.png");
+    expect(key?.negated).toBe(true);
+    expect(pictureKey(key!.reference, key!.negated)).toBe("!set.png");
   });
 });
 

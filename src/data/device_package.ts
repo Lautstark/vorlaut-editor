@@ -146,8 +146,8 @@ import {
  * is what holds them to it. */
 import { HASH_BYTES, SLOTS_PER_SET } from "../device/layout_facts.js";
 import { zipBytes, type ZipMember } from "./zip.js";
-import { actOf } from "../core/types.js";
-import type { DiyLayout, SlotAct } from "../core/types.js";
+import { PAGE_KEY, actOf } from "../core/types.js";
+import type { DiyLayout, Slot, SlotAct } from "../core/types.js";
 
 export const FORMAT = "open-board-0.1";
 const MANIFEST = "manifest.json";
@@ -210,15 +210,26 @@ export interface DeviceSlot {
   empty: boolean;
 }
 
+/** One set as `layout.bin` lays it out: a name, the page key, four slots.
+ *
+ * **The file's shape and not the editor's.** core/types.ts holds a page as
+ * KEYS_PER_SET equal keys in reading order, which is what a person authors;
+ * this is the same five in the order the format writes them - adr/0020 §1,
+ * "the set key first, where the label hash sat, then the four speech keys" -
+ * and `device/fixtures/layout/*` is laid out on it. devicePlan() below is the
+ * one place the two orders meet, and keeping them apart is what stops a stride
+ * in the file from deciding how a board reads on screen.
+ */
 export interface DeviceSet {
   name: string;
-  /** The set key's picture reference, "" for none.
+  /** The page key's picture reference, "" for none.
    *
    *  Kept beside `key` rather than folded into it, because it is where it was
-   *  before the set key had anything else and moving it would rewrite every
+   *  before that key had anything else and moving it would rewrite every
    *  caller to say the same thing. `key.symbol` carries the same string. */
   symbol: string;
-  /** The set key, which is a key like the other four since adr/0020. */
+  /** The key on the page-key panel - core/types.ts's PAGE_KEY, which is a key
+   *  like the other four since adr/0020. */
   key: DeviceKey;
   slots: DeviceSlot[];
 }
@@ -274,35 +285,49 @@ export function devicePlan(layout: DiyLayout, voice: string): DevicePlan {
     return { does: act.alsoSpeak ? "speak-and-go" : "go", target };
   };
 
+  /** One key, in the file's words. */
+  const keyed = (slot: Slot | undefined) => ({
+    text: String(slot?.text ?? ""),
+    symbol: String(slot?.symbol ?? ""),
+    negated: Boolean(slot?.negated),
+    ...acted(actOf(slot ?? { text: "", symbol: "" })),
+  });
+
   return {
     language: String(layout.language ?? ""),
     voice: String(voice ?? ""),
     sleepTimeoutSeconds: Number(layout.sleep_timeout_seconds ?? 0),
-    sets: sets.map((set, index) => ({
-      name: String(set?.name ?? ""),
-      symbol: String(set?.symbol ?? ""),
-      /* The set key. **Absent `key.act` is the ring** - BoardSet.key says why -
-       * so a Sammlung written before the set key could do anything else
-       * exports exactly the file it exported, with every set key going on to
-       * the next. The ring is computed here rather than stored, because it is
-       * a fact about the order and would be wrong the moment somebody drags a
-       * set. */
-      key: {
-        text: String(set?.key?.text ?? "") || String(set?.name ?? ""),
-        symbol: String(set?.symbol ?? ""),
-        negated: false,
-        ...(set?.key?.act
-          ? acted(set.key.act)
-          : { does: "go" as const, target: (index + 1) % (sets.length || 1) }),
-      },
-      slots: (set?.slots ?? []).slice(0, SLOTS_PER_SET).map((slot) => ({
-        text: String(slot?.text ?? ""),
-        symbol: String(slot?.symbol ?? ""),
-        negated: Boolean(slot?.negated),
-        empty: slotIsEmpty(slot),
-        ...acted(actOf(slot)),
-      })),
-    })),
+    sets: sets.map((set) => {
+      const slots = set?.slots ?? [];
+      /* The five keys, sorted into the two places the file keeps them. The
+       * page key is the one on PAGE_KEY's panel and the other four follow it
+       * in reading order - one table, in core/types.ts, and this is the only
+       * place that reads it apart.
+       *
+       * **Nothing is computed here any more.** An absent `BoardSet.key` used
+       * to mean the ring, and the ring was worked out at this line from where
+       * a set happened to sit. It is targets in the file now - data/upgrade.ts
+       * wrote every stored one out on the way to database version 6 - so a key
+       * goes where it was pointed and a key pointed nowhere stays put, which
+       * is what a joining game's question needs and what this line could not
+       * express. */
+      const page = keyed(slots[PAGE_KEY]);
+      return {
+        name: String(set?.name ?? ""),
+        symbol: page.symbol,
+        key: {
+          ...page,
+          // What the panel says, which is the key's own word or else the name
+          // the firmware prints there - see PAGE_KEY.
+          text: page.text || String(set?.name ?? ""),
+        },
+        slots: slots.filter((_, at) => at !== PAGE_KEY)
+          .slice(0, SLOTS_PER_SET).map((slot) => ({
+            ...keyed(slot),
+            empty: slotIsEmpty(slot),
+          })),
+      };
+    }),
   };
 }
 
@@ -316,13 +341,19 @@ export const planLayout = (plan: DevicePlan): DiyLayout => ({
   language: plan.language,
   voice: plan.voice,
   sleep_timeout_seconds: plan.sleepTimeoutSeconds,
-  sets: plan.sets.map((set) => ({
-    name: set.name,
-    symbol: set.symbol,
-    slots: set.slots.map((slot) => ({
-      text: slot.text, symbol: slot.symbol, negated: slot.negated,
-    })),
-  })),
+  sets: plan.sets.map((set) => {
+    const said = (one: { text: string; symbol: string; negated: boolean }) =>
+      ({ text: one.text, symbol: one.symbol, negated: one.negated });
+    // The file's order back into the board's: the page key returns to its own
+    // panel and the four fill the cells around it. devicePlan() above is the
+    // way out and this is the way back, so the two tables are one.
+    const slots = set.slots.map(said);
+    return {
+      name: set.name,
+      slots: [...slots.slice(0, PAGE_KEY), said(set.key),
+              ...slots.slice(PAGE_KEY)],
+    };
+  }),
 });
 
 /* -------------------------------------------------------------- shapes --- */
@@ -792,13 +823,16 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
       buttons.push(button);
     }
 
-    // The set key, which is a key like the other four since adr/0020: it may
-    // say its own word, lead onward, or do both, and where it leads is no
-    // longer always the next set. A Sammlung that says nothing about it gets
-    // the ring, which devicePlan() is where that is decided.
+    // The key on the page-key panel, which is a key like the other four since
+    // adr/0020: it may say its own word, lead onward, or do both, and where it
+    // leads is where it was pointed. It is written last because that is where
+    // it has always sat in buttons[]; the grid is what says where it is drawn.
     const switchKey: DeviceButton = {
       id: `${id}-set`,
-      label: set.name,
+      // Its own word, or the name the firmware prints on that panel where it
+      // has none. devicePlan() is where the fallback is applied, so this is
+      // one field rather than a second copy of the rule.
+      label: set.key.text,
     };
     const setPicture = putImage(set.symbol);
     if (setPicture) switchKey.image_id = setPicture;

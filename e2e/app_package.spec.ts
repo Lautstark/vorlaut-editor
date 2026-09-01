@@ -5,7 +5,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { checkPackage } from "../src/data/app_package.js";
 import { readPackage, unzip } from "./obz.js";
-import { KEY_CELL, cells, key, keySheet, nameSet, press, put } from "./diy.js";
+import {
+  KEY_CELL, PAGE_KEY, cells, choose, chooseNamed, key, keySheet, nameSet, press, put,
+} from "./diy.js";
 import {
   exportForTalker, openPanel, openSettings, openVoices, pickExport,
 } from "./sheets.js";
@@ -118,13 +120,33 @@ async function fill(page: Page): Promise<void> {
   await press(box, "ui.done");
   await expect(cells(page).nth(KEY_CELL[0]!).locator(".cell__pic")).toBeVisible();
 
-  // A second set, so the package has two boards and a ring between them. One
+  // A second page, so the package has two boards and a way between them. One
   // board would leave load_board pointing at itself, which is legal and proves
   // nothing about navigation.
   await page.locator("#tabs .tab.add").click();
-  await expect(page.locator("#tabs .tab")).toHaveCount(3);   // two sets and the +
+  await expect(page.locator("#tabs .tab")).toHaveCount(3);   // two pages and the +
   await nameSet(page, "Spielen");
   await put(page, 0, "Noch einmal");
+
+  /* And each page's key pointed at the other, which is what makes them a
+   * Sammlung somebody can walk rather than two boards in one file.
+   *
+   * Written through the sheet, key by key, because that is what it is now: the
+   * fifth key used to go to the next page along by a rule nobody wrote down,
+   * so a two-page Sammlung was a ring the moment the second page existed.
+   * adr/0023 is the decision that made it targets, and this is what an author
+   * does instead. */
+  const tabs = page.locator("#tabs .tab:not(.add)");
+  for (const [at, to] of [[1, "Morgens"], [0, "Spielen"]] as const) {
+    await tabs.nth(at).click();
+    await key(page, PAGE_KEY).click();
+    const sheet = keySheet(page);
+    await expect(sheet).toBeVisible();
+    await choose(page, "#diyDoes", "ui.diy_does_goto");
+    await chooseNamed(page, "#diyGoto", to);
+    await press(sheet, "ui.done");
+    await expect(sheet).toHaveCount(0);
+  }
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
 
   // The Azure key, and Katja chosen with it. The stored voice is what the
@@ -206,9 +228,8 @@ test("a Sammlung leaves as a package, and it passes the spec's own checks",
     // §4.1: the hint, without the "azure:" that says where it is synthesised.
     expect(pkg.manifest.ext_lautstark_tts_voice).toBe("de-DE-KatjaNeural");
 
-    // Two boards, and a ring: each set key names the next, the last comes back
-    // round to the first. That is the device's behaviour and what a viewer has
-    // to be able to follow.
+    // Two boards, and each page's key naming the other - which is what fill()
+    // pointed them at, key by key, and what a viewer has to be able to follow.
     expect(pkg.boards.map((one) => one.name)).toEqual(["Morgens", "Spielen"]);
     // §7.1's locale, and it comes off the chosen voice rather than off the
     // browser this test happens to run in: the page here is English and the
@@ -349,11 +370,14 @@ async function seedMixed(page: Page): Promise<void> {
       sleep_timeout_seconds: 600,
       language: "de",
       voice: "azure:de-DE-KatjaNeural",
+      // Five keys in reading order, with the panel the page's name is printed
+      // on in the middle of them - core/types.ts's PAGE_KEY.
       sets: [{
-        name: "Morgens", symbol: "", color: "#3B5BDB",
+        name: "Morgens",
         slots: [
           { text: "Ich habe Hunger", symbol: "arasaac-2462.png" },
           { text: "Ich habe Durst", symbol: "arasaac-99.png" },
+          { text: "", symbol: "" },
           { text: "Noch einmal", symbol: "metacom:PNG_ohne_Rahmen/ja" },
           { text: "", symbol: "" },
         ],

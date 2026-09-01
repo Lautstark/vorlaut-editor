@@ -1471,25 +1471,30 @@ a.factlinks__line:hover { text-decoration: underline; }
   width: 38px; height: 38px; fill: none; stroke: currentColor;
 }
 
-/* The set key, which is a display like the four beside it and is also the set.
-   Its edge used to be the set's colour, the way the device drew one round all
-   five screens; the device draws none now, so this is the page's own line and
-   what makes the cell the set key is the eyebrow on it.
+/* The panel the device prints the page's name on - core/types.ts's PAGE_KEY.
+   A key like the four beside it: it drags, it takes a drop, and it opens the
+   same sheet. The heavier line is what says where the name will be, which is
+   the one thing this seat still decides.
 
-   It does not move and is not a drop target: its position is the hardware's.
-   The cursor says so, and the absence of a draggable attribute is what
-   actually stops it. */
-.cell--setkey { border-color: var(--line); border-width: 3px; }
-/* What this cell is, over what is on it. Small and shouted, which is what the
-   two words have to be to sit above a picture without competing with it - and
-   the shouting is here rather than in the table, where a capitalised string is
-   read out letter by letter by a screen reader. */
+   It was .cell--setkey and it was the set drawn as a cell: it did not move,
+   was not a drop target, and opened the set's own card instead of its own key.
+   The class is renamed rather than kept, because a stylesheet that goes on
+   saying "set key" is where the idea grows back. */
+.cell--namepanel { border-color: var(--line); border-width: 3px; }
+/* Where the page's name comes from, said over the cell it is drawn on. Small
+   and shouted, which is what a few words have to be to sit above a picture
+   without competing with it - and the shouting is here rather than in the
+   table, where a capitalised string is read out letter by letter by a screen
+   reader.
+
+   It is on the name panel and only while the key there has no word of its own:
+   once it has one there is nothing left to explain. */
 .cell__eyebrow {
   position: absolute; top: 4px; left: 0; right: 0; text-align: center;
   font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
   color: var(--text-faint); pointer-events: none;
 }
-.cell--setkey .cell__pic { max-height: 48%; margin-top: 8px; }
+.cell--namepanel .cell__pic { max-height: 48%; margin-top: 8px; }
 
 /* There was a .cell__pic--device here: the picture at the 15.21 mm the display
    really shows, drawn the way the display draws it. It is on the loader page

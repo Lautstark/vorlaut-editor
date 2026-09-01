@@ -143,24 +143,33 @@ const BOARD = {
    * the board all the way to the licence gate. A board with no voice would
    * default to Thorsten, who passes that gate even unclaimed. */
   voice: "piper:de_DE-kerstin-low",
+  /* Three pages of five keys, chained the way data/upgrade.ts chains a
+     Sammlung that used to ring: the key on the page-key panel - the third in
+     reading order, core/types.ts's PAGE_KEY - carries the page's picture and a
+     `goto` at the next page, and the last comes back round to the first. That
+     is what a database at version 6 holds, so it is what is seeded. */
   sets: [
-    { name: "Erste", symbol: "red.png", color: "#3B5BDB",
+    { id: "s1", name: "Erste",
       slots: [{ symbol: "red.png", text: "Hallo" },
               { symbol: "blue.png", text: "Danke" },
+              { symbol: "red.png", text: "", act: { kind: "goto", set: "s2" } },
               { symbol: "green.png", text: "Hallo" },
               { symbol: "", text: "" }] },
-    { name: "", symbol: "blue.png", color: "#159947",
+    { id: "s2", name: "",
       /* The first key here is red.png crossed out, and the first key of the
-         set above is red.png plain. One reference, one member of the archive,
+         page above is red.png plain. One reference, one member of the archive,
          one flag - which is form rule 2, and the one thing that goes wrong
          silently if the export ever bakes the cross instead. */
       slots: [{ symbol: "red.png", text: "Danke", negated: true },
               { symbol: "weg.png", text: "Tsch\u00fcss" },   // escaped: tests/test_language.py
+              { symbol: "blue.png", text: "", act: { kind: "goto", set: "s3" } },
               { symbol: "", text: "Bitte" },
               { symbol: "green.png", text: "" }] },
-    { name: "Aus", symbol: "yellow.png", color: "#FF6B35",
+    { id: "s3", name: "Aus",
       slots: [{ symbol: "yellow.png", text: "Niemals" },
-              { symbol: "", text: "" }, { symbol: "", text: "" },
+              { symbol: "", text: "" },
+              { symbol: "yellow.png", text: "", act: { kind: "goto", set: "s1" } },
+              { symbol: "", text: "" },
               { symbol: "", text: "" }] },
   ],
 };

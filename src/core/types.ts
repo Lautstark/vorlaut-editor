@@ -31,7 +31,7 @@ export interface Slot {
   act?: SlotAct;
 }
 
-/** What pressing a speech key does, on the device with four of them.
+/** What pressing a key does, on the device with five of them.
  *
  * Three things in the editor's words - **Wort**, **Wort & weiter**, **weiter**
  * - which are two members and a modifier here, for the reason Act's own note
@@ -43,7 +43,8 @@ export interface Slot {
  * the sentence bar - `append`, `clear`, `backspace`, `sayBar` - and this
  * device has no bar at all: the key is the whole sentence and it is said on
  * the press. `home` is the fifth, and it goes with the bar's neighbour, the
- * start page, which a ring of sets does not have. What is left is not a subset
+ * start page: this device opens on its first page and reaches it again
+ * through an ordinary `goto` like any other. What is left is not a subset
  * either, because `goto` names a different thing here - a BoardSet, not an
  * AppPage - and the modifier says something else about it. A shared union
  * would therefore have to be widened until it could express a talker key
@@ -59,7 +60,12 @@ export type SlotAct =
   /** Say this key. The default and, until this type existed, the only thing a
    *  speech key did. */
   | { kind: "speak" }
-  /** Switch to another set. `set` is a BoardSet.id in this same Sammlung.
+  /** Switch to another page. `set` is a BoardSet.id in this same Sammlung.
+   *
+   *  On any of the five keys. It was four while the fifth had a rule of its
+   *  own instead of a target; the rule is gone, and a page is reached because
+   *  some key names it - which is what makes a Sammlung a graph rather than a
+   *  ring.
    *
    *  `alsoSpeak` is the talker's half of exchange/SPEC.md §7.3's modifier: the
    *  key says its word first, then the set changes. It is
@@ -103,49 +109,82 @@ export type SlotAct =
  * last two bake it into pixels rather than carrying a flag, which is what lets
  * the firmware and the Android viewer show it without knowing it exists. */
 
-/** One set of four keys, and the set key that switches to it. */
+/** One page of the talker: five keys, and what the page is called.
+ *
+ * **The five are one kind of thing.** There was a fifth key here in another
+ * shape - `symbol`, `name` and `key` beside four `slots` - because the device
+ * had a set key that only ever switched sets. It has not had one since
+ * vorlaut-diy-talker's adr/0020 ("A set holds five keys") and `0ac0465` there
+ * ("the set key is a key like the other four with a sound of its own"), and
+ * this was the last place holding the distinction. What it cost while it
+ * lasted is in data/obf.ts's history: a reader that had to *guess* which of
+ * the five was the set key put an imported game's question into an answer
+ * panel and lost the winning answer entirely. There is nothing left to guess.
+ *
+ * So: any of the five may show a picture, say a word, lead to another page, or
+ * do none of it. A key that leads nowhere is not an unfinished key - the
+ * question of a joining game's round has to stay put while the four answers
+ * reply, and that is a whole panel whose act is `speak`.
+ */
 export interface BoardSet {
-  /** What a `goto` key names, when one names this set. AppPage.id one editor
-   *  along, and the same argument: a set is told apart from its neighbours by
-   *  being itself, not by where it currently sits. The order of these is the
-   *  order the device's set key cycles them in, so reordering them is an
-   *  ordinary authoring act on this device rather than a rearrangement of a
-   *  list - and a target stored as a position would follow the drag instead of
-   *  staying where it was pointed.
+  /** What a `goto` key names, when one names this page. AppPage.id one editor
+   *  along, and the same argument: a page is told apart from its neighbours by
+   *  being itself, not by where it currently sits - a target stored as a
+   *  position would follow a move instead of staying where it was pointed.
    *
    *  **Minted when something first points at it, and not before.** Absent
-   *  means no key leads here, which is every set in every Sammlung written
-   *  until now: nothing has to be migrated, nothing already stored changes,
-   *  and a Sammlung nobody uses this on goes on exporting the file it exported.
-   *  The alternative - an id on every set the moment this field existed -
-   *  would rewrite every board in the store to say something none of them had
-   *  been asked. openKeySheet() is where the minting happens, on the press
-   *  that writes the key that needed it. */
+   *  means no key leads here, which is a legal state and the ordinary one for
+   *  the five seconds between making a page and pointing a key at it. It is
+   *  also how `pages.ts` one editor along treats an unreachable page:
+   *  reachability is reported and never enforced. openKeySheet() is where the
+   *  minting happens, on the press that writes the key that needed it. */
   id?: string;
+  /** What the page is called.
+   *
+   * **Not the text of a key.** The firmware prints it on the panel in the last
+   * row's first cell, which is where the case puts the page key
+   * (`docs/hardware.md`), and the device's own menu reads it to name a page a
+   * `goto` leads to - vorlaut-diy-talker's adr/0021. So it is a fact about the
+   * page and the key on that panel keeps its own `text` like any other.
+   *
+   * Empty means nobody has named it rather than a page without a name: every
+   * reader draws `name || "Seite N"`, so the page reads as "Seite 3" in
+   * whichever language the page is in. */
   name: string;
-  symbol: string;
-  /** What the set key does, where it does something other than the ring.
+  /** The five keys, in the order they read on the board - device/layout_facts.ts's
+   *  KEYS_PER_SET of them.
    *
-   * **Absent is the ring**, which is what the set key did from the first
-   * five-key board until 2026-09-01 and what every Sammlung already stored
-   * means: press it and the next set comes up, forever, in the order these sit
-   * in. So nothing has to be migrated and a Sammlung nobody uses this on
-   * exports the file it exported - the same rule as `Slot.act` and
-   * `Slot.negated`, and it is the third field to take it.
+   * Reading order, left to right and top to bottom, skipping the corner where
+   * the speaker is (`docs/hardware.md`):
    *
-   * `text` is what the key says when it says anything, and absent means the
-   * set's name: a set key that speaks is nearly always saying what the set is
-   * called, and making somebody type that twice would be the editor asking for
-   * a fact it already has. The picture stays `symbol` above, where it was
-   * before the key had anything else.
+   *     .           slots[0]    slots[1]
+   *     slots[2]    slots[3]    slots[4]
    *
-   * A set key that speaks is what a joining game's board needs - the round
-   * says its own compound word and waits, and the four speech keys answer it -
-   * and it is the half of vorlaut-diy-talker's adr/0020 that the device
-   * gained on 2026-08-31 and this editor could not yet write down. */
-  key?: { text?: string; act?: SlotAct };
+   * That table is the whole of what an index means here: **where a key is
+   * drawn, and nothing at all about what it is.** editor-diy/editor.ts's CELLS
+   * and data/obf.ts's grid() are the same six cells written down for the two
+   * things that need them, and a document round trip goes through the grid
+   * rather than through a rule about which key leads anywhere.
+   *
+   * Always this many. obf.ts's normalizeLayout() is the gate that pads a short
+   * page and refuses a long one, so everything downstream may stop checking. */
   slots: Slot[];
 }
+
+/** Which of the five sits on the panel the device prints the page's name on.
+ *
+ * The last row's first cell, under the speaker, which is where the case puts
+ * it (`docs/hardware.md`) and where vorlaut-diy-talker's adr/0020 §3 says a
+ * reader finds it: "the button the grid puts in the set key's cell". The
+ * firmware draws `name` there whatever the key itself does.
+ *
+ * **A drawing position and not a role.** The key on it speaks, leads onward or
+ * stays put exactly like the other four, and every door reads it out of the
+ * grid rather than out of what it does. What the position still decides is one
+ * thing: a key on this panel with no word of its own shows the page's name,
+ * because that is what is printed there.
+ */
+export const PAGE_KEY = 2;
 
 /** One Sammlung in the list, as the sidebar shows it.
  *
@@ -209,7 +248,7 @@ export type Target = "diy" | "app";
  */
 export type Layout = DiyLayout | AppLayout;
 
-/** The five-key talker: sets of four keys, and the ring that cycles them. */
+/** The five-key talker: pages of five keys, each pointed where it points. */
 export interface DiyLayout {
   /** Absent counts as "diy". Every layout written before there was a second
    *  editor is one of these, and there is no migration - the flag arrived
@@ -217,7 +256,14 @@ export interface DiyLayout {
   target?: "diy";
   /** Every one of them goes onto the device, in this order, up to the cap in
    *  LIMITS.maxSets - the device's own MAX_SETS. A Sammlung is the selection:
-   *  there is no second flag deciding which of its sets ship. */
+   *  there is no second flag deciding which of its pages ship.
+   *
+   *  **The order is where each page sits in the file, and one thing more.**
+   *  It was also the order the set key cycled them in, until the ring stopped
+   *  being a rule and became the targets it had always meant; what a press
+   *  does is in the keys now. What the order still decides is `sets[0]`: the
+   *  device opens there, `manifest.root` names it, and every walk over the
+   *  pages starts from it. */
   sets: BoardSet[];
   /** Which language the device's own menu speaks. */
   language?: string;

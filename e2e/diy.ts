@@ -41,26 +41,30 @@ export const within = (key: string) => new RegExp(
   `(${LANGUAGES.map((l) => table[l][key]!
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`);
 
-/** The six cells of the board: the hole, the set key and the four speech keys,
- *  in the reading order src/editor-diy/editor.ts's CELLS lays them out in.
+/** The six cells of the board: the hole where the speaker is, and the five
+ *  keys, in the reading order src/editor-diy/editor.ts's CELLS lays them out in.
  *
- *      0 hole     1 key 1    2 key 2
- *      3 set key  4 key 3    5 key 4
+ *      0 hole     1 key 0    2 key 1
+ *      3 key 2    4 key 3    5 key 4
  */
 export const cells = (page: Page) => page.locator("#device .cell");
 
-/** The cell index a speech slot is drawn in. The four slots are the 2x2 block
- *  to the right of the speaker and the set key, which is where the hardware
- *  puts them - docs/hardware.md. */
-export const KEY_CELL = [1, 2, 4, 5] as const;
+/** The cell index a key is drawn in: the five in reading order, after the hole
+ *  where the 40 mm cone is - docs/hardware.md. BoardSet.slots' own order. */
+export const KEY_CELL = [1, 2, 3, 4, 5] as const;
 
-/** What a press on a speech key lands on. The cell is the box around it. */
+/** What a press on a key lands on. The cell is the box around it. */
 export const key = (page: Page, slot: number) =>
   cells(page).nth(KEY_CELL[slot]!).locator(".cell__open");
 
-/** The set key, bottom left, which opens the set's own card - it is the set,
- *  drawn as the thing the device shows. */
-export const setKey = (page: Page) => cells(page).nth(3).locator(".cell__open");
+/** Which of the five sits on the panel the device prints the page's name on -
+ *  core/types.ts's PAGE_KEY. A key like the other four: it opens the key sheet
+ *  and it is only its caption that the panel decides. */
+export const PAGE_KEY = 2;
+
+/** The page's own card, which is behind the ... on the tab that is open - and
+ *  only there, since every cell opens its own key. */
+export const pageMore = (page: Page) => page.locator(".tab.active .tab__more");
 
 /** The one open sheet, named by its heading rather than by its whole text.
  *
@@ -73,7 +77,7 @@ export const sheet = (page: Page, key: string) => page.locator("dialog[open]")
 
 /** The sheet a press on a speech key opens. */
 export const keySheet = (page: Page) => sheet(page, "ui.diy_key_title");
-/** The card the ⋯ on the current tab and the set key both open. */
+/** The card the ⋯ on the current tab opens. */
 export const setCard = (page: Page) => sheet(page, "ui.set_title");
 
 /** An entry in an open dropdown menu, matched by the words on it.
@@ -124,7 +128,7 @@ export async function openBoard(page: Page): Promise<void> {
   await expect(cells(page)).toHaveCount(6);
 }
 
-/** The word one speech key is drawn with.
+/** The word one key is drawn with.
  *
  * Read off the cell rather than out of a field, because there is no field on
  * the board any more: the word on a cell is what the editor believes, which is
@@ -134,7 +138,7 @@ export async function openBoard(page: Page): Promise<void> {
 export const word = (page: Page, slot: number) =>
   cells(page).nth(KEY_CELL[slot]!).locator(".cell__word");
 
-/** What one speech key says, once it says it.
+/** What one key says, once it says it.
  *
  * A retrying assertion rather than a read, and that is not a detail: switching
  * Sammlung and reloading both go through IndexedDB, so the board on screen at
@@ -150,7 +154,7 @@ export async function expectSaid(page: Page, slot: number, text: string): Promis
   else await expect(word(page, slot)).toHaveText(text);
 }
 
-/** Puts a sentence on one speech key, through the sheet a person would use.
+/** Puts a sentence on one key, through the sheet a person would use.
  *
  * Nothing is written until Fertig - see the head of src/shell/sheet.ts - so
  * this is also what exercises that, on the way to every board these specs
@@ -167,9 +171,9 @@ export async function put(page: Page, slot: number, text: string): Promise<void>
     .toHaveText(text);
 }
 
-/** Names the set on screen, through its card. */
+/** Names the page on screen, through its card. */
 export async function nameSet(page: Page, name: string): Promise<void> {
-  await setKey(page).click();
+  await pageMore(page).click();
   const card = setCard(page);
   await expect(card).toBeVisible();
   await card.locator("#diySetName").fill(name);
