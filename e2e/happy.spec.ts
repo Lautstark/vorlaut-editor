@@ -716,6 +716,142 @@ test("a key can say its word, lead onward, or do both", async ({ page }) => {
   await expect(cells(page).nth(KEY_CELL[0]!).locator(".cell__follow")).toHaveCount(1);
 });
 
+test("the set key can ring, say a word and stand still, or lead where it was pointed",
+     async ({ page }) => {
+  /* The round of a joining game, built the way somebody builds one.
+   *
+   * This is the last door that was shut. The device has spoken a set key since
+   * 2026-08-31, data/device_package.ts has written one and data/obf.ts has read
+   * one back - and tests/unit/import_acts.test.ts had to state its boards by
+   * hand rather than take them from a fixture, in the sentence "the editor's
+   * own writer cannot produce a set key that stays put and that is exactly the
+   * board that broke". This is that writer, so what is driven here is the
+   * control a person drives and never the layout behind it.
+   *
+   * The board is the round out of Spiegel-und-Ei-device.obz, which runs on the
+   * real device: the fifth key asks the compound word and does not move, and
+   * exactly one of the four answers leads to the next round.
+   *
+   * ## Four answers, and the first of them is the whole risk
+   *
+   * Absent is the ring - press it, next set, forever - and `{kind: "speak"}` is
+   * a key that speaks and stands still. Reading those two as one thing goes
+   * wrong in one of two silent ways: every Sammlung ever stored becomes one
+   * whose set key does not move, or the board above cannot be written at all.
+   * So the ring is asserted twice here - as the answer an untouched set key
+   * stands on, and as the answer it is still standing on after being opened,
+   * confirmed with Fertig and reloaded. That second one is what the promise on
+   * BoardSet.key comes to in the interface: a Sammlung whose set key nobody
+   * touched exports the file it exported before.
+   */
+  await openBoard(page);
+
+  // Two rounds, so there is somewhere for the winning answer to lead.
+  await nameSet(page, "Runde 1");
+  await page.locator("#tabs .tab.add").click();
+  const tabs = page.locator("#tabs .tab:not(.add)");
+  await expect(tabs).toHaveCount(2);
+  await nameSet(page, "Runde 2");
+  await tabs.first().click();
+
+  await setKey(page).click();
+  const card = setCard(page);
+  await expect(card).toBeVisible();
+
+  /* Reihum, which is where an untouched set key stands, and the answer that
+   * asks for nothing else: it neither speaks nor is pointed anywhere, so both
+   * of the rows under it are away. */
+  await expect(card.locator("#diySetDoes"))
+    .toHaveText(label("ui.diy_set_does_ring"));
+  await expect(card.locator("#diySetGoto")).toBeHidden();
+  await expect(card.locator("#diySetText")).toBeHidden();
+
+  /* Wort: the round's question, said on the press, and the page stays where it
+   * is. The target list goes away with the answer - hidden rather than greyed,
+   * for the key sheet's reason. */
+  await choose(page, "#diySetDoes", "ui.diy_does_word");
+  await expect(card.locator("#diySetGoto")).toBeHidden();
+  const says = card.locator("#diySetText");
+  await expect(says).toBeVisible();
+
+  /* Empty is the set's name, and the name is the placeholder rather than the
+   * value: the field offers the fact the editor already has without writing a
+   * second copy of it into the Sammlung. It follows the name as it is typed,
+   * which is what makes that offer true rather than a snapshot. */
+  await expect(says).toHaveValue("");
+  await expect(says).toHaveAttribute("placeholder", "Runde 1");
+
+  await says.fill("Was wird aus Spiegel und Ei?");
+  await press(card, "ui.done");
+  await expect(card).toHaveCount(0);
+
+  // One answer of the four carries the round onward - the same key the game
+  // file has, written through the key sheet beside this one.
+  await put(page, 0, "Spiegelei. Genau!");
+  await key(page, 0).click();
+  const box = keySheet(page);
+  await expect(box).toBeVisible();
+  await choose(page, "#diyDoes", "ui.diy_does_carry");
+  await chooseNamed(page, "#diyGoto", "Runde 2");
+  await press(box, "ui.done");
+  await expect(box).toHaveCount(0);
+  await expect(cells(page).nth(KEY_CELL[0]!).locator(".cell__follow"))
+    .toHaveCount(1);
+
+  /* And it is written, not merely drawn. A reload is the assertion that the
+   * question reached the store: it comes back in the field, on the answer that
+   * says the key stands still. */
+  await page.reload();
+  await expect(cells(page)).toHaveCount(6);
+  await setKey(page).click();
+  await expect(card).toBeVisible();
+  await expect(card.locator("#diySetDoes")).toHaveText(label("ui.diy_does_word"));
+  await expect(card.locator("#diySetText"))
+    .toHaveValue("Was wird aus Spiegel und Ei?");
+
+  /* Weiter: pointed at a set rather than at whichever one comes next. It says
+   * nothing, so the field it would be said in is away and the list it is
+   * pointed with is there - which is the pair of rows Reihum has neither of,
+   * and the reason the two are different answers. */
+  await choose(page, "#diySetDoes", "ui.diy_does_goto");
+  await expect(card.locator("#diySetText")).toBeHidden();
+  await expect(card.locator("#diySetGoto")).toBeVisible();
+  await chooseNamed(page, "#diySetGoto", "Runde 2");
+
+  // Wort & weiter draws both, and is the only answer that does.
+  await choose(page, "#diySetDoes", "ui.diy_does_carry");
+  await expect(card.locator("#diySetGoto")).toBeVisible();
+  // Nothing was cleared on the way through the three answers, so the question
+  // typed before somebody changed their mind is still there.
+  await expect(card.locator("#diySetText"))
+    .toHaveValue("Was wird aus Spiegel und Ei?");
+  await press(card, "ui.done");
+  await expect(card).toHaveCount(0);
+
+  /* The second round's key, which nobody has touched: opened, confirmed with
+   * Fertig and reloaded, it is still the ring. Anything the sheet wrote onto
+   * it - an act saying speak, or the name copied into the field - would show
+   * up here as a different answer or a filled field, and would be a Sammlung
+   * that exports a file it did not export before. */
+  await tabs.nth(1).click();
+  await setKey(page).click();
+  await expect(card).toBeVisible();
+  await expect(card.locator("#diySetDoes"))
+    .toHaveText(label("ui.diy_set_does_ring"));
+  await press(card, "ui.done");
+  await expect(card).toHaveCount(0);
+
+  await page.reload();
+  await expect(cells(page)).toHaveCount(6);
+  await tabs.nth(1).click();
+  await setKey(page).click();
+  await expect(card).toBeVisible();
+  await expect(card.locator("#diySetDoes"))
+    .toHaveText(label("ui.diy_set_does_ring"));
+  await choose(page, "#diySetDoes", "ui.diy_does_word");
+  await expect(card.locator("#diySetText")).toHaveValue("");
+});
+
 test("a Sammlung of two dozen pages leaves the board on screen", async ({ page }) => {
   /* The regression the cap's move to sixty-four could have shipped.
    *

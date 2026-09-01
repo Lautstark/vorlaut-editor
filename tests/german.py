@@ -200,6 +200,15 @@ ALLOWED = [
     ("Wo ist Mama?", "a sentence in the levelling batch"),
     ("Mir tut der Bauch weh, und ", "a sentence in the levelling batch"),
     ("Ich habe Durst und möchte e", "a sentence in the levelling batch"),
+    # The round of a joining game, in e2e/happy.spec.ts. The set key asks a
+    # compound word and stands still while the four answers reply, and that
+    # board is what the spec drives the sheets to build - so the question is
+    # the input, typed into the field and then read back out of it. It is the
+    # one out of Spiegel-und-Ei-device.obz rather than an invention, because
+    # the point of the test is that a game which already runs on the device
+    # can be authored in the editor; tests/unit/import_acts.test.ts measured
+    # the same file from the reading side.
+    ("Was wird aus Spiegel und Ei?", "a joining game's round, as input"),
     # The word class guesser and its test, where German words are the data.
     #
     # src/data/wordclass.ts answers what part of speech a word is out of the
