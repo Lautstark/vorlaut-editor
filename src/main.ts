@@ -70,5 +70,18 @@ settingsSheet.render();
 collectionSheet.render();
 legal.render();
 
+/* Before anything reads the database. Where a folder is the store it is the
+   truth, and a first paint from the browser's copy would be a board that changes
+   under somebody a moment later. */
+const { ablage, adopted, watchFolder } = await import("./data/folder.js");
+const { pullFromFolder } = await import("./data/store.js");
+await ablage.restore().catch(() => null);
+await pullFromFolder().catch(() => false);
+
 const { start } = await import("./app.js");
 start();
+
+/* Somebody else's edit, arriving as a file that changed under this browser. */
+if (await adopted()) {
+  watchFolder(() => void pullFromFolder().then(() => { location.reload(); }));
+}

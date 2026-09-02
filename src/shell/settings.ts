@@ -21,6 +21,9 @@ import * as symbols from "../data/symbols.js";
 import { exportEverything, importBackup, isBackup, TOO_NEW } from "../data/backup.js";
 import { adopt, adopted, refusal } from "./adopt.js";
 import { paintBackupFolder, wireBackupFolder } from "./backupFolder.js";
+import { wherePanel } from "@lautstark/sicherung/ablage-panel";
+import { ablage, isStore } from "../data/folder.js";
+import { adoptFolder } from "../data/store.js";
 import type { Sicherung } from "@lautstark/sicherung";
 import { downloadJson } from "@lautstark/werkzeuge/download";
 
@@ -415,7 +418,21 @@ export function wireImport() {
  * one is about this browser's whole state, in a shape only vorlaut reads, and
  * the two would blur into "export" if they shared a panel. */
 export function wireData(backup: Sicherung) {
-  wireBackupFolder(backup, (message) => { $("dataState").textContent = message; });
+  /* The store panel comes from the package, so every Lautstark programme shows
+     the same one. What stays here is what vorlaut alone offers besides it. */
+  const store = wherePanel({
+    store: ablage,
+    adopt: adoptFolder,
+    changed: () => { location.reload(); },
+    say: (line) => { $("dataState").textContent = line; },
+    lang: LANG === "en" ? "en" : "de",
+  });
+  $("whereBox").append(store.node);
+  /* Only where there is no store folder: with one, the copies already go beside
+     the work, and a second picker would be the same offer under a name that
+     reads almost the same. */
+  if (isStore()) $("folderBox").hidden = true;
+  else wireBackupFolder(backup, (message) => { $("dataState").textContent = message; });
 
   $<HTMLButtonElement>("dataExport").onclick = async () => {
     $("dataState").textContent = "";

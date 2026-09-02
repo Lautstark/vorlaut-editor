@@ -53,6 +53,7 @@ import { wireSymbolFolder, wireImport, wireData, wireSources } from "./shell/set
 import { wireLegal } from "./shell/legal.js";
 import { subscribeMetacom } from "./data/symbols.js";
 import { exportEverything } from "./data/backup.js";
+import { ablage } from "./data/folder.js";
 import { onChanged } from "./data/changed.js";
 import { onBlocked } from "./data/store.js";
 import { offerRescue, sayCarried, wireRescue } from "./shell/rescue.js";
@@ -139,7 +140,12 @@ export function start(): void {
   // Never prompts - there is no gesture here. A folder that needs its
   // permission re-confirmed lands in needs-permission and says so in the
   // Daten panel, which is where the click can happen.
-  void backup.restore().catch(() => undefined);
+  /* Where the work already lives in a folder, the dated copies go beside it: the
+     store fills `<folder>/vorlaut/` and these are flat files above it, so nobody
+     is asked to pick a second folder that reads like the first. */
+  const held = ablage.handle();
+  if (held) void backup.useFolder(held).catch(() => undefined);
+  else void backup.restore().catch(() => undefined);
   /* The board's own pictures follow the METACOM provider: a folder arriving -
    * restored on load, reconnected, or freshly picked - re-renders the board,
    * or every metacom: key keeps the placeholder it drew while there was no

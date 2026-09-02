@@ -246,6 +246,14 @@ export const markup = `
       <span class="section" id="dataSection"></span>
     </summary>
     <div class="setting">
+      <!-- The store: one panel for every Lautstark programme, built by
+           @lautstark/sicherung/ablage-panel so the words and the order are the
+           same wherever somebody meets them. Everything below is what vorlaut
+           offers besides the store. -->
+      <div id="whereBox"></div>
+      <hr class="hair" />
+      <p class="subhead" id="keepHead"></p>
+
       <p class="lead" id="dataNote"></p>
 
       <!-- The folder first, because it is the one that keeps working after

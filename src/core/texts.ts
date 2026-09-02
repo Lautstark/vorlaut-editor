@@ -142,6 +142,7 @@ export function applyTexts() {
   // opens and so labels as it builds. Nothing on this sheet is about a cable
   // any more.
   $("dataSection").textContent = t("ui.data_section");
+  $("keepHead").textContent = t("ui.keep_head");
   $("dataNote").textContent = t("ui.data_note");
   $("dataExport").textContent = t("ui.data_export");
   $("dataImport").textContent = t("ui.data_import");

@@ -66,6 +66,7 @@ import { openDB, type DBSchema, type IDBPDatabase, type IDBPObjectStore, type St
 import type { CollectionList, CollectionRef, HeldLayout, Layout, SaveResult, Settings }
   from "../core/types.js";
 import { touched } from "./changed.js";
+import { adopt, adopted, isStore, pushKind, readKind } from "./folder.js";
 import { migrate, MISSING_STEP, type OldDB, type OldTx } from "./migrations.js";
 import { type Dump } from "./rescue.js";
 
@@ -154,6 +155,11 @@ interface StoredLayout {
   id: string;
   text: string;
   version: string;
+  /** §1.4's stamp, and what the folder compares to decide what to rewrite. A
+   *  record whose stamp never moves is one the folder stops believing has
+   *  changed — `version` moves with the text but is a hash, and the folder
+   *  wants a number. */
+  updatedAt?: number;
 }
 
 /** The two things this database remembers that are neither content nor
@@ -316,6 +322,67 @@ function createSchema(db: IDBPDatabase<VorlautDB>): void {
   db.createObjectStore(MARKS);
   db.createObjectStore("symbols");
   db.createObjectStore(SPEECH).createIndex(BY_USE, ["usedAt", "size"]);
+}
+
+/* Where a folder is the store, every change has to reach it. A change here is
+   always a transaction over several stores, so it is mirrored afterwards rather
+   than record by record: a folder write cannot happen inside a transaction that
+   has to stay open. */
+async function mirror(): Promise<void> {
+  if (!isStore()) return;
+  const db = await open();
+  const [collections, layouts] = await Promise.all([
+    db.getAll(COLLECTIONS),
+    db.getAll(LAYOUTS),
+  ]);
+  await pushKind("sammlungen", collections);
+  await pushKind("layouts", layouts.map((one) => ({ ...one, updatedAt: one.updatedAt ?? 0 })));
+}
+
+/* The folder is the truth where one is connected: on start it is read and the
+   browser's copy is replaced wholesale. Only a folder that has finished becoming
+   the store — one halfway through adoption holds fewer records than the browser
+   does, and reading that back is indistinguishable from "everything was deleted
+   elsewhere". It is not the same thing, and guessing cost a household its
+   calendar once.
+
+   The marks are not touched: which board is open here is this machine's answer,
+   and a board that went away leaves `current` pointing at nothing, which the
+   reader already has to handle. */
+export async function pullFromFolder(): Promise<boolean> {
+  if (!isStore() || !(await adopted())) return false;
+  const db = await open();
+  const [collections, layouts] = await Promise.all([
+    readKind<{ id: string; name: string; updatedAt: number }>("sammlungen"),
+    readKind<StoredLayout>("layouts"),
+  ]);
+  const tx = db.transaction([COLLECTIONS, LAYOUTS], "readwrite");
+  await tx.objectStore(COLLECTIONS).clear();
+  await tx.objectStore(LAYOUTS).clear();
+  for (const one of collections) await tx.objectStore(COLLECTIONS).put(one);
+  for (const one of layouts) await tx.objectStore(LAYOUTS).put(one);
+  await tx.done;
+  touched();
+  return true;
+}
+
+/* Connecting a folder for the first time is the migration with a before and an
+   after. A folder that is already a store replaces what this browser holds; one
+   that is not adopts what this browser holds — written, checked, and only then
+   marked. */
+export async function adoptFolder(): Promise<"pushed" | "pulled" | "incomplete"> {
+  if (await adopted()) { await pullFromFolder(); return "pulled"; }
+  const db = await open();
+  const [collections, layouts] = await Promise.all([
+    db.getAll(COLLECTIONS),
+    db.getAll(LAYOUTS),
+  ]);
+  const went = await adopt({
+    sammlungen: collections,
+    layouts: layouts.map((one) => ({ ...one, updatedAt: one.updatedAt ?? 0 })),
+  });
+  if (!went.adopted) return went.reason === "already" ? "pulled" : "incomplete";
+  return "pushed";
 }
 
 /** Somebody to tell when the database cannot be opened at all.
@@ -675,11 +742,13 @@ export async function createCollection(name: string, layout: Layout): Promise<st
   const collections = tx.objectStore(COLLECTIONS);
   // The registry row, the layout and "this is the open one" in one transaction:
   // a row with nothing behind it is a sidebar entry that opens onto nothing.
-  await collections.put({ id, name, updatedAt: await nextStamp(collections) });
-  await tx.objectStore(LAYOUTS).put({ id, text, version });
+  const stamp = await nextStamp(collections);
+  await collections.put({ id, name, updatedAt: stamp });
+  await tx.objectStore(LAYOUTS).put({ id, text, version, updatedAt: stamp });
   await tx.objectStore(MARKS).put(id, CURRENT);
   await tx.done;
 
+  await mirror();
   touched();
   return id;
 }
@@ -691,6 +760,7 @@ export async function renameCollection(id: string, name: string): Promise<void> 
   const held = await collections.get(id);
   if (held) await collections.put({ ...held, name, updatedAt: await nextStamp(collections) });
   await tx.done;
+  await mirror();
   touched();
 }
 
@@ -725,6 +795,7 @@ export async function deleteCollection(id: string): Promise<void> {
     }
   }
   await tx.done;
+  await mirror();
   touched();
 }
 
@@ -802,11 +873,12 @@ export async function replaceCollections(incoming: IncomingCollection[],
   await layouts.clear();
   for (const one of written) {
     await collections.put({ id: one.id, name: one.name, updatedAt: one.updatedAt });
-    await layouts.put({ id: one.id, text: one.text, version: one.version });
+    await layouts.put({ id: one.id, text: one.text, version: one.version, updatedAt: Date.now() });
   }
   await tx.objectStore(MARKS).put(list.current, CURRENT);
   await tx.done;
 
+  await mirror();
   touched();
   return list;
 }
@@ -887,8 +959,9 @@ export async function writeLayout(layout: Layout, expected: string | null): Prom
     return { conflict: true };
   }
 
-  await layouts.put({ id, text, version });
+  await layouts.put({ id, text, version, updatedAt: Date.now() });
   await tx.done;
+  await mirror();
 
   // Only a write that actually landed. A conflict wrote nothing, and
   // announcing one would back up the layout this tab lost.
