@@ -1,5 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
+/* The Daten panel's folder line is drawn by the package now, so its words come
+   from there rather than from TEXTS. Asserted against the same function the
+   panel paints with, so this test moves if the sentence does — and still fails
+   if the page stops repainting it, which is the half it was written for. */
+import { sentenceFor } from "@lautstark/sicherung/backup-panel";
 import { hits, key, keySheet, openBoard, put, search } from "./diy.js";
 import { openCollectionSettings, openPanel, openSettings, openVoices } from "./sheets.js";
 
@@ -314,19 +319,26 @@ test("opening a Sammlung does not re-language the editor", async ({ page }) => {
 test("the folder's own line follows a switch, formatter and all", async ({ page }) => {
   await openSettings(page);
   await openPanel(page, "#dataPanel");
-  const line = page.locator("#folderState");
+  /* #folderState and #folderActions are gone: the block is
+     @lautstark/sicherung/backup-panel's markup now, mounted into #folderBox. */
+  const line = page.locator("#folderBox .standing");
   await expect(line).toBeVisible();
-  const before = (await line.textContent())?.trim() ?? "";
+  const off = { kind: "off" } as const;
   // Nothing chosen yet, so this is the "off" sentence - in the language the
   // browser asked for, which is the baseline the switch has to move.
-  expect(before).toContain(says(ASKED, "ui.folder_off"));
+  await expect(line).toContainText(sentenceFor(off, ASKED as "de" | "en"));
+
+  const button = page.locator("#folderBox .acts button").first();
+  const wasNamed = (await button.textContent())?.trim() ?? "";
 
   await openPanel(page, "#languagePanel");
   await option(page, CHOSEN).click();
 
-  await expect(line).toContainText(says(CHOSEN, "ui.folder_off"));
-  await expect(page.locator("#folderActions button").first())
-    .toHaveText(says(CHOSEN, "ui.folder_choose"));
+  await expect(line).toContainText(sentenceFor(off, CHOSEN as "de" | "en"));
+  /* The buttons carry no data-i18n either, and the panel names them out of the
+     same table it draws the sentence from — so if the sentence moved and these
+     did not, the repaint reached half the block. */
+  await expect(button).not.toHaveText(wasNamed);
 });
 
 /* The half of a language switch that was not switching.
