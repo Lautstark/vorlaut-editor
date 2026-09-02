@@ -450,7 +450,7 @@ export function wireData(backup: Sicherung) {
     else byId("folderBox").hidden = true;
   }
 
-  /* „Alles löschen", which this editor was the only one in the family without.
+  /* Delete everything, which this editor was the only one in the family without.
      Same shape as its three siblings: its own panel last in the column, a
      confirmation that counts what goes and says how far it reaches, a refusal
      where the folder is out of reach, and the one typed word in the product. */

@@ -33,7 +33,7 @@ export const isStore = () =>
 export const isStale = () => ablage.status.kind === "stale";
 
 /**
- * How far a „Alles löschen" would reach.
+ * How far a delete-everything would reach.
  *
  * Three answers rather than a boolean, because the sentence differs in each.
  * With a folder as the store the files go, so they go on every device the
