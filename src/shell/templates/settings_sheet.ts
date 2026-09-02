@@ -260,11 +260,7 @@ export const markup = `
            somebody stops thinking about it. Hidden outright where the browser
            has no picker - Safari, Firefox, anything on Android - and then the
            two buttons below are the whole offer, unchanged. -->
-      <div id="folderBox" class="folderbox">
-        <p class="lead" id="folderLead"></p>
-        <p class="standing" id="folderState"></p>
-        <div class="row" id="folderActions"></div>
-      </div>
+      <div id="folderBox" class="folderbox"></div>
 
       <div class="row">
         <button id="dataExport" class="btn" type="button"></button>

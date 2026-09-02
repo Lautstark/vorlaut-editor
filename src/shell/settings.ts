@@ -20,12 +20,17 @@ import { paintCollections } from "./collections.js";
 import * as symbols from "../data/symbols.js";
 import { exportEverything, importBackup, isBackup, TOO_NEW } from "../data/backup.js";
 import { adopt, adopted, refusal } from "./adopt.js";
-import { paintBackupFolder, wireBackupFolder } from "./backupFolder.js";
+import { backupPanel, type BackupPanel } from "@lautstark/sicherung/backup-panel";
 import { wherePanel } from "@lautstark/sicherung/ablage-panel";
 import { ablage, isStore } from "../data/folder.js";
 import { adoptFolder } from "../data/store.js";
 import type { Sicherung } from "@lautstark/sicherung";
 import { downloadJson } from "@lautstark/werkzeuge/download";
+import { LANG } from "../core/boot.js";
+
+/* Held so a language switch can repaint it: the panel paints its own words and
+   carries no data-i18n, so applyTexts() cannot reach it. */
+let keeping: BackupPanel | null = null;
 
 let settings: Settings = { azureKey: { set: false, hint: "" }, azureRegion: "",
                  metacom: { path: "", ok: false, count: 0, keywords: false,
@@ -306,7 +311,7 @@ export function paintStates() {
   // The Daten panel's own state line, which is drawn by the module that owns
   // the folder rather than from here - it is the one panel whose sentence is
   // built from a status this file never sees.
-  paintBackupFolder();
+  keeping?.refresh();
   /* There was a second one, and the hook it registered through has gone with
    * it. onPaintPanels() let a panel wired outside this file ask to be redrawn
    * on a language switch, and existed because the Device panel belonged to
@@ -432,7 +437,18 @@ export function wireData(backup: Sicherung) {
      the work, and a second picker would be the same offer under a name that
      reads almost the same. */
   if (isStore()) $("folderBox").hidden = true;
-  else wireBackupFolder(backup, (message) => { $("dataState").textContent = message; });
+  else {
+    /* The 170 lines this replaces are @lautstark/sicherung/backup-panel's now.
+       `lang` is a function because LANG here is a live binding that moves when
+       the page changes language without reloading. */
+    keeping = backupPanel({
+      backup,
+      say: (message) => { $("dataState").textContent = message; },
+      lang: () => (LANG === "en" ? "en" : "de"),
+    });
+    if (keeping) $("folderBox").append(keeping.node);
+    else $("folderBox").hidden = true;
+  }
 
   $<HTMLButtonElement>("dataExport").onclick = async () => {
     $("dataState").textContent = "";

@@ -146,10 +146,11 @@ export function applyTexts() {
   $("dataNote").textContent = t("ui.data_note");
   $("dataExport").textContent = t("ui.data_export");
   $("dataImport").textContent = t("ui.data_import");
-  // The standing backup's own line and buttons are NOT set here. They are
-  // rebuilt from the table on every status change instead, because the state
-  // decides which words and which buttons there are - see ui/backupFolder.ts.
-  $("folderLead").textContent = t("ui.folder_lead");
+  // The standing backup's line, lead and buttons are NOT set here, and no
+  // longer exist as ids either: @lautstark/sicherung/backup-panel builds the
+  // whole block and paints its own words on every status change, because the
+  // state decides which words and which buttons there are. settings.ts calls
+  // its refresh() from here's caller when the language moves.
   $<HTMLButtonElement>("boardImport").textContent = t("ui.collection_import");
   $<HTMLButtonElement>("azureSave").textContent = t("ui.azure_save");
   $("arasaacSection").textContent = t("ui.arasaac");
