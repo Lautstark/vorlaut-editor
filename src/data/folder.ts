@@ -32,6 +32,23 @@ export const isStore = () =>
   ablage.status.kind !== "off" && ablage.status.kind !== "unsupported";
 export const isStale = () => ablage.status.kind === "stale";
 
+/**
+ * How far a „Alles löschen" would reach.
+ *
+ * Three answers rather than a boolean, because the sentence differs in each.
+ * With a folder as the store the files go, so they go on every device the
+ * household has — and with the folder out of reach a wipe would empty this
+ * browser while the folder kept everything and handed it back on the next
+ * start. That one is refused rather than asked. The three sibling products grew
+ * the same function on 2026-09-02.
+ */
+export const wipeReaches = (): "browser" | "folder" | "unreachable" =>
+  !isStore() ? "browser" : isStale() ? "unreachable" : "folder";
+
+/** The folder's own name, for a sentence that has to point at it. */
+export const folderName = (): string =>
+  "folder" in ablage.status ? ablage.status.folder : "";
+
 /* A write reaches the folder only where the folder is the store, and never while
    it is stale — a copy that took writes nobody else can see would be the second
    source of truth this arrangement exists to avoid. */

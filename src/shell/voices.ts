@@ -46,7 +46,7 @@ import { forgetKey, loadSettings, paintStates, saveSettings } from "./settings.j
  *  the drift that made this list necessary. */
 export const PANELS = [
   "languagePanel", "themePanel", "voicesHerePanel", "azurePanel",
-  "arasaacPanel", "symbolsPanel", "boardPanel", "dataPanel",
+  "arasaacPanel", "symbolsPanel", "boardPanel", "dataPanel", "dangerPanel",
 ] as const;
 
 /** The one panel the sheet loads with open - settings_sheet.ts marks it so.

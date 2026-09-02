@@ -144,6 +144,9 @@ export function applyTexts() {
   $("dataSection").textContent = t("ui.data_section");
   $("keepHead").textContent = t("ui.keep_head");
   $("dataNote").textContent = t("ui.data_note");
+  $("dangerSection").textContent = t("ui.danger_section");
+  $("dangerNote").textContent = t("ui.danger_note");
+  $<HTMLButtonElement>("dangerWipe").textContent = t("ui.danger_wipe");
   $("dataExport").textContent = t("ui.data_export");
   $("dataImport").textContent = t("ui.data_import");
   // The standing backup's line, lead and buttons are NOT set here, and no

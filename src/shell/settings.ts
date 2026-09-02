@@ -6,7 +6,7 @@
 // Save, are in voices.js.
 import { $, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
-import { confirmDialog } from "@lautstark/design/dialog";
+import { confirmDialog, openDialog } from "@lautstark/design/dialog";
 import { reason } from "../core/errors.js";
 import type { Settings, WantedSettings } from "../core/types.js";
 import { readSettings, writeSettings, azureState, listCollections }
@@ -19,10 +19,11 @@ import { load } from "../core/save.js";
 import { paintCollections } from "./collections.js";
 import * as symbols from "../data/symbols.js";
 import { exportEverything, importBackup, isBackup, TOO_NEW } from "../data/backup.js";
+import { boardTotals, wipeEverything } from "../data/store.js";
 import { adopt, adopted, refusal } from "./adopt.js";
 import { backupPanel, type BackupPanel } from "@lautstark/sicherung/backup-panel";
 import { wherePanel } from "@lautstark/sicherung/ablage-panel";
-import { ablage, isStore } from "../data/folder.js";
+import { ablage, folderName, isStore, wipeReaches } from "../data/folder.js";
 import { adoptFolder } from "../data/store.js";
 import type { Sicherung } from "@lautstark/sicherung";
 import { downloadJson } from "@lautstark/werkzeuge/download";
@@ -448,6 +449,50 @@ export function wireData(backup: Sicherung) {
     if (keeping) $("folderBox").append(keeping.node);
     else $("folderBox").hidden = true;
   }
+
+  /* „Alles löschen", which this editor was the only one in the family without.
+     Same shape as its three siblings: its own panel last in the column, a
+     confirmation that counts what goes and says how far it reaches, a refusal
+     where the folder is out of reach, and the one typed word in the product. */
+  $<HTMLButtonElement>("dangerWipe").onclick = async () => {
+    const reach = wipeReaches();
+    const folder = folderName();
+
+    if (reach === "unreachable") {
+      const ok = document.createElement("button");
+      ok.type = "button";
+      ok.className = "btn primary";
+      ok.textContent = t("ui.understood");
+      const sheet = openDialog({
+        title: t("ui.danger_blocked_title"),
+        closeLabel: t("ui.close"),
+        body: [t("ui.danger_blocked", { folder })],
+        footer: [ok],
+      });
+      ok.addEventListener("click", () => sheet.close());
+      return;
+    }
+
+    const totals = await boardTotals();
+    if (!await confirmDialog({
+      title: t("ui.danger_wipe"),
+      body: t(reach === "folder" ? "ui.danger_ask_folder" : "ui.danger_ask_browser",
+        { ...totals, folder }),
+      confirmLabel: t("ui.danger_do"),
+      cancelLabel: t("ui.cancel"),
+      closeLabel: t("ui.close"),
+      danger: true,
+      /* The one act here that asks for a word: it empties the boards on every
+         device the household has. design.md §4.3 says spending this anywhere
+         else is what breaks it. */
+      requireTyping: t("ui.danger_word"),
+      typingLabel: t("ui.danger_type"),
+    })) return;
+
+    await wipeEverything();
+    $("dataState").textContent = t("ui.danger_done");
+    location.reload();
+  };
 
   $<HTMLButtonElement>("dataExport").onclick = async () => {
     $("dataState").textContent = "";

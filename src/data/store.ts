@@ -328,6 +328,53 @@ function createSchema(db: IDBPDatabase<VorlautDB>): void {
    always a transaction over several stores, so it is mirrored afterwards rather
    than record by record: a folder write cannot happen inside a transaction that
    has to stay open. */
+/**
+ * Everything, gone: every store, and the folder with it.
+ *
+ * vorlaut-editor was the only editor in the family without this. The other three
+ * have had it in their settings sheet for as long as they have had a settings
+ * sheet — and the argument for it got stronger rather than weaker when the
+ * Ablage arrived: with the work in a folder, the browser's own "clear site data"
+ * no longer erases anything durable, so only the programme knows which files are
+ * its own and how they come out. The cases are the shared tablet handed to the
+ * next child and the device that gets sold.
+ *
+ * `mirror` reads the stores and pushes what it finds, so calling it after the
+ * clear pushes nothing and every file in the folder goes with it. Calling it
+ * before would push the old contents back.
+ *
+ * The caller must ask `wipeReaches()` first: with the folder out of reach this
+ * empties the browser, leaves the folder whole, and hands everything back on the
+ * next start.
+ */
+export async function wipeEverything(): Promise<void> {
+  const db = await open();
+  const tx = db.transaction([COLLECTIONS, LAYOUTS, MARKS, SETTINGS, "symbols", SPEECH], "readwrite");
+  await Promise.all([
+    tx.objectStore(COLLECTIONS).clear(),
+    tx.objectStore(LAYOUTS).clear(),
+    tx.objectStore(MARKS).clear(),
+    tx.objectStore(SETTINGS).clear(),
+    tx.objectStore("symbols").clear(),
+    tx.objectStore(SPEECH).clear(),
+  ]);
+  await tx.done;
+  await mirror();
+  touched();
+}
+
+/** How much has to go, so the asking can count it. */
+export async function boardTotals(): Promise<{ sammlungen: number; tasten: number }> {
+  const db = await open();
+  const [collections, layouts] = await Promise.all([db.getAll(COLLECTIONS), db.getAll(LAYOUTS)]);
+  let tasten = 0;
+  for (const one of layouts) {
+    try { tasten += (JSON.parse(String(one.text)) as { buttons?: unknown[] }).buttons?.length ?? 0; }
+    catch { /* A layout this build cannot read still counts as a Sammlung. */ }
+  }
+  return { sammlungen: collections.length, tasten };
+}
+
 async function mirror(): Promise<void> {
   if (!isStore()) return;
   const db = await open();

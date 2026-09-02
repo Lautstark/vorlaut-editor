@@ -271,6 +271,23 @@ export const markup = `
     </div>
   </details>
 
+  <!-- Deletion is not filed under the word for keeping things: its own panel,
+       last in the column, so the list of headings says what is in this sheet
+       without anybody opening one of them. bildhaft made this move on
+       2026-08-29 and mitreden and wochenwerk followed; this was the one editor
+       that had no such panel at all. -->
+  <details class="panel" name="settings" id="dangerPanel">
+    <summary>
+      <span class="section" id="dangerSection"></span>
+    </summary>
+    <div class="setting">
+      <p class="lead" id="dangerNote"></p>
+      <div class="row">
+        <button id="dangerWipe" class="btn destructive" type="button"></button>
+      </div>
+    </div>
+  </details>
+
   </div>
 </dialog>
 `;
