@@ -34,7 +34,7 @@
  */
 import { $, status } from "./dom.js";
 import { menuOn, type AddItem } from "@lautstark/design/menu";
-import { confirmDialog, openDialog } from "@lautstark/design/dialog";
+import { confirmDialog, openDialog } from "./dialog.js";
 import { renameField, type RenameField } from "@lautstark/design/rename";
 import { drawCollections } from "@lautstark/design/collections";
 import { reason } from "../core/errors.js";
@@ -607,7 +607,6 @@ function askTarget(): Promise<Made | null> {
 
     const sheet: ReturnType<typeof openDialog> | undefined = openDialog({
       title: t("ui.collection_target"),
-      closeLabel: t("ui.close"),
       body,
       footer: [make],
       onClose: () => finish(null),
@@ -897,7 +896,6 @@ function chooseExport(): void {
     // The act, out of the menu entry's own key. The sheet used to be headed
     // with a question about what the file was for, and is not asking it now.
     title: t("ui.collection_export"),
-    closeLabel: t("ui.close"),
     body: [card(offered.lead, true), more],
     // No footer. There is nothing to confirm - the cards are the presses - and
     // an Abbrechen beside a corner ✕ would be two buttons for one act.
@@ -982,10 +980,8 @@ async function remove(): Promise<void> {
     title: t("ui.collection_delete"),
     body: t(`ui.collection_delete_ask_${which.unit}${one}`, { name, n }),
     confirmLabel: t(`ui.collection_delete_go_${which.unit}${one}`, { n }),
-    cancelLabel: t("ui.cancel"),
     // Never the same word as the button beside it: two dismissals sharing an
     // accessible name is ambiguous to anyone navigating by it.
-    closeLabel: t("ui.close"),
     danger: true,
   })) return;
 

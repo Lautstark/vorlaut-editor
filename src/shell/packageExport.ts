@@ -38,7 +38,7 @@
  * is what vorlaut-app's BuilderPackageTest opens - so the sheet cannot belong
  * to the editor that happens to be on screen.
  */
-import { openDialog } from "@lautstark/design/dialog";
+import { openDialog } from "./dialog.js";
 import { status } from "./dom.js";
 import { reason } from "../core/errors.js";
 import { t } from "../core/texts.js";
@@ -150,7 +150,6 @@ function openExport(what: Offered): void {
 
   const sheet = openDialog({
     title: what.title,
-    closeLabel: t("ui.close"),
     body: [line],
     footer: [go, cancel, close, after],
     // Closing the sheet mid-run is the same act as pressing Abbrechen, and it

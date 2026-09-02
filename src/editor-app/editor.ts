@@ -34,7 +34,7 @@ import { GRID, LANG, WORD_CLASSES } from "../core/boot.js";
 import { t } from "../core/texts.js";
 import { save, saveSoon } from "../core/save.js";
 import { speak } from "../shell/speech.js";
-import { confirmDialog } from "@lautstark/design/dialog";
+import { confirmDialog } from "../shell/dialog.js";
 /* The sheet is the shell's now, and the whole of what this file hands it is a
  * title, a picture, some rows and three labelled things to do. It was written
  * here, and moving it is what let the talker have the same one: an editor may
@@ -1032,8 +1032,6 @@ async function askDelete(on: AppPage): Promise<boolean> {
     title: t("ui.app_page_delete"),
     body: lines.join(" "),
     confirmLabel: t("ui.app_page_delete_go"),
-    cancelLabel: t("ui.cancel"),
-    closeLabel: t("ui.close"),
     danger: true,
   })) return false;
 

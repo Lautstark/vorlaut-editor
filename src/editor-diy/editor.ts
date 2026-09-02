@@ -114,7 +114,7 @@ import { speak } from "../shell/speech.js";
 import { dropdown, formRow, hint, missing, openSheet, textField }
   from "../shell/sheet.js";
 import type { Choice, Left } from "../shell/sheet.js";
-import { confirmDialog } from "@lautstark/design/dialog";
+import { confirmDialog } from "../shell/dialog.js";
 
 let dragSlot: number | null = null;   // index of the dragged key
 /* Which set is being edited. It was `state.current` while the page held one
@@ -1081,10 +1081,8 @@ async function askDelete(): Promise<boolean> {
                                     : "ui.set_delete_leads", { n: leading })
             : ""),
     confirmLabel: t("ui.set_delete_go"),
-    cancelLabel: t("ui.cancel"),
     // Never the same word as the button beside it: two dismissals sharing an
     // accessible name is ambiguous to anyone navigating by it.
-    closeLabel: t("ui.close"),
     danger: true,
   })) return false;
 

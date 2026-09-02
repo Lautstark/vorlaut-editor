@@ -20,7 +20,7 @@
  * discards.
  */
 
-import { openDialog } from "@lautstark/design/dialog";
+import { openDialog } from "./dialog.js";
 import { downloadJson } from "@lautstark/werkzeuge/download";
 import { reason } from "../core/errors.js";
 import { t } from "../core/texts.js";
@@ -110,7 +110,6 @@ async function show(again: () => void): Promise<void> {
   let going = false;
   const sheet = openDialog({
     title: t("ui.rescue_title"),
-    closeLabel: t("ui.close"),
     body: [line, state],
     footer: [save, discard],
     // Dismissing costs nothing, because nothing has happened: the database is

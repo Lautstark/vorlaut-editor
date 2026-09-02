@@ -93,7 +93,7 @@
  * a tablet, which means the number was right, which means the same request
  * would be the same request. Those offer Speichern.
  */
-import { openDialog } from "@lautstark/design/dialog";
+import { openDialog } from "./dialog.js";
 import { status } from "./dom.js";
 import { t } from "../core/texts.js";
 import { readSettings, writeSettings } from "../backend/index.js";
@@ -467,7 +467,6 @@ export async function openTabletSend(what: Sending): Promise<boolean> {
 
     const sheet = openDialog({
       title: t("ui.send_title"),
-      closeLabel: t("ui.close"),
       body: [lead, label, row.root, note, trouble],
       footer: [cancel, go, instead],
       // Escape, the corner and a press outside all land here, and none of them

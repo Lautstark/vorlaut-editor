@@ -54,7 +54,7 @@
  * reason above: a foot button is the confirming press, and the ✕, Escape and a
  * press outside still cost nothing.
  */
-import { openDialog } from "@lautstark/design/dialog";
+import { openDialog } from "./dialog.js";
 import { menuOn } from "@lautstark/design/menu";
 import { negationCross, say, status } from "./dom.js";
 import { symbolInto } from "../backend/index.js";
@@ -1222,7 +1222,6 @@ export function openSheet(spec: SheetSpec): Promise<Left> {
 
     const sheet: ReturnType<typeof openDialog> | undefined = openDialog({
       title: spec.title,
-      closeLabel: t("ui.close"),
       body,
       footer: foot,
       onClose: () => finish(null),

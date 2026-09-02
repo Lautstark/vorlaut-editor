@@ -6,7 +6,7 @@
 // Save, are in voices.js.
 import { $, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
-import { confirmDialog, openDialog } from "@lautstark/design/dialog";
+import { confirmDialog, openDialog } from "./dialog.js";
 import { reason } from "../core/errors.js";
 import type { Settings, WantedSettings } from "../core/types.js";
 import { readSettings, writeSettings, azureState, listCollections }
@@ -465,7 +465,6 @@ export function wireData(backup: Sicherung) {
       ok.textContent = t("ui.understood");
       const sheet = openDialog({
         title: t("ui.danger_blocked_title"),
-        closeLabel: t("ui.close"),
         body: [t("ui.danger_blocked", { folder })],
         footer: [ok],
       });
@@ -479,8 +478,6 @@ export function wireData(backup: Sicherung) {
       body: t(reach === "folder" ? "ui.danger_ask_folder" : "ui.danger_ask_browser",
         { ...totals, folder }),
       confirmLabel: t("ui.danger_do"),
-      cancelLabel: t("ui.cancel"),
-      closeLabel: t("ui.close"),
       danger: true,
       /* The one act here that asks for a word: it empties the boards on every
          device the household has. design.md §4.3 says spending this anywhere
@@ -540,10 +537,8 @@ export function wireData(backup: Sicherung) {
         title: t("ui.data_replace"),
         body: t(`ui.data_replace_ask${one}`, { n: here }),
         confirmLabel: t(`ui.data_replace_go${one}`, { n: here }),
-        cancelLabel: t("ui.cancel"),
         // Never the same word as the button beside it: two dismissals sharing
         // an accessible name is ambiguous to anyone navigating by it.
-        closeLabel: t("ui.close"),
         danger: true,
       })) return;
       const done = await importBackup(parsed);
