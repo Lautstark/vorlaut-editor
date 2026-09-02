@@ -26,7 +26,6 @@ import { ablage, isStore } from "../data/folder.js";
 import { adoptFolder } from "../data/store.js";
 import type { Sicherung } from "@lautstark/sicherung";
 import { downloadJson } from "@lautstark/werkzeuge/download";
-import { LANG } from "../core/boot.js";
 
 /* Held so a language switch can repaint it: the panel paints its own words and
    carries no data-i18n, so applyTexts() cannot reach it. */
