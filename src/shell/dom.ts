@@ -11,26 +11,25 @@ import { announcer, type Announcer } from "@lautstark/design/toast";
 // network standing open beside the one the seam provides, which is the
 // arrangement the seam exists to end. Nothing under static/ has a URL to give
 // it any more except the ARASAAC download in backend/local.js.
-/** An element that has to be there, by id.
+/* An element that has to be there, by id.
  *
- * Throws rather than answering null, and that is the whole of the change from
- * the JavaScript this was: every caller here is asking for something the page's
- * own templates put in the document, so a null is not a case to handle - it is
- * a template and a module that have drifted apart. Returning null made each of
- * roughly two hundred call sites carry a branch for a state that means the page
- * is already broken; throwing puts the complaint at the one place that can name
- * which id is missing.
+ * This was `$` until 2026-09-02, and the throw and the type parameter that
+ * stood here are @lautstark/werkzeuge/dom's now — this file is where they came
+ * from. Two reasons for the move, and the second is the one that matters.
  *
- * The type parameter is how a caller says which element it expects. It is an
- * assertion rather than a check - nothing verifies at runtime that #q really is
- * an input - so it is exactly as true as the template beside it, which is what
- * `document.getElementById` offered anyway.
+ * `$` reads well inside one file and is a name nobody can search for in a
+ * package. And across the family the *finding* had two names while the word
+ * `el` was doing the finding in mitreden and the **making** in bildhaft and
+ * wochenwerk — one word, two contradictory meanings, in sibling repositories
+ * somebody moves between every week. `el` makes, `byId` finds, everywhere.
+ *
+ * What survives unchanged is the argument: throwing rather than answering null,
+ * because a null is not a case to handle — it is a template and a module that
+ * have drifted apart, and 267 call sites should not each carry a branch for a
+ * page that is already broken.
  */
-export const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
-  const found = document.getElementById(id);
-  if (!found) throw new Error(`the page has no #${id}`);
-  return found as T;
-};
+export { byId } from "@lautstark/werkzeuge/dom";
+import { byId } from "@lautstark/werkzeuge/dom";
 
 /** How long a resting status stays lit. Long enough to be read by somebody who
  *  looked over, short enough to be gone by the next time anything happens. */
@@ -52,7 +51,7 @@ const RESTS_FOR = 4000;
  * module is imported before that has run. */
 let line: Announcer | undefined;
 const region = (): Announcer =>
-  (line ??= announcer($("status"), {
+  (line ??= announcer(byId("status"), {
     rest: RESTS_FOR,
     onRest: (node) => node.classList.add("status--rested"),
     /* The inverse, and the reason it is not optional here: a fade that has

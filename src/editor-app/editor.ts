@@ -22,7 +22,7 @@
 // near it: what happens to the buttons that pointed at a deleted page is the
 // part of this that is expensive to get wrong, so it is the part that can be
 // tested without a browser.
-import { $, negationCross, status } from "../shell/dom.js";
+import { byId, negationCross, status } from "../shell/dom.js";
 import { symbolInto } from "../backend/index.js";
 import { state } from "../core/state.js";
 import type { Editor } from "../core/editor.js";
@@ -85,7 +85,7 @@ let dragging: string | null = null;
  * for an app Sammlung and for nothing else - so the guarantee is written down
  * once here instead of being asserted at every read below.
  *
- * It throws for the reason $() throws: reaching here with a talker Sammlung on
+ * It throws for the reason byId() throws: reaching here with a talker Sammlung on
  * screen is not a case to handle, it is a composition root that has installed
  * the wrong editor. */
 function board(): AppLayout {
@@ -190,28 +190,28 @@ function drawPageHead(found: Set<string>): void {
   const layout = board();
   const one = page();
 
-  const house = $("appPageHome");
+  const house = byId("appPageHome");
   house.hidden = one.id !== layout.home;
   house.textContent = "\u2302";
   house.title = t("ui.app_page_home");
 
-  const name = $<HTMLInputElement>("appPageName");
+  const name = byId<HTMLInputElement>("appPageName");
   name.setAttribute("aria-label", t("ui.app_page_name"));
   name.placeholder = t("ui.app_page_n", { n: layout.pages.indexOf(one) + 1 });
   // Only when it is not the field somebody is typing in: writing the value
   // back under the caret moves it to the end on every keystroke.
   if (document.activeElement !== name) name.value = one.name;
 
-  const warn = $("appPageWarn");
+  const warn = byId("appPageWarn");
   warn.hidden = found.has(one.id);
   warn.textContent = "\u26a0";
   warn.title = t("ui.app_page_unreachable");
 
-  const start = $<HTMLButtonElement>("appPageStart");
+  const start = byId<HTMLButtonElement>("appPageStart");
   start.hidden = one.id === layout.home;
   start.textContent = t("ui.app_page_home_set");
 
-  const remove = $<HTMLButtonElement>("appPageDelete");
+  const remove = byId<HTMLButtonElement>("appPageDelete");
   remove.textContent = t("ui.app_page_delete");
 }
 
@@ -236,7 +236,7 @@ function drawPageHead(found: Set<string>): void {
 function drawFacts(found: Set<string>): void {
   const layout = board();
   const one = page();
-  const row = $("appFacts");
+  const row = byId("appFacts");
   row.innerHTML = "";
 
   const into = inboundPages(layout, one.id);
@@ -310,7 +310,7 @@ let unfolded: string | null = null;
 function drawUnfolded(found: Set<string>, into: AppPage[], outOf: AppPage[],
                       cost: number | undefined): void {
   const layout = board();
-  const box = $("appFactLinks");
+  const box = byId("appFactLinks");
   box.innerHTML = "";
   box.hidden = unfolded === null;
   if (unfolded === null) return;
@@ -536,7 +536,7 @@ export function goToPage(id: string): void {
 
 function drawGrid(): void {
   const layout = board();
-  const grid = $("appGrid");
+  const grid = byId("appGrid");
   grid.innerHTML = "";
   grid.style.setProperty("--rows", String(layout.grid.rows));
   grid.style.setProperty("--cols", String(layout.grid.columns));
@@ -912,7 +912,7 @@ function cell(on: AppPage, row: number, col: number): HTMLElement {
     // render() rebuilt every cell, so the element that had focus is gone. It
     // follows the button rather than staying at the coordinate, which is what
     // makes a run of presses move one thing across the board.
-    ($("appGrid").children[(to[0] * grid.columns) + to[1]]
+    (byId("appGrid").children[(to[0] * grid.columns) + to[1]]
       ?.querySelector(".cell__open") as HTMLElement)?.focus();
   };
   return box;
@@ -2047,7 +2047,7 @@ export function wireEditor(): () => void {
   /* The page's name is the field that renames it, the way the Sammlung's is
    * one floor up. Typed straight into the page, saved on the debounce that
    * every other field here uses - no sheet, no Fertig, nothing to dismiss. */
-  const named = $<HTMLInputElement>("appPageName");
+  const named = byId<HTMLInputElement>("appPageName");
   named.oninput = () => {
     page().name = named.value;
     /* The sidebar row for this page carries the same name, so it is repainted
@@ -2057,12 +2057,12 @@ export function wireEditor(): () => void {
     saveSoon();
   };
 
-  $<HTMLButtonElement>("appPageStart").onclick = () => {
+  byId<HTMLButtonElement>("appPageStart").onclick = () => {
     board().home = page().id;
     commit();
   };
 
-  $<HTMLButtonElement>("appPageDelete").onclick = () => {
+  byId<HTMLButtonElement>("appPageDelete").onclick = () => {
     void askDelete(page());
   };
 
@@ -2194,7 +2194,7 @@ function drawPageList(into: HTMLElement): void {
     unfolded = null;
     wantFocus = false;
     commit();
-    $<HTMLInputElement>("appPageName").focus();
+    byId<HTMLInputElement>("appPageName").focus();
   };
   into.appendChild(make);
 

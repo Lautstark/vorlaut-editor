@@ -18,7 +18,7 @@
 // Azure and METACOM panels inside Einstellungen are settings.js, which this
 // calls into.
 import type { VoiceList } from "../core/types.js";
-import { $, status } from "./dom.js";
+import { byId, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
 import { weighs } from "@lautstark/werkzeuge/bytes";
 import { reason } from "../core/errors.js";
@@ -268,7 +268,7 @@ function voiceRow(voice, note: string, mute: boolean, on: boolean,
  * catalogue speaks a good many more, and a filter offering a language nothing
  * can speak is a filter that answers with nothing. */
 function renderFilters() {
-  const box = $("voiceFilters");
+  const box = byId("voiceFilters");
   box.innerHTML = "";
   const codes = [...new Set(voices.voices.map((v) => language(v.language)))]
     .filter(Boolean).sort();
@@ -312,7 +312,7 @@ function fetchRow() {
 }
 
 function renderVoices() {
-  const list = $("voiceList");
+  const list = byId("voiceList");
   list.innerHTML = "";
   renderFilters();
   if (!voices.voices.length) {
@@ -326,7 +326,7 @@ function renderVoices() {
     // the offer that would fix it is installation-scoped and lives in
     // Einstellungen, so an empty list here has to name the door rather than
     // leave somebody in front of a search field with no voices behind it.
-    $("voiceHint").textContent = t("ui.voice_none_where");
+    byId("voiceHint").textContent = t("ui.voice_none_where");
     paintVoiceState();
     return;
   }
@@ -377,7 +377,7 @@ function renderVoices() {
   // of them rather than only the ones edited afterwards. It is the whole of
   // what this line says now - a download's progress belongs to the panel that
   // started it, which is on the other sheet.
-  $("voiceHint").textContent = t("ui.voice_rebuild");
+  byId("voiceHint").textContent = t("ui.voice_rebuild");
   paintVoiceState();
 }
 
@@ -391,7 +391,7 @@ function paintVoiceState() {
   // The same name the row below uses when the voice is not here. Falling back
   // to the id put `azure:de-DE-KatjaNeural` in the one line that is the whole
   // answer nine times out of ten.
-  $("voiceState").textContent = voice
+  byId("voiceState").textContent = voice
     ? [voice.label, sourceOf(voice.source), speaks(voice.language)].filter(Boolean).join(" · ")
     : voices.chosenLabel || id || t("ui.voice_state_none");
 }
@@ -405,11 +405,11 @@ function paintVoiceState() {
  * actually missing.
  */
 function renderOffer() {
-  const box = $("voiceOffer");
+  const box = byId("voiceOffer");
   box.innerHTML = "";
   if (fetching.missing) box.appendChild(fetchRow());
-  $("voiceOfferHint").textContent = fetchNote();
-  $("voicesHereState").textContent = voices.voices.length
+  byId("voiceOfferHint").textContent = fetchNote();
+  byId("voicesHereState").textContent = voices.voices.length
     ? t("ui.voices_here_count", { n: voices.voices.length })
     : t("ui.voices_here_none");
 }
@@ -598,7 +598,7 @@ export async function forgetAzureKey() {
 
 /** The button says which language is in force; the menu offers the others. */
 export function paintLanguage() {
-  const box = $("langPick");
+  const box = byId("langPick");
   box.textContent = "";
   for (const code of LANGUAGES) {
     const button = document.createElement("button");
@@ -624,8 +624,8 @@ export function paintLanguage() {
  * what layout_format.ts and localeFor() both make of it. */
 export function paintCollectionLanguage() {
   const code = state.layout.language || DEFAULT_LANGUAGE;
-  $("collectionLangPick").textContent = LANGUAGE_NAMES[code] || code;
-  $("collectionLanguageState").textContent = LANGUAGE_NAMES[code] || code;
+  byId("collectionLangPick").textContent = LANGUAGE_NAMES[code] || code;
+  byId("collectionLanguageState").textContent = LANGUAGE_NAMES[code] || code;
 }
 
 export function wireLanguage() {
@@ -639,7 +639,7 @@ export function wireLanguage() {
   // property of the Sammlung, it travels in an export and it ends up in the
   // byte the firmware indexes its menu by. Two controls that look identical
   // would invite the reading that they are the same kind of choice.
-  const collection = $("collectionLangPick");
+  const collection = byId("collectionLangPick");
   collection.onclick = () => menuOn(collection, (add) => {
     const live = state.layout.language || DEFAULT_LANGUAGE;
     for (const code of LANGUAGES)
@@ -649,7 +649,7 @@ export function wireLanguage() {
 
   // Typed into once and read on every render afterwards. The field is in the
   // sheet's markup rather than rebuilt with the list, so the caret survives.
-  const search = $<HTMLInputElement>("voiceQuery");
+  const search = byId<HTMLInputElement>("voiceQuery");
   search.oninput = () => { query = search.value.trim().toLowerCase(); renderVoices(); };
 }
 
@@ -661,8 +661,8 @@ export function wireLanguage() {
  * saving an Azure key is judged by whether the list changed.
  */
 export async function openSettings() {
-  $("voiceOffer").innerHTML = "";
-  $("voiceOfferHint").textContent = "";
+  byId("voiceOffer").innerHTML = "";
+  byId("voiceOfferHint").textContent = "";
   fetchDone = false;
   // Folded again on every open. Somebody who unfolded one last time was after
   // a single thing in it, not after a preference. The headings say what is
@@ -675,9 +675,9 @@ export async function openSettings() {
   // sheet left it open on the next visit, under a comment saying it would not
   // be. A list beside the markup is the smallest thing that cannot drift from
   // it the way five names left out of a line could.
-  for (const id of PANELS) $<HTMLDetailsElement>(id).open = false;
-  $<HTMLDetailsElement>(OPENS_WITH).open = true;
-  $<HTMLDialogElement>("voices").showModal();
+  for (const id of PANELS) byId<HTMLDetailsElement>(id).open = false;
+  byId<HTMLDetailsElement>(OPENS_WITH).open = true;
+  byId<HTMLDialogElement>("voices").showModal();
   await Promise.all([loadVoices(), readFetch(), loadSettings()]);
   paintLanguage();
   renderOffer();
@@ -769,12 +769,12 @@ export function collectionSheetPanel(list: SheetPanel[] | null): void {
  * somebody who is in the picker wanting a picture is not looking for settings.
  */
 function paintSymbolSource(): void {
-  const body = $("symbolBody");
+  const body = byId("symbolBody");
   body.replaceChildren();
-  $("symbolSection").textContent = t("ui.symbol_source_section");
+  byId("symbolSection").textContent = t("ui.symbol_source_section");
 
   const chosen = offeredSource();
-  $("symbolState").textContent = t(chosen === "metacom" ? "ui.metacom" : "ui.arasaac");
+  byId("symbolState").textContent = t(chosen === "metacom" ? "ui.metacom" : "ui.arasaac");
 
   const note = document.createElement("p");
   note.className = "note";
@@ -834,19 +834,19 @@ async function chooseSymbolSource(source: "arasaac" | "metacom"): Promise<void> 
 }
 
 export async function openCollectionSettings() {
-  $("voiceList").innerHTML = "";
-  $("voiceHint").textContent = "";
+  byId("voiceList").innerHTML = "";
+  byId("voiceHint").textContent = "";
   // The list is narrowed back on every open, for the reason the panels are
   // folded back: a filter left on would hide voices with no sign that it had.
   query = "";
   onlyLang = null;
-  $<HTMLInputElement>("voiceQuery").value = "";
-  const language = $<HTMLDetailsElement>("collectionLanguagePanel");
+  byId<HTMLInputElement>("voiceQuery").value = "";
+  const language = byId<HTMLDetailsElement>("collectionLanguagePanel");
   language.hidden = isApp(state.layout);
   // Built from scratch on every open rather than emptied and refilled: an
   // editor may have been swapped since the last one, and a panel belonging to
   // the editor that is gone would otherwise still be standing here.
-  const symbols = $<HTMLDetailsElement>("symbolPanel");
+  const symbols = byId<HTMLDetailsElement>("symbolPanel");
   for (const old of symbols.parentElement?.querySelectorAll("details.panel--editor") ?? []) {
     old.remove();
   }
@@ -885,10 +885,10 @@ export async function openCollectionSettings() {
   // one - which is the browser undoing something this line should not have
   // said in the first place.
   paintSymbolSource();
-  const shown = [language, ...built, symbols, $<HTMLDetailsElement>("voicePanel")];
+  const shown = [language, ...built, symbols, byId<HTMLDetailsElement>("voicePanel")];
   const first = shown.find((one) => !one.hidden);
   for (const one of shown) one.open = one === first;
-  $<HTMLDialogElement>("collectionSheet").showModal();
+  byId<HTMLDialogElement>("collectionSheet").showModal();
   await Promise.all([loadVoices(), readFetch()]);
   // Read off the layout rather than out of LANG. It is deliberately not in
   // paintStates() with the settings sheet's state lines: those are redrawn

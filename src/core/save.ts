@@ -3,7 +3,7 @@
 // saveTimer, unsaved and layoutVersion live here and nowhere else. They were
 // three of the eleven at the top of the old script; nothing outside this file
 // ever read them, and nothing can now.
-import { $, status, statusRests } from "../shell/dom.js";
+import { byId, status, statusRests } from "../shell/dom.js";
 import { reason } from "./errors.js";
 import { loadLayout, saveLayout } from "../backend/index.js";
 import { state } from "./state.js";
@@ -60,7 +60,7 @@ export async function load() {
   // switched now - this paints one control in a sheet nothing else here
   // touches - and it stays first only because that is where it has always been.
   sayCollectionLanguage();
-  $("conflict").classList.remove("show");
+  byId("conflict").classList.remove("show");
   unsaved = false;
   status("");
   // Which editor this Sammlung needs, put on screen, and then told to let go
@@ -202,9 +202,9 @@ async function doSave() {
     if (result.conflict) {
       // Nothing was written. Which of the two states counts is not this
       // page's decision to make.
-      $("conflictText").textContent =
+      byId("conflictText").textContent =
         t("ui.conflict_elsewhere");
-      $("conflict").classList.add("show");
+      byId("conflict").classList.add("show");
       status(t("ui.not_saved"));
       return;
     }
@@ -220,15 +220,15 @@ async function doSave() {
     // came back without a layout at all takes the same branch, and for the
     // same reason: it has certainly not saved what is on screen.
     if (!saved || comparable(saved) !== comparable(state.layout)) {
-      $("conflictText").textContent =
+      byId("conflictText").textContent =
         t("ui.conflict_mismatch");
-      $("conflict").classList.add("show");
+      byId("conflict").classList.add("show");
       status(t("ui.saved_wrong"));
       return;
     }
 
     unsaved = false;
-    $("conflict").classList.remove("show");
+    byId("conflict").classList.remove("show");
     statusRests(t("ui.saved"));
   } catch (error) {
     status(t("ui.save_failed", { error: reason(error) }));
@@ -240,12 +240,12 @@ async function doSave() {
 // this file.
 export function wireConflict() {
   // Deliberately force through what this page holds.
-  $<HTMLButtonElement>("overwriteBtn").onclick = async () => {
+  byId<HTMLButtonElement>("overwriteBtn").onclick = async () => {
     const fresh = await loadLayout(editorFor(FIRST_TARGET).blank());
     layoutVersion = fresh.version;
       await save();
   };
-  $<HTMLButtonElement>("reloadBtn").onclick = () => load();
+  byId<HTMLButtonElement>("reloadBtn").onclick = () => load();
 
   // Whoever closes the window while something is outstanding should notice.
   window.addEventListener("beforeunload", (event) => {

@@ -32,7 +32,7 @@
  * one. docs/sammlung-settings.md carries the wording; ~/Code/design is its own
  * session and this file may not edit it.
  */
-import { $, status } from "./dom.js";
+import { byId, status } from "./dom.js";
 import { menuOn, type AddItem } from "@lautstark/design/menu";
 import { confirmDialog, openDialog } from "./dialog.js";
 import { renameField, type RenameField } from "@lautstark/design/rename";
@@ -194,7 +194,7 @@ export async function paintCollections(): Promise<void> {
   drawList();
 
   const at = held.collections.findIndex((one) => one.id === held.current);
-  const field = $<HTMLInputElement>("collectionName");
+  const field = byId<HTMLInputElement>("collectionName");
   // Through refresh() rather than by assigning, which is the whole reason that
   // function exists: it declines while the field is being typed in and while a
   // keystroke is still waiting out its debounce, so a repaint cannot put the
@@ -256,7 +256,7 @@ export function paintOpenCollection(): void {
  * for the same reason: there is no second thing to add.
  */
 function drawList(): void {
-  const list = $("collectionList");
+  const list = byId("collectionList");
   list.setAttribute("aria-label", t("ui.collections"));
   drawCollections(list, {
     rows: held.collections.map((one) => ({
@@ -710,7 +710,7 @@ async function create(): Promise<void> {
   // Straight into the name, selected: the first keystroke replaces the date it
   // was given. Focusing without selecting would make the invented name a chore
   // to delete rather than a suggestion to type over.
-  const field = $<HTMLInputElement>("collectionName");
+  const field = byId<HTMLInputElement>("collectionName");
   field.focus();
   field.select();
   // And the start key's picture, behind all of that - see keepHomeSymbol. The
@@ -1006,7 +1006,7 @@ async function remove(): Promise<void> {
  * deliberately not consulted down there. */
 async function showSidebar(open: boolean, remember = true): Promise<void> {
   document.body.classList.toggle("collapsed", !open);
-  $("sidebarShow").hidden = open;
+  byId("sidebarShow").hidden = open;
   if (remember) await writeSettings({ sidebarOpen: open });
 }
 
@@ -1020,13 +1020,13 @@ const narrow = (): boolean => matchMedia("(max-width: 820px)").matches;
  * written down: closing the tab closes it, which is what somebody expects of a
  * thing they slid over their work. §1.3 is about the column, not this. */
 function openDrawer(): void {
-  $("sidebar").classList.add("open");
-  $("scrim").hidden = false;
+  byId("sidebar").classList.add("open");
+  byId("scrim").hidden = false;
 }
 
 function closeDrawer(): void {
-  $("sidebar").classList.remove("open");
-  $("scrim").hidden = true;
+  byId("sidebar").classList.remove("open");
+  byId("scrim").hidden = true;
 }
 
 /* --- Wiring ------------------------------------------------------------------ */
@@ -1092,19 +1092,19 @@ export function paintPages(): void {
 }
 
 export function wireCollections(): void {
-  $<HTMLButtonElement>("collectionNew").onclick = () => { void create(); closeOnPick(); };
-  $<HTMLButtonElement>("sidebarHide").onclick = () => { void showSidebar(false); };
-  $<HTMLButtonElement>("sidebarShowBtn").onclick = () => { void showSidebar(true); };
-  $<HTMLButtonElement>("sidebarOpenBtn").onclick = openDrawer;
-  $<HTMLButtonElement>("sidebarClose").onclick = closeDrawer;
-  $("scrim").onclick = closeDrawer;
+  byId<HTMLButtonElement>("collectionNew").onclick = () => { void create(); closeOnPick(); };
+  byId<HTMLButtonElement>("sidebarHide").onclick = () => { void showSidebar(false); };
+  byId<HTMLButtonElement>("sidebarShowBtn").onclick = () => { void showSidebar(true); };
+  byId<HTMLButtonElement>("sidebarOpenBtn").onclick = openDrawer;
+  byId<HTMLButtonElement>("sidebarClose").onclick = closeDrawer;
+  byId("scrim").onclick = closeDrawer;
   void readSettings().then((held) => showSidebar(held.sidebarOpen !== false, false));
 
   // The debounce, the write on the way out, and the rule that a repaint never
   // types over you are all @lautstark/design/rename's now. What is left here is
   // the half that is this product's: trimming, which Sammlung is being renamed,
   // and what to say when the write fails.
-  name = renameField($<HTMLInputElement>("collectionName"), async (typed) => {
+  name = renameField(byId<HTMLInputElement>("collectionName"), async (typed) => {
     if (!held.current) return;
     try {
       await renameCollection(held.current, typed.trim());
@@ -1114,9 +1114,9 @@ export function wireCollections(): void {
     }
   });
 
-  $<HTMLButtonElement>("collectionMenu").onclick = (event) => {
+  byId<HTMLButtonElement>("collectionMenu").onclick = (event) => {
     event.stopPropagation();
-    menuOn($("collectionMenu"), (add) => {
+    menuOn(byId("collectionMenu"), (add) => {
       /* One export, whatever kind of Sammlung this is.
        *
        * This was three entries until adr/0011's last open point was done -

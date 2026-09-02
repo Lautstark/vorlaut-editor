@@ -205,7 +205,7 @@ export function haveEditor(): boolean {
 
 /** The editor on screen.
  *
- * Throws rather than answering null, for the reason $() does: every caller is
+ * Throws rather than answering null, for the reason byId() does: every caller is
  * running inside a page that the composition root has already put one on, so a
  * null here is not a case to handle - it is a composition root that has
  * stopped doing its one job, and the complaint should say so once rather than

@@ -97,7 +97,7 @@
 // usually called - and here it does not: the key says "Spiegelei" and the page
 // is "Runde 7". keyCell() has the rule, and the seat is the caption line that
 // was already on this cell rather than a mark of its own.
-import { $, negationCross } from "../shell/dom.js";
+import { byId, negationCross } from "../shell/dom.js";
 import { symbolInto } from "../backend/index.js";
 import { state } from "../core/state.js";
 import type { Editor } from "../core/editor.js";
@@ -132,7 +132,7 @@ let current = 0;
  * this is that guarantee written down once instead of a cast at each of the
  * forty places below.
  *
- * It throws for the reason $() throws: reaching here with a tablet Sammlung on
+ * It throws for the reason byId() throws: reaching here with a tablet Sammlung on
  * screen is not a case to handle, it is a composition root that has installed
  * the wrong editor, and the complaint should say so once. */
 function board(): DiyLayout {
@@ -242,7 +242,7 @@ function swapSlots(a: number, b: number): void {
   const slots = set().slots;
   [slots[a], slots[b]] = [slots[b]!, slots[a]!];
   commit();
-  ($("device").children[cellOf(b)]
+  (byId("device").children[cellOf(b)]
     ?.querySelector(".cell__open") as HTMLElement)?.focus();
 }
 
@@ -533,7 +533,7 @@ function keyCell(entry: BoardSet, index: number): HTMLElement {
 /* --- The set strip -------------------------------------------------------- */
 
 function drawTabs(): void {
-  const tabs = $("tabs");
+  const tabs = byId("tabs");
   tabs.innerHTML = "";
   const layout = board();
   /* The order the device meets the pages in, and then the ones nothing leads
@@ -697,11 +697,11 @@ export function render(): void {
    * button just stops being there, and a sentence is what is left to say why.
    */
   const used = board().sets.length;
-  $("slots").textContent = used < limits.maxSets
+  byId("slots").textContent = used < limits.maxSets
     ? t("ui.sets_count", { used })
     : t("ui.sets_full", { used });
 
-  const device = $("device");
+  const device = byId("device");
   device.innerHTML = "";
   const entry = board().sets[current];
   if (!entry) {

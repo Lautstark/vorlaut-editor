@@ -4,7 +4,7 @@
 //
 // This is the lower half of the settings sheet. The sheet itself, and its one
 // Save, are in voices.js.
-import { $, status } from "./dom.js";
+import { byId, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
 import { confirmDialog, openDialog } from "./dialog.js";
 import { reason } from "../core/errors.js";
@@ -52,31 +52,31 @@ function keyPlaceholder() {
 }
 
 function renderSettings() {
-  $<HTMLInputElement>("azureRegion").value = settings.azureRegion || "";
-  $<HTMLInputElement>("metacomPath").value = settings.metacom.path || "";
+  byId<HTMLInputElement>("azureRegion").value = settings.azureRegion || "";
+  byId<HTMLInputElement>("metacomPath").value = settings.metacom.path || "";
   // The key is never sent back to the page, so the field starts empty and
   // means "leave it alone" until somebody types in it.
-  $<HTMLInputElement>("azureKey").value = "";
-  $<HTMLInputElement>("azureKey").placeholder = keyPlaceholder();
-  $<HTMLInputElement>("azureKey").disabled = !settings.local;
+  byId<HTMLInputElement>("azureKey").value = "";
+  byId<HTMLInputElement>("azureKey").placeholder = keyPlaceholder();
+  byId<HTMLInputElement>("azureKey").disabled = !settings.local;
   // Only the one thing the field cannot show by itself. That a key is stored,
   // and which one, is in the placeholder above and in the heading below.
-  $("azureKeyState").textContent = settings.local ? "" : t("ui.azure_local_only");
+  byId("azureKeyState").textContent = settings.local ? "" : t("ui.azure_local_only");
   probeAzure();
-  $("azureState").textContent = settings.azureKey.set
+  byId("azureState").textContent = settings.azureKey.set
     ? t("ui.azure_key_stored")
     : t("ui.azure_key_none");
-  const forget = $<HTMLButtonElement>("azureForget");
+  const forget = byId<HTMLButtonElement>("azureForget");
   forget.textContent = t("ui.azure_forget");
   // Only when there is a key to remove, and only where the key can be touched
   // at all - away from the machine the whole panel is read-only.
   forget.hidden = !settings.azureKey.set || !settings.local;
 
-  $("metacomState").textContent = metacomWord(false);
-  $("symbolsState").textContent = metacomWord(true);
+  byId("metacomState").textContent = metacomWord(false);
+  byId("symbolsState").textContent = metacomWord(true);
   // A folder that was set and cannot be read is the one state worth unfolding
   // for: somebody meant to configure this and it is not working.
-  if (settings.metacom.path && !settings.metacom.ok) $<HTMLDetailsElement>("symbolsPanel").open = true;
+  if (settings.metacom.path && !settings.metacom.ok) byId<HTMLDetailsElement>("symbolsPanel").open = true;
 
   // Handed in from outside - the container. The path in the field is the one
   // inside it, a host path typed here could not take effect, and the write
@@ -86,9 +86,9 @@ function renderSettings() {
   //
   // That line replaces what was found rather than adding to it: the heading
   // is already saying it, two lines up.
-  $<HTMLInputElement>("metacomPath").disabled = !!settings.metacom.fixed;
+  byId<HTMLInputElement>("metacomPath").disabled = !!settings.metacom.fixed;
   if (settings.metacom.fixed) {
-    $("metacomState").textContent = t("ui.metacom_fixed");
+    byId("metacomState").textContent = t("ui.metacom_fixed");
   }
 
   renderHere();
@@ -114,14 +114,14 @@ function renderSettings() {
  * a single rendering has nothing to choose between, and an empty dropdown is
  * a question with one answer. */
 function renderRenderings() {
-  const box = $("renderingBox");
-  const pick = $("renderingPick");
+  const box = byId("renderingBox");
+  const pick = byId("renderingPick");
   const found = symbols.metacomReady() ? symbols.metacomRenderings() : [];
   box.hidden = found.length < 2;
   if (box.hidden) return;
 
-  $("renderingLabel").textContent = t("ui.rendering");
-  $("renderingNote").textContent = t("ui.rendering_note");
+  byId("renderingLabel").textContent = t("ui.rendering");
+  byId("renderingNote").textContent = t("ui.rendering_note");
 
   /* A button and a menu rather than a select, for the reason dom.ts gives:
      the open list of a select is the operating system's drawing and is the
@@ -176,11 +176,11 @@ function renderRenderings() {
 function paintSources() {
   const active = settings.activeProvider || "arasaac";
 
-  const useArasaac = $<HTMLButtonElement>("arasaacUse");
+  const useArasaac = byId<HTMLButtonElement>("arasaacUse");
   useArasaac.textContent = t("ui.source_use");
   useArasaac.hidden = active === "arasaac";
 
-  const useMetacom = $<HTMLButtonElement>("metacomUse");
+  const useMetacom = byId<HTMLButtonElement>("metacomUse");
   useMetacom.textContent = t("ui.source_use");
   useMetacom.hidden = active === "metacom" || !symbols.metacomReady();
 }
@@ -198,8 +198,8 @@ async function useSource(source: "arasaac" | "metacom") {
 }
 
 export function wireSources() {
-  $<HTMLButtonElement>("arasaacUse").onclick = () => void useSource("arasaac");
-  $<HTMLButtonElement>("metacomUse").onclick = () => void useSource("metacom");
+  byId<HTMLButtonElement>("arasaacUse").onclick = () => void useSource("arasaac");
+  byId<HTMLButtonElement>("metacomUse").onclick = () => void useSource("metacom");
 }
 
 /* A folder that has just been installed becomes the source it is searched
@@ -266,7 +266,7 @@ const themeLabel = (theme: Theme): string => t(`ui.theme_${theme}`);
 /** The three answers, with the one in force pressed. */
 export function paintTheme() {
   const current = readTheme(THEME_KEY);
-  const box = $("themePick");
+  const box = byId("themePick");
   box.textContent = "";
   for (const theme of THEMES) {
     const button = document.createElement("button");
@@ -279,24 +279,24 @@ export function paintTheme() {
       // This control and its heading, and nothing else: the tokens carry the
       // scheme to everything else on the page, which is what tokens are for.
       paintTheme();
-      $("themeState").textContent = themeLabel(theme);
+      byId("themeState").textContent = themeLabel(theme);
     };
     box.appendChild(button);
   }
 }
 
 export function paintStates() {
-  $("languageState").textContent = LANGUAGE_NAMES[LANG] || LANG;
-  $("themeState").textContent = themeLabel(readTheme(THEME_KEY));
+  byId("languageState").textContent = LANGUAGE_NAMES[LANG] || LANG;
+  byId("themeState").textContent = themeLabel(readTheme(THEME_KEY));
   // The three labels are drawn from here rather than carried by the markup, so
   // applyTexts() cannot reach them and a language switch has to redraw them.
   paintTheme();
   const active = settings.activeProvider || "arasaac";
-  $("arasaacState").textContent =
+  byId("arasaacState").textContent =
     active === "arasaac" ? t("ui.source_active") : t("ui.arasaac_state");
-  $("arasaacIntro").textContent = t("ui.arasaac_intro");
-  $("arasaacCredit").textContent = symbols.attributionFor(["arasaac"]).join(" ");
-  $("symbolsState").textContent =
+  byId("arasaacIntro").textContent = t("ui.arasaac_intro");
+  byId("arasaacCredit").textContent = symbols.attributionFor(["arasaac"]).join(" ");
+  byId("symbolsState").textContent =
     active === "metacom" ? t("ui.source_active") : metacomWord(true);
   paintSources();
   // Base line first, then ask Azure - the same pair renderSettings() draws,
@@ -304,7 +304,7 @@ export function paintStates() {
   // Azure tests: "stored" describes this database and would sit on top of the
   // probe's answer, which is the only line that describes whether the key
   // works. That answer is the whole reason azureState() exists.
-  $("azureState").textContent = settings.azureKey.set
+  byId("azureState").textContent = settings.azureKey.set
     ? t("ui.azure_key_stored")
     : t("ui.azure_key_none");
   probeAzure();
@@ -340,14 +340,14 @@ export function paintStates() {
  * lies; see docs/symbol-search.md.
  */
 function renderHere() {
-  $("metacomHereLabel").textContent = t("ui.metacom_here");
-  $<HTMLButtonElement>("metacomChoose").textContent = t("ui.metacom_choose");
-  $<HTMLButtonElement>("metacomForget").textContent = t("ui.metacom_forget");
-  $("metacomBuildNote").textContent = t("ui.metacom_build_uses");
-  $<HTMLButtonElement>("metacomForget").hidden = !symbols.metacomReady();
+  byId("metacomHereLabel").textContent = t("ui.metacom_here");
+  byId<HTMLButtonElement>("metacomChoose").textContent = t("ui.metacom_choose");
+  byId<HTMLButtonElement>("metacomForget").textContent = t("ui.metacom_forget");
+  byId("metacomBuildNote").textContent = t("ui.metacom_build_uses");
+  byId<HTMLButtonElement>("metacomForget").hidden = !symbols.metacomReady();
 
   const state = symbols.metacomStatus();
-  const line = $("metacomHereState");
+  const line = byId("metacomHereState");
   /* The one state that is a thing to do rather than a thing to read: the folder
    * is still here and the browser has downgraded the permission on it, which
    * Chromium does between visits. It is drawn as a warning rather than as
@@ -399,19 +399,19 @@ export function wireImport() {
   // One way in, and it is here rather than in the sidebar: the sidebar holds
   // the list, the way to make one, and the way out of the page. Importing is
   // rare, and it belongs beside the prose that says what the format is.
-  $<HTMLButtonElement>("boardImport").onclick = () => $<HTMLInputElement>("boardFile").click();
-  $<HTMLInputElement>("boardFile").onchange = async () => {
-    const file = $<HTMLInputElement>("boardFile").files?.[0];
-    $<HTMLInputElement>("boardFile").value = "";
+  byId<HTMLButtonElement>("boardImport").onclick = () => byId<HTMLInputElement>("boardFile").click();
+  byId<HTMLInputElement>("boardFile").onchange = async () => {
+    const file = byId<HTMLInputElement>("boardFile").files?.[0];
+    byId<HTMLInputElement>("boardFile").value = "";
     if (!file) return;
-    $("boardState").textContent = "";
+    byId("boardState").textContent = "";
     try {
       // The same path ?sammlung= takes — see shell/adopt.ts for why the two
       // must not each have their own.
-      $("boardState").textContent =
+      byId("boardState").textContent =
         adopted(await adopt(file, file.name.replace(/\.[^.]+$/, "")));
     } catch (error) {
-      $("boardState").textContent = refusal(error);
+      byId("boardState").textContent = refusal(error);
     }
   };
 }
@@ -429,32 +429,32 @@ export function wireData(backup: Sicherung) {
     store: ablage,
     adopt: adoptFolder,
     changed: () => { location.reload(); },
-    say: (line) => { $("dataState").textContent = line; },
+    say: (line) => { byId("dataState").textContent = line; },
     lang: LANG === "en" ? "en" : "de",
   });
-  $("whereBox").append(store.node);
+  byId("whereBox").append(store.node);
   /* Only where there is no store folder: with one, the copies already go beside
      the work, and a second picker would be the same offer under a name that
      reads almost the same. */
-  if (isStore()) $("folderBox").hidden = true;
+  if (isStore()) byId("folderBox").hidden = true;
   else {
     /* The 170 lines this replaces are @lautstark/sicherung/backup-panel's now.
        `lang` is a function because LANG here is a live binding that moves when
        the page changes language without reloading. */
     keeping = backupPanel({
       backup,
-      say: (message) => { $("dataState").textContent = message; },
+      say: (message) => { byId("dataState").textContent = message; },
       lang: () => (LANG === "en" ? "en" : "de"),
     });
-    if (keeping) $("folderBox").append(keeping.node);
-    else $("folderBox").hidden = true;
+    if (keeping) byId("folderBox").append(keeping.node);
+    else byId("folderBox").hidden = true;
   }
 
   /* „Alles löschen", which this editor was the only one in the family without.
      Same shape as its three siblings: its own panel last in the column, a
      confirmation that counts what goes and says how far it reaches, a refusal
      where the folder is out of reach, and the one typed word in the product. */
-  $<HTMLButtonElement>("dangerWipe").onclick = async () => {
+  byId<HTMLButtonElement>("dangerWipe").onclick = async () => {
     const reach = wipeReaches();
     const folder = folderName();
 
@@ -487,28 +487,28 @@ export function wireData(backup: Sicherung) {
     })) return;
 
     await wipeEverything();
-    $("dataState").textContent = t("ui.danger_done");
+    byId("dataState").textContent = t("ui.danger_done");
     location.reload();
   };
 
-  $<HTMLButtonElement>("dataExport").onclick = async () => {
-    $("dataState").textContent = "";
+  byId<HTMLButtonElement>("dataExport").onclick = async () => {
+    byId("dataState").textContent = "";
     try {
       const stamp = new Date().toISOString().slice(0, 10);
       downloadJson(await exportEverything(t("ui.data_notice")),
                    `vorlaut-sicherung-${stamp}.json`);
-      $("dataState").textContent = t("ui.data_exported");
+      byId("dataState").textContent = t("ui.data_exported");
     } catch (error) {
-      $("dataState").textContent = t("ui.data_failed", { error: reason(error) });
+      byId("dataState").textContent = t("ui.data_failed", { error: reason(error) });
     }
   };
 
-  $<HTMLButtonElement>("dataImport").onclick = () => $<HTMLInputElement>("dataFile").click();
-  $<HTMLInputElement>("dataFile").onchange = async () => {
-    const file = $<HTMLInputElement>("dataFile").files?.[0];
-    $<HTMLInputElement>("dataFile").value = "";
+  byId<HTMLButtonElement>("dataImport").onclick = () => byId<HTMLInputElement>("dataFile").click();
+  byId<HTMLInputElement>("dataFile").onchange = async () => {
+    const file = byId<HTMLInputElement>("dataFile").files?.[0];
+    byId<HTMLInputElement>("dataFile").value = "";
     if (!file) return;
-    $("dataState").textContent = "";
+    byId("dataState").textContent = "";
     try {
       const parsed = JSON.parse(await file.text());
       if (!isBackup(parsed)) throw new Error(t("ui.data_failed", { error: file.name }));
@@ -550,12 +550,12 @@ export function wireData(backup: Sicherung) {
       // the restore, which is this tab conflicting with itself.
       await load();
       await paintCollections();
-      $("dataState").textContent =
+      byId("dataState").textContent =
         t("ui.data_imported", { boards: done.boards, symbols: done.symbols });
     } catch (error) {
       // The data layer has no language and answers with a code; this is where
       // the code becomes a sentence.
-      $("dataState").textContent = error instanceof Error && error.message === TOO_NEW
+      byId("dataState").textContent = error instanceof Error && error.message === TOO_NEW
         ? t("ui.data_too_new")
         : t("ui.data_failed", { error: reason(error) });
     }
@@ -566,7 +566,7 @@ export function wireSymbolFolder() {
   // Chromium remembers the choice; everywhere else the file input reads the
   // folder for this session only. One button either way, so the difference
   // does not become a thing to explain.
-  $<HTMLButtonElement>("metacomChoose").onclick = async () => {
+  byId<HTMLButtonElement>("metacomChoose").onclick = async () => {
     try {
       // A folder chosen on an earlier visit is usually still here, one
       // permission click away - reconnect first, and only open the picker
@@ -582,14 +582,14 @@ export function wireSymbolFolder() {
       if (symbols.remembersFolder) await symbols.chooseMetacomFolder();
       // Firefox and Safari have no picker to await, so the file input carries
       // the rest of this errand - adopting included, in its own handler.
-      else { $<HTMLInputElement>("metacomFiles").click(); return; }
+      else { byId<HTMLInputElement>("metacomFiles").click(); return; }
       await adoptMetacom();
     } catch (error) {
       // An abandoned picker throws, and is not a failure worth reporting.
       if (!(error instanceof DOMException) || error.name !== "AbortError") status(reason(error));
     }
   };
-  $<HTMLInputElement>("metacomFiles").onchange = async (event) => {
+  byId<HTMLInputElement>("metacomFiles").onchange = async (event) => {
     const input = event.target as HTMLInputElement;
     // Copied out, not just referenced. input.files hands back the same
     // FileList object every time, and clearing the value empties that object
@@ -606,7 +606,7 @@ export function wireSymbolFolder() {
   // would have nothing to search and would say so on every keystroke. The
   // fallback is written down rather than left to readSettings() to infer on
   // the next visit, so the answer is the same before and after a reload.
-  $<HTMLButtonElement>("metacomForget").onclick = async () => {
+  byId<HTMLButtonElement>("metacomForget").onclick = async () => {
     await symbols.forgetMetacom();
     if ((settings.activeProvider || "arasaac") === "metacom") {
       symbols.setActiveSource("arasaac");
@@ -661,7 +661,7 @@ function metacomWord(short) {
  * why the list looked exactly as if no key had been typed. */
 async function probeAzure() {
   if (!settings.azureKey.set || !settings.azureRegion) return;
-  const summary = $("azureState");
+  const summary = byId("azureState");
   summary.textContent = t("ui.azure_checking");
   const state = await azureState();
   if (!state.configured) return;
@@ -726,12 +726,12 @@ export async function saveSettings(
     // The fields are read inside the turn rather than as this is called, so
     // that what is written is what they hold when the write actually happens.
     const wanted: WantedSettings = {
-      azureRegion: $<HTMLInputElement>("azureRegion").value.trim(),
-      metacom: $<HTMLInputElement>("metacomPath").value.trim(),
+      azureRegion: byId<HTMLInputElement>("azureRegion").value.trim(),
+      metacom: byId<HTMLInputElement>("metacomPath").value.trim(),
       ...extra,
     };
     // Only when something was typed: an untouched field must not wipe the key.
-    const typed = $<HTMLInputElement>("azureKey").value.trim();
+    const typed = byId<HTMLInputElement>("azureKey").value.trim();
     if (typed) wanted.azureKey = typed;
     const azureChanged = !!typed || wanted.azureRegion !== (settings.azureRegion || "");
     settings = await writeSettings(wanted);
@@ -750,8 +750,8 @@ export async function saveSettings(
 export async function forgetKey() {
   return inTurn(async () => {
     settings = await writeSettings({
-      azureRegion: $<HTMLInputElement>("azureRegion").value.trim(),
-      metacom: $<HTMLInputElement>("metacomPath").value.trim(),
+      azureRegion: byId<HTMLInputElement>("azureRegion").value.trim(),
+      metacom: byId<HTMLInputElement>("metacomPath").value.trim(),
       azureKey: null,
     });
     renderSettings();

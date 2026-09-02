@@ -37,7 +37,7 @@
 // taught has not.
 import { reason } from "./core/errors.js";
 import { openNamed } from "./shell/shelf.js";
-import { $, status} from "./shell/dom.js";
+import { byId, status} from "./shell/dom.js";
 import { t, applyTexts } from "./core/texts.js";
 import { load, wireConflict } from "./core/save.js";
 import { editor, haveEditor, useEditors } from "./core/editor.js";
@@ -96,8 +96,8 @@ onChanged(() => backup.schedule());
  *  #releaseBtn can survive in as #editor is, and it is the one that would be
  *  missed, because it holds one button and looks like furniture. */
 function clearEditor(): void {
-  $("editor").replaceChildren();
-  $("collectionAction").replaceChildren();
+  byId("editor").replaceChildren();
+  byId("collectionAction").replaceChildren();
 }
 
 export function start(): void {
@@ -113,7 +113,7 @@ export function start(): void {
       editor: diy,
       mount: () => {
         clearEditor();
-        diyBoard.render($("editor"), $("collectionAction"));
+        diyBoard.render(byId("editor"), byId("collectionAction"));
       },
       // Nothing, and it used to be three. wireRelease() bound the transfer
       // button and subscribed to the build mark; wireBuildEntry() put a build
@@ -130,7 +130,7 @@ export function start(): void {
       editor: app,
       mount: () => {
         clearEditor();
-        appBoard.render($("editor"), $("collectionAction"));
+        appBoard.render(byId("editor"), byId("collectionAction"));
       },
       wire: wireApp,
     },
@@ -167,16 +167,16 @@ export function start(): void {
   // header as well; the header has gone, and design.md §3.4 settles the
   // placement - two doors to one sheet is two things to keep in step for no
   // gain.
-  $<HTMLButtonElement>("settingsLink").onclick = openSettings;
+  byId<HTMLButtonElement>("settingsLink").onclick = openSettings;
   // The cross in the corner is the only way out of either sheet, because there
   // is nothing to confirm or to abandon: everything in both is already
   // written. The Sammlung's has no entrance here - it opens from the ⋯ beside
   // the name it belongs to, which shell/collections.ts wires.
-  $<HTMLButtonElement>("voiceClose").onclick = () => $<HTMLDialogElement>("voices").close();
-  $<HTMLButtonElement>("collectionSheetClose").onclick =
-    () => $<HTMLDialogElement>("collectionSheet").close();
-  $<HTMLButtonElement>("azureSave").onclick = saveAzure;
-  $<HTMLButtonElement>("azureForget").onclick = forgetAzureKey;
+  byId<HTMLButtonElement>("voiceClose").onclick = () => byId<HTMLDialogElement>("voices").close();
+  byId<HTMLButtonElement>("collectionSheetClose").onclick =
+    () => byId<HTMLDialogElement>("collectionSheet").close();
+  byId<HTMLButtonElement>("azureSave").onclick = saveAzure;
+  byId<HTMLButtonElement>("azureForget").onclick = forgetAzureKey;
 
   /* The one failure the chain below cannot report on its own.
    *
