@@ -599,7 +599,7 @@ export async function azureState(): Promise<AzureState> {
 const NO_SETTINGS: Settings = {
   azureKey: { set: false, hint: "" },
   azureRegion: "",
-  metacom: { path: "", ok: false, count: 0, keywords: false, fixed: false },
+  metacom: { path: "", ok: false, count: 0, fixed: false },
   // ARASAAC until somebody says otherwise: it needs no licence and no folder,
   // so it is the only source a first visit can actually search.
   activeProvider: "arasaac",
@@ -624,7 +624,6 @@ export async function readSettings(): Promise<Settings> {
       path: symbols.metacomRoot() || "",
       ok: symbols.metacomReady(),
       count: symbols.metacomCount() || 0,
-      keywords: false,
       fixed: false,
     },
   };

@@ -610,11 +610,16 @@ export interface Settings {
   azureKey: { set: boolean; hint: string };
   azureRegion: string;
   azureSecret?: string;
+  /* `keywords` was a fifth field here and has gone. It said whether the
+     collection had been indexed with a keyword table beside it, and every
+     writer of it wrote the literal `false` - it stopped being answerable when
+     the search moved into the browser, where a folder is indexed by file name
+     and there is no table to ship. The line that read it is documented at
+     metacomWord() in shell/settings.ts. */
   metacom: {
     path: string;
     ok: boolean;
     count: number;
-    keywords: boolean;
     fixed: boolean;
   };
   /** Which collection the picker offers. One at a time, deliberately: a board

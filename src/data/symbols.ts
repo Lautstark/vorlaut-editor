@@ -23,7 +23,6 @@ import {
   attributionsFor,
   getProvider,
   metacom,
-  MetacomProvider,
   setSymbolLanguage,
   symbolLanguage,
   type LanguageCode,
@@ -39,8 +38,14 @@ const METACOM_PREFIX = "metacom:";
 
 /* ------------------------------------------------------------- sources --- */
 
-/** True when this browser can remember a chosen folder across visits. */
-export const remembersFolder = MetacomProvider.supportsPersistentPicker;
+/** The provider object itself, for `@lautstark/bildquelle/metacom-panel`.
+ *
+ *  The panel is handed the provider rather than the wrappers below it: it
+ *  subscribes, reads the status and drives all four acts through the same
+ *  object, so passing it eight functions would only be this file restating an
+ *  interface the package already has. Everything else here stays a wrapper,
+ *  because everything else here is vorlaut speaking its own shapes. */
+export { metacom as metacomProvider };
 
 /** Re-attaches to a folder chosen on an earlier visit. Safe to call always. */
 export async function restoreMetacom() {
@@ -62,14 +67,16 @@ export const metacomCount = () => metacom.symbolCount;
 export const metacomRoot = () => metacom.rootName;
 export const subscribeMetacom = (listener) => metacom.subscribe(listener);
 
-export const chooseMetacomFolder = () => metacom.pickDirectory();
 /** One click on a stored folder handle, no picker: Chromium keeps the handle
  *  across visits but often downgrades the permission to "ask again", and
  *  re-confirming needs a user gesture. This is that gesture's cheap path -
- *  falling back to the full picker only when there is nothing stored. */
+ *  falling back to the full picker only when there is nothing stored.
+ *
+ *  Still here after the panel moved out, because two surfaces that are not the
+ *  settings sheet offer the same re-confirm: the picker's own retry row and the
+ *  voices sheet. */
 export const reconnectMetacom = () => metacom.requestPermission();
 export const readMetacomFiles = (files) => metacom.useFileList(files);
-export const readMetacomZip = (file) => metacom.useZip(file);
 export const forgetMetacom = () => metacom.forget();
 
 /* METACOM ships the same symbols several times over - with and without a

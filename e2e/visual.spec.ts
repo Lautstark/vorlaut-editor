@@ -160,6 +160,49 @@ test("the data panel, unfolded", async ({ page }) => {
   await expect(panel).toHaveScreenshot("data-panel.png", { mask: dataLines(page) });
 });
 
+/* The symbol folder's panel, which nothing here could see until now.
+ *
+ * The sheet shot above arrives with every panel but the first folded away, so
+ * the only part of this one it holds is the single word in its summary. The
+ * body - the licence paragraph, the state line and its dot, and the four acts -
+ * was drawn by seventy lines of this repository's own code and photographed by
+ * nothing at all.
+ *
+ * That gap is why this test exists rather than being tidiness. The block is
+ * @lautstark/bildquelle/metacom-panel's markup now and is styled from outside,
+ * which puts it in exactly the position the middle test above describes for
+ * @lautstark/sicherung's two boxes: the markup and the stylesheet are in two
+ * packages that version separately, and prose cannot check that they still
+ * agree. @lautstark/design's own note beside `.metacom-panel` says the same in
+ * as many words - the rules were added with no product emitting the class yet,
+ * and the migration is where their drawing has to be checked.
+ *
+ * No folder is connected, which is not a limitation but the only state a test
+ * can arrive in without a handle to plant: bildquelle stores one in its own
+ * database, and sources.spec.ts is where that is seeded and where what the
+ * panel then SAYS is asserted. What this holds is how it is drawn.
+ *
+ * No mask. Every line in this state is fixed text - the licence paragraph, the
+ * "no folder chosen yet" state, the four labels - and the count that would vary
+ * is not on screen because there is nothing indexed to count. */
+test("the symbol folder panel, unfolded", async ({ page }) => {
+  await openBoard(page);
+  await openSettings(page);
+  await openPanel(page, "#symbolsPanel");
+  const panel = page.locator("#symbolsPanel");
+  /* The shared block drawn before the picture is taken, for the data panel's
+     reason: it is not in the markup - wireSymbolFolder() builds it and appends
+     it into an empty div - so a shot of the panel alone would be satisfied by
+     that div staying empty, which is what a broken import leaves behind and
+     exactly the picture that would then be recorded as correct. */
+  await expect(panel.locator("#metacomBox .metacom-panel")).toBeVisible();
+  // The act this repository did not have until this change, and the reason
+  // half of it is here: a picture that did not include it could be recorded
+  // over a panel that had quietly lost it again.
+  await expect(panel.locator("#metacomBox .acts button")).toHaveCount(4);
+  await expect(panel).toHaveScreenshot("symbols-panel.png");
+});
+
 test("the deletion panel, unfolded", async ({ page }) => {
   await openBoard(page);
   await openSettings(page);

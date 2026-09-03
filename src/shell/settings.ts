@@ -23,6 +23,7 @@ import { boardTotals, wipeEverything } from "../data/store.js";
 import { adopt, adopted, refusal } from "./adopt.js";
 import { backupPanel, type BackupPanel } from "@lautstark/sicherung/backup-panel";
 import { wherePanel } from "@lautstark/sicherung/ablage-panel";
+import { metacomPanel, type MetacomPanel } from "@lautstark/bildquelle/metacom-panel";
 import { ablage, folderName, isStore, wipeReaches } from "../data/folder.js";
 import { adoptFolder } from "../data/store.js";
 import type { Sicherung } from "@lautstark/sicherung";
@@ -33,8 +34,7 @@ import { downloadJson } from "@lautstark/werkzeuge/download";
 let keeping: BackupPanel | null = null;
 
 let settings: Settings = { azureKey: { set: false, hint: "" }, azureRegion: "",
-                 metacom: { path: "", ok: false, count: 0, keywords: false,
-                            fixed: false },
+                 metacom: { path: "", ok: false, count: 0, fixed: false },
                  local: true };
 
 // What a stored key looks like in the field: the four characters it ends in,
@@ -72,8 +72,8 @@ function renderSettings() {
   // at all - away from the machine the whole panel is read-only.
   forget.hidden = !settings.azureKey.set || !settings.local;
 
-  byId("metacomState").textContent = metacomWord(false);
-  byId("symbolsState").textContent = metacomWord(true);
+  byId("metacomState").textContent = metacomWord();
+  paintSymbolsSummary();
   // A folder that was set and cannot be read is the one state worth unfolding
   // for: somebody meant to configure this and it is not working.
   if (settings.metacom.path && !settings.metacom.ok) byId<HTMLDetailsElement>("symbolsPanel").open = true;
@@ -228,21 +228,27 @@ export function wireSources() {
  * it lies, no byte of it is copied or uploaded, and only one source is ever
  * active. See docs/symbol-search.md.
  */
-async function adoptMetacom() {
-  if (!symbols.metacomReady()) return;
+async function adoptMetacom(): Promise<boolean> {
+  if (!symbols.metacomReady()) return false;
   // Behind whatever the folder's arrival already set going. The provider's own
   // subscription fires a read on that same event, so `settings` here is still
   // the answer from before the folder existed - and it is read below to decide
   // whether there is anything to switch. Awaiting a read of our own is what
   // drains the queue: see inTurn().
   await loadSettings();
-  if ((settings.activeProvider || "arasaac") === "metacom") return;
+  if ((settings.activeProvider || "arasaac") === "metacom") return false;
   await useSource("metacom");
   // Said out loud rather than left to be noticed: switching source changes
   // what every search from now on answers with, and the panel that would show
   // it is the one somebody is looking at rather than the sheet they will open
   // next. bildhaft says it through its own notifier for the same reason.
+  //
+  // Answered rather than only said, because the panel has a quieter sentence
+  // of its own for the same press - see the say() it is passed. Both in the
+  // one status line, so whichever is the bigger news has to win rather than
+  // arrive first and be overwritten.
   status(t("ui.metacom_now_active"));
+  return true;
 }
 
 /* ------------------------------------------------------------ the scheme ---
@@ -296,8 +302,7 @@ export function paintStates() {
     active === "arasaac" ? t("ui.source_active") : t("ui.arasaac_state");
   byId("arasaacIntro").textContent = t("ui.arasaac_intro");
   byId("arasaacCredit").textContent = symbols.attributionFor(["arasaac"]).join(" ");
-  byId("symbolsState").textContent =
-    active === "metacom" ? t("ui.source_active") : metacomWord(true);
+  paintSymbolsSummary();
   paintSources();
   // Base line first, then ask Azure - the same pair renderSettings() draws,
   // and in the same order. Setting only the base here is what broke the two
@@ -308,10 +313,13 @@ export function paintStates() {
     ? t("ui.azure_key_stored")
     : t("ui.azure_key_none");
   probeAzure();
-  // The Daten panel's own state line, which is drawn by the module that owns
-  // the folder rather than from here - it is the one panel whose sentence is
-  // built from a status this file never sees.
+  /* The two panels drawn by the module that owns their folder rather than from
+     here. Neither carries a data-i18n, so applyTexts() cannot reach either, and
+     each paints its own words in whichever language it is asked for on the way
+     past. There used to be one of these; §4.9's two folder questions are both
+     packaged now. */
   keeping?.refresh();
+  folder?.refresh();
   /* There was a second one, and the hook it registered through has gone with
    * it. onPaintPanels() let a panel wired outside this file ask to be redrawn
    * on a language switch, and existed because the Device panel belonged to
@@ -340,41 +348,57 @@ export function paintStates() {
  * lies; see docs/symbol-search.md.
  */
 function renderHere() {
-  byId("metacomHereLabel").textContent = t("ui.metacom_here");
-  byId<HTMLButtonElement>("metacomChoose").textContent = t("ui.metacom_choose");
-  byId<HTMLButtonElement>("metacomForget").textContent = t("ui.metacom_forget");
   byId("metacomBuildNote").textContent = t("ui.metacom_build_uses");
-  byId<HTMLButtonElement>("metacomForget").hidden = !symbols.metacomReady();
+  // The block itself carries its own words and repaints on its own status, so
+  // there is nothing here to redraw but the one line beside it.
+  folder?.refresh();
+}
 
-  const state = symbols.metacomStatus();
-  const line = byId("metacomHereState");
-  /* The one state that is a thing to do rather than a thing to read: the folder
-   * is still here and the browser has downgraded the permission on it, which
-   * Chromium does between visits. It is drawn as a warning rather than as
-   * another grey note, because the collection is silently unavailable until
-   * somebody presses the button above - and a grey line saying so reads like
-   * the others, which are all descriptions. components.css's .notice.bad. */
-  const needsAccess = state.kind === "needs-setup" && state.code === "permission-needed";
-  // Whether to draw it as a warning is bildquelle's answer; which sentence is
-  // this page's. The two differ: `error` needs attention too and has its own
-  // words below.
-  const attention = symbols.needsAttention(state);
-  line.className = attention ? "notice bad" : "note";
+/** What the shared panel last put in the symbols panel's summary.
+ *
+ * Held rather than read back off the element, because paintStates() overwrites
+ * the same span with "active" when METACOM is the source being searched - and
+ * the two have to be able to swap back and forth without either losing what the
+ * other knows. */
+let folderHead = "";
 
-  if (needsAccess) {
-    line.textContent = t("ui.metacom_confirm");
-  } else if (symbols.metacomReady()) {
-    line.textContent = t("ui.metacom_here_ok", {
-      count: symbols.metacomCount(),
-      root: symbols.metacomRoot(),
-    });
-  } else if (state.kind === "loading") {
-    line.textContent = t("ui.metacom_here_busy");
-  } else if (state.kind === "error") {
-    line.textContent = t("ui.metacom_here_failed");
-  } else {
-    line.textContent = t("ui.metacom_here_none");
-  }
+/** The shared block, held so a language switch can repaint it. */
+let folder: MetacomPanel | null = null;
+
+/* Whether the press now running was a re-confirm rather than a pick.
+ *
+ * The module merges "choose a folder" and "confirm access" into one button -
+ * one press, three labels - and tells `after()` only that a `choose` happened.
+ * This repository has to keep the two apart, because adoptMetacom() below must
+ * not fire on a re-confirm: the same folder coming back is a restore, not a new
+ * answer to which source somebody wants searched.
+ *
+ * Sampled in the capture phase, before the module's own click handler runs,
+ * because that handler is what changes the status this asks about - by the time
+ * after() is called the answer has already moved. */
+let reconfirming = false;
+
+/** Whether after() has already put a sentence in the status line for this press.
+ *
+ * Read by the panel's say(), which runs straight afterwards and would otherwise
+ * overwrite the louder of the two with the quieter one. */
+let announced = false;
+
+/** The summary line of the symbols panel.
+ *
+ * Two things want to say something there and only one can. Which source is
+ * active wins, because that is the fact a reader of a folded sheet is looking
+ * for; the folder's own state is what the panel says when METACOM is set up and
+ * not being searched.
+ *
+ * The module leaves the heading blank where there is nothing to report - a
+ * folder that was never chosen - and this page fills that with its own "not
+ * set", because every other panel on this sheet states something in its
+ * summary and a blank one reads as a panel that failed to draw. */
+function paintSymbolsSummary() {
+  const active = (settings.activeProvider || "arasaac") === "metacom";
+  byId("symbolsState").textContent =
+    active ? t("ui.source_active") : (folderHead || t("ui.metacom_short_none"));
 }
 
 /* ------------------------------------------ a Sammlung as a document ---
@@ -563,56 +587,61 @@ export function wireData(backup: Sicherung) {
 }
 
 export function wireSymbolFolder() {
-  // Chromium remembers the choice; everywhere else the file input reads the
-  // folder for this session only. One button either way, so the difference
-  // does not become a thing to explain.
-  byId<HTMLButtonElement>("metacomChoose").onclick = async () => {
-    try {
-      // A folder chosen on an earlier visit is usually still here, one
-      // permission click away - reconnect first, and only open the picker
-      // when there is nothing to reconnect to. Without this, every return
-      // visit cost re-picking the folder from scratch.
-      //
-      // It returns rather than falling through to adoptMetacom(): the same
-      // folder coming back is a restore, and a restore does not decide which
-      // source is active - see the note there.
-      const state = symbols.metacomStatus();
-      if (state.kind === "needs-setup" && state.code === "permission-needed"
-          && await symbols.reconnectMetacom()) return;
-      if (symbols.remembersFolder) await symbols.chooseMetacomFolder();
-      // Firefox and Safari have no picker to await, so the file input carries
-      // the rest of this errand - adopting included, in its own handler.
-      else { byId<HTMLInputElement>("metacomFiles").click(); return; }
-      await adoptMetacom();
-    } catch (error) {
-      // An abandoned picker throws, and is not a failure worth reporting.
-      if (!(error instanceof DOMException) || error.name !== "AbortError") status(reason(error));
-    }
-  };
-  byId<HTMLInputElement>("metacomFiles").onchange = async (event) => {
-    const input = event.target as HTMLInputElement;
-    // Copied out, not just referenced. input.files hands back the same
-    // FileList object every time, and clearing the value empties that object
-    // in place - so the length was read as 0 a line later and the folder was
-    // never read at all. This is the Firefox and Safari path, where it was
-    // the only way to connect a collection.
-    const files = Array.from(input.files || []);
-    input.value = "";
-    if (!files.length) return;
-    await symbols.readMetacomFiles(files);
-    await adoptMetacom();
-  };
-  // Forgetting the folder cannot leave METACOM as the source: the picker
-  // would have nothing to search and would say so on every keystroke. The
-  // fallback is written down rather than left to readSettings() to infer on
-  // the next visit, so the answer is the same before and after a reload.
-  byId<HTMLButtonElement>("metacomForget").onclick = async () => {
-    await symbols.forgetMetacom();
-    if ((settings.activeProvider || "arasaac") === "metacom") {
-      symbols.setActiveSource("arasaac");
-      await saveSettings({ activeProvider: "arasaac" });
-    }
-  };
+  /* The 70 lines this replaces are @lautstark/bildquelle/metacom-panel's now:
+     the licence paragraph, the link to the shop, the state line and its dot,
+     and the four acts. What is left here is the three things the module leaves
+     to a product on purpose - which source is now active, what a language
+     switch has to repaint, and this page's own word for a folder nobody has
+     chosen. See the module's header for why each of those stayed.
+
+     `lang` is a function because LANG is a live binding that moves when the
+     page changes language without reloading - the same reason backupPanel()
+     above is passed one. */
+  folder = metacomPanel({
+    metacom: symbols.metacomProvider,
+    /* All four, including the one this repository did not have. `readMetacomZip`
+       had been sitting in data/symbols.ts since the search moved into the
+       browser with no caller at all - the wiring was built and never hung on a
+       button, which conventions.md §4.13 records as a hole rather than a
+       decision. bildhaft and wochenwerk both offer it. */
+    actions: ["choose", "zip", "reread", "forget"],
+    lang: () => (LANG === "en" ? "en" : "de"),
+    headline: (text) => { folderHead = text; paintSymbolsSummary(); },
+    say: (line) => {
+      /* The module's own sentence, unless after() has already put a bigger one
+         in the same status line. Switching source is the bigger one: it changes
+         what every search from now on answers with, where "folder read" only
+         says the press worked. after() runs first and this would overwrite it,
+         so it has to ask rather than assume - and when nothing was switched,
+         which is every press on a folder that is already the active source,
+         this is the only confirmation there is. */
+      if (!announced) status(line);
+    },
+    after: async (action) => {
+      announced = false;
+      if (action === "forget") {
+        // Forgetting the folder cannot leave METACOM as the source: the picker
+        // would have nothing to search and would say so on every keystroke. The
+        // fallback is written down rather than left to readSettings() to infer
+        // on the next visit, so the answer is the same before and after a
+        // reload.
+        if ((settings.activeProvider || "arasaac") === "metacom") {
+          symbols.setActiveSource("arasaac");
+          await saveSettings({ activeProvider: "arasaac" });
+        }
+        return;
+      }
+      // A re-confirm is a restore, and a restore does not decide which source
+      // is active. See adoptMetacom() and `reconfirming` above.
+      if (action === "choose" && reconfirming) return;
+      if (action === "choose" || action === "zip") announced = await adoptMetacom();
+    },
+  });
+  byId("metacomBox").append(folder.node);
+  folder.node.addEventListener("click", () => {
+    const state = symbols.metacomStatus();
+    reconfirming = state.kind === "needs-setup" && state.code === "permission-needed";
+  }, true);
 
   // The provider says when a folder arrives or goes; nothing here polls.
   //
@@ -625,31 +654,38 @@ export function wireSymbolFolder() {
   symbols.subscribeMetacom(() => void loadSettings());
 }
 
-// Where the symbols come from, in one line. Twice over, because the heading
-// has room for two words and the line under the field has room for a
-// sentence - and only the "nothing set" case differs between the two.
-function metacomWord(short) {
+/* Where the symbols come from, for the one line that still asks: the note under
+ * the build path. It used to answer twice over, once short for the panel's
+ * summary, and that half is the shared panel's headline now.
+ *
+ * **The index kind has gone with it, and it was dead text rather than a
+ * setting.** This line used to end with a second clause naming how the folder
+ * had been indexed - with a keyword table, or by file name only - chosen from
+ * `settings.metacom.keywords`. Every writer of that field wrote the literal
+ * `false`: backend/local.ts's NO_SETTINGS and its readSettings(), which
+ * rebuilds the whole `metacom` record from the browser provider, and this
+ * file's own initialiser. Nothing has ever assigned it `true` since the search
+ * moved into the browser, so one of the two answers could not be printed and
+ * the other was printed unconditionally.
+ *
+ * It is not a switch anybody can flip, either: a folder read in a browser has
+ * no keywords to have. metacom.ts indexes file names by construction, because
+ * the index is the only thing about a licensed folder bildquelle keeps. The
+ * line is a leftover from the Python build, where a collection could ship a
+ * keyword table beside it. bildquelle's shared panel leaves the whole item out
+ * for the same reason and says so in its header; conventions.md §4.13 records
+ * it as a hole rather than a decision. */
+function metacomWord() {
   const where = settings.metacom;
   // The folder is there and one click re-confirms it - a different sentence
   // from "not set" and from "unreadable", because the remedy is different.
   const state = symbols.metacomStatus();
-  /* A state, not an instruction. This returned the whole sentence telling
-   * somebody which button to press, and it is written into the panel's summary
-   * - where design.md says a heading carries what a section IS set to. A
-   * summary is one line and gets truncated, so the instruction arrived as its
-   * own first half and stopped mid-clause. The
-   * sentence is in the body now, where it has room and where the button it
-   * names is. bildhaft's panel does the same: a short state above, the words
-   * about what to do beside the control. */
   if (state.kind === "needs-setup" && state.code === "permission-needed") {
     return t("ui.metacom_needs_access");
   }
-  if (!where.path) return t(short ? "ui.metacom_short_none" : "ui.metacom_none");
+  if (!where.path) return t("ui.metacom_none");
   if (!where.ok) return t("ui.metacom_bad");
-  return t("ui.metacom_ok", {
-    count: where.count,
-    kind: t(where.keywords ? "ui.metacom_keywords" : "ui.metacom_names"),
-  });
+  return t("ui.metacom_ok", { count: where.count });
 }
 
 /** Replaces "stored" with whether the key actually works, asynchronously.

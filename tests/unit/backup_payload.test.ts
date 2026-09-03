@@ -56,7 +56,7 @@ async function seed(): Promise<void> {
     azureKey: { set: true, hint: "…f8a2" },
     azureRegion: "westeurope",
     azureSecret: "sk-geheim-123",
-    metacom: { path: LICENSED, ok: true, count: 1284, keywords: false, fixed: false },
+    metacom: { path: LICENSED, ok: true, count: 1284, fixed: false },
     activeProvider: "metacom",
     metacomRendering: "PNG_ohne_Rahmen",
     tabletAddress: TABLET,
@@ -147,7 +147,7 @@ describe("what the standing backup is handed", () => {
     const future = {
       activeProvider: "arasaac",
       azureSecret: "sk-1",
-      metacom: { path: LICENSED, ok: true, count: 3, keywords: false, fixed: false },
+      metacom: { path: LICENSED, ok: true, count: 3, fixed: false },
       elevenLabsToken: "tok-999",
     };
     expect(stripSecrets(future as never)).toEqual({ activeProvider: "arasaac" });

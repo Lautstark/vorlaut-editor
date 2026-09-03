@@ -132,7 +132,9 @@ export function applyTexts() {
   byId("themeNote").textContent = t("ui.theme_note");
   byId("symbolsSection").textContent = t("ui.symbols");
   byId("metacomIntro").textContent = t("ui.metacom_intro");
-  outward("metacomLink", "ui.metacom_link", "ui.metacom_link_url");
+  // The licence link was here. It is inside the shared panel now, which carries
+  // its own words in both languages and repaints itself on a language switch -
+  // see the refresh() in settings.ts's paintStates().
   byId("metacomLabel").textContent = t("ui.metacom_path");
   byId("boardSection").textContent = t("ui.collection");
   byId("boardNote").textContent = t("ui.collection_note");

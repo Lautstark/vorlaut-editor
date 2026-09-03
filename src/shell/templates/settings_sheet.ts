@@ -191,14 +191,16 @@ export const markup = `
     </summary>
     <div class="setting">
       <p class="lead" id="metacomIntro"></p>
-      <p class="lead"><a id="metacomLink" target="_blank" rel="noopener noreferrer"></a></p>
-      <label id="metacomHereLabel"></label>
-      <div class="row">
-        <button id="metacomChoose" class="btn" type="button"></button>
-        <input type="file" id="metacomFiles" webkitdirectory directory multiple hidden>
-        <button id="metacomForget" class="btn" type="button"></button>
-      </div>
-      <p class="note" id="metacomHereState"></p>
+      <!-- The folder this browser reads, drawn by
+           @lautstark/bildquelle/metacom-panel so that all three programmes show
+           the same block. Empty in the markup for the same reason #whereBox and
+           #folderBox are: wireSymbolFolder() builds it and appends it.
+
+           The licence paragraph and the link to the shop are the module's now.
+           They were this repository's own words, and are in the package because
+           it was the only one of the three that said where a licence comes
+           from - see the module's header. -->
+      <div id="metacomBox"></div>
 
       <label id="metacomLabel" for="metacomPath"></label>
       <input type="text" id="metacomPath" class="field" autocomplete="off">

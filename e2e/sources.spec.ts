@@ -163,15 +163,31 @@ async function supplyFiles(page: Page) {
       });
       carrier.items.add(file);
     }
-    const input = document.getElementById("metacomFiles") as HTMLInputElement;
+    /* The panel's own directory input, addressed by what it is rather than by
+       an id: the block is @lautstark/bildquelle/metacom-panel's markup now and
+       gives its controls no ids. `[webkitdirectory]` is what separates it from
+       the ZIP input beside it, which is the same element with an accept list.
+       The visual spec reaches into @lautstark/sicherung's two boxes the same
+       way, and for the same reason. */
+    const input = document.querySelector(
+      "#metacomBox input[type=file][webkitdirectory]") as HTMLInputElement;
     input.files = carrier.files;
     input.dispatchEvent(new Event("change"));
   }, { root: ROOT, files: FILES });
-  // Connected, said by the control that only exists when there is something
-  // to forget. Not "use this": whether that one is offered depends on which
-  // collection is active, which is the thing under test.
-  await expect(page.locator("#metacomForget")).toBeVisible();
+  // Connected, said by the control that can only do anything when there is
+  // something to forget. Not "use this": whether that one is offered depends on
+  // which collection is active, which is the thing under test.
+  //
+  // Enabled rather than visible, because the shared panel disables an act it
+  // cannot run instead of removing it - so the button is on screen from the
+  // first paint and being there says nothing. bildquelle's own note gives the
+  // reason: a row that changes width under the pointer as a folder arrives
+  // loses whatever the keyboard was on.
+  await expect(forgetButton(page)).toBeEnabled();
 }
+
+/** The panel's destructive act. See supplyFiles() for why it has no id. */
+const forgetButton = (page: Page) => page.locator("#metacomBox button.destructive");
 
 
 
@@ -302,7 +318,7 @@ test("a folder restored at boot does not decide which source is active", async (
   // what a search asks.
   await page.locator("#settingsLink").click();
   await openPanel(page, "#symbolsPanel");
-  await expect(page.locator("#metacomForget")).toBeVisible();
+  await expect(forgetButton(page)).toBeEnabled();
   // Offered rather than taken: the control that would switch is on screen and
   // has not been pressed.
   await expect(page.locator("#metacomUse")).toBeVisible();
