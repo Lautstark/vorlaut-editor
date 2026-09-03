@@ -96,8 +96,10 @@ export function applyTexts() {
   byId<HTMLButtonElement>("collectionSheetClose").setAttribute("aria-label", t("ui.close"));
   byId<HTMLButtonElement>("collectionSheetClose").title = t("ui.close");
   byId("voiceSection").textContent = t("ui.voice");
-  byId<HTMLInputElement>("voiceQuery").placeholder = t("ui.voice_search_hint");
-  byId<HTMLInputElement>("voiceQuery").setAttribute("aria-label", t("ui.voice_search_hint"));
+  // The search field's caption and its example are not here any more: the
+  // field belongs to @lautstark/stimmquelle/voice-picker, which carries both
+  // in both languages and assigns them on every paint. A language switch
+  // reaches them through renderVoices() below rather than through this pass.
   // What this machine can speak with at all, which is the half of the old
   // voice panel that stayed in Einstellungen. Its state line is a count and so
   // is not here - voices.ts draws it, from the list it has just fetched.

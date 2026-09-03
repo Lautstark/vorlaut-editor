@@ -126,7 +126,7 @@ test("both settings sheets open", async ({ page }) => {
   // Populated rather than merely present: the voice list comes from the
   // catalogue, which is the half that would be empty if the licence gate or
   // the package import had gone wrong.
-  await expect(page.locator("#voiceList, #voiceHint")).not.toHaveCount(0);
+  await expect(page.locator("#voiceBox, #voiceHint")).not.toHaveCount(0);
 });
 
 /* The one entrance to the settings is at the foot of the sidebar (design.md

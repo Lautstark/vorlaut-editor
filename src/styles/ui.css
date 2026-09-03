@@ -326,7 +326,12 @@ button, select, input, textarea { font-family: inherit; }
 /* Dark type on the purple: 5.5:1 instead of 3.2:1 with white. That reasoning
    is now a token - --accent-ink is the same idea solved rather than guessed,
    and it comes out at 6.0:1. */
-.play { width: 40px; flex: none; justify-content: center; padding: 8px 0; }
+/* `.play` stood here: the 40px square the voice list's ▶ was drawn as. It had
+   exactly one emitter, voiceRow() in shell/voices.ts, and it left with it -
+   the button is `.voices__play` now and components.css draws it, with tabular
+   numerals this rule never had because the per cent it prints is the module's
+   idea rather than this one's. The editors' own play buttons never wore this
+   class; they are `.btn.quiet.icon`. */
 .tab.dragover { outline: 2px dashed var(--text-dim); outline-offset: 2px; }
 .tab[draggable=true] { cursor: grab; }
 
@@ -589,7 +594,6 @@ dialog.sheet > .head, dialog.sheet > .foot { flex: none; }
   padding: 16px 16px 0; font-size: 12px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-dim);
 }
-.sheet .voiceList { padding-top: 10px; }
 /* One labelled setting inside the sheet: a label, a control, a note. It was
    called .field until the components layer arrived, where .field is the
    control itself - two different things under one name in one stylesheet is
@@ -665,58 +669,30 @@ dl.transfer dd { margin: 0; font-size: 14px; }
    would be 38px down either side. */
 #voices > .head, #legal > .head { padding: 16px 16px 4px; margin: 0; }
 .sheet > .head strong { flex: 1 1 auto; font-weight: 600; }
-/* No scrolling of its own any more. It used to be twenty rows deep and
-   carried a scrollbar inside the sheet's scrollbar; folded up it is one row,
-   and unfolded it is something that was asked for, so it may take the space
-   and let the sheet do the scrolling. */
-.voiceList {
-  display: flex; flex-direction: column; gap: 6px; padding: 6px 16px 16px;
-}
-.voiceList .note { padding: 6px 11px; color: var(--text-dim); font-size: 13px; }
-/* One scrolling area for the sheet, and this is not a second one.
+/* The whole voice list stood here - `.voiceList`, `.voices`, `.voicefilters`,
+ * `.voiceRow`, `.voice` and its three parts - and it is components.css's now,
+ * because @lautstark/stimmquelle/voice-picker draws the block in all three
+ * programmes. Deleted rather than left: this file loads after components.css,
+ * so every one of these rules would have beaten the shared ones by nothing but
+ * order and this repository would have gone on drawing its own picker while
+ * appearing to have stopped.
  *
- * It used to be: `max-height: min(46vh, 340px); overflow: auto`, on the
- * argument that a personal key brings hundreds of voices and the panel holding
- * that key sits underneath them. The argument is true and the box was still
- * wrong, for the reason components.css states one floor up - "two of them
- * nested is a way to lose the Save button without noticing it is there".
+ * Most of the values went across unchanged, because all three products had
+ * already converged on the same five class names and mostly on the same
+ * numbers. Two things this file argued for won there and are quoted in
+ * components.css's own comment: the row is a wrapper holding two buttons
+ * rather than being the button, and `.voices` has no scroll box of its own.
+ * The second one was measured here - a 340px list inside a 460px body means a
+ * wheel gesture latches to the list for its whole run, so the sheet does not
+ * move and the panel below cannot be reached - and the other two products
+ * still had the box this file had already removed.
  *
- * That is exactly what happened. A 340px list inside a 460px body is most of
- * what the pointer is over, and a wheel gesture latches to the element under
- * the pointer for its whole run: the sheet did not move at all, and the button
- * at the foot of the panel below could not be reached. "Sometimes" is where the
- * pointer happened to be.
- *
- * So the list grows and the sheet scrolls. Hundreds of voices are then a long
- * scroll - but it is one scroll, with the filters directly above it, and a long
- * scroll that works beats a short one that swallows the gesture. */
-.voices { display: flex; flex-direction: column; gap: 2px; padding: 2px; }
-.voicefilters { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px 16px 0; }
-
-.voiceRow { display: flex; align-items: center; gap: 8px; }
-/* mitreden's row, which is a button there. Here it is the second of two, so
-   the row around it holds them side by side and this is the one that chooses. */
-.voice {
-  flex: 1 1 auto; min-width: 0; display: block; text-align: left;
-  border: 1px solid transparent; background: none; color: var(--text);
-  cursor: pointer; padding: 8px 11px; border-radius: var(--radius-item);
-}
-.voice:hover { background: var(--surface-2); }
-.voice[aria-checked="true"] { background: var(--accent-soft); }
-.voice[aria-checked="true"] .voice__name { color: var(--accent-strong); font-weight: 650; }
-.voice__name { font-size: 14.5px; }
-/* Where it comes from, what it speaks, whose voice it is, and what it costs -
-   the four facts the old picker withheld, on the line under the name. */
-.voice__facts { display: block; font-size: 12px; color: var(--text-faint); }
-/* A note the catalogue attaches to a voice, under the facts and deliberately
-   in the same size and the same faint colour. It is a sentence rather than a
-   fact, so it wraps - and it takes no accent, no border and no icon, because
-   every one of those would say "this voice is broken" about a voice that is
-   not. See voiceRow() for the argument. */
-.voice__hint {
-  display: block; margin-top: 3px; font-size: 12px; color: var(--text-faint);
-}
-.voiceRow.blank { color: var(--text-dim); display: block; padding: 6px 16px; }
+ * One thing genuinely changes shape. `.voicefilters` and `.voiceList` each
+ * carried their own `padding: ... 16px`, inside a `.setting` that already has
+ * 16px, so the pills and the rows sat 32px in while the search field above
+ * them sat 16px in. `.voice-picker` is a grid with no horizontal padding at
+ * all, which is what puts the field, the pills and the rows on one left edge.
+ */
 /* The button and, under it, what it will fetch. Set off by a line, because
    it is an errand of its own and not one of the voices. */
 .voiceOffer:not(:empty) { border-top: 1px solid var(--line); margin: 4px 16px 0; }

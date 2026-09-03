@@ -373,8 +373,11 @@ function nameOf(id: string): string {
  *
  * `recommended` is stimmquelle's pick for a language-and-gender slot, and this
  * is the one use there is for a flag this product deliberately never shows -
- * see voiceRow() in shell/voices.ts and OfferedVoice in core/types.ts, which
- * both keep it out of what a row says. It is used here and only here because
+ * see OfferedVoice in core/types.ts, which keeps it out of what a row says,
+ * and @lautstark/stimmquelle/voice-picker's factsOf(), whose own comment gives
+ * the reason: the flag is that package's editorial pick inside its own piper
+ * catalogue and is false for every cloud voice, so a badge would sit on two
+ * rows and not on the several hundred an Azure key had just unlocked. It is used here and only here because
  * array order is not evidence: the catalogue opens with three German voices,
  * so an English Sammlung started in a German man's and stayed there, and of
  * the three Thorstens on offer order alone would hand somebody the 114 MB one.

@@ -113,11 +113,23 @@ export const markup = `
       <span class="state" id="voiceState"></span>
     </summary>
     <div class="setting">
-      <!-- The search field is markup rather than rebuilt with the list:
-           redrawing an input somebody is typing into takes the caret with it. -->
-      <input type="search" id="voiceQuery" class="field" autocomplete="off">
-      <div class="voicefilters" id="voiceFilters"></div>
-      <div class="voiceList" id="voiceList"></div>
+      <!-- The search field, the language pills and the rows, drawn by
+           @lautstark/stimmquelle/voice-picker so that all three programmes
+           show the same list. Empty in the markup for the same reason
+           #metacomBox is: openCollectionSettings() builds the block and puts
+           it in here.
+
+           The search field went into the module with the rest. It was markup
+           here because redrawing an input somebody is typing into takes the
+           caret with it - the module makes the same guarantee one level in,
+           by building the field once and replacing only the rows under it. -->
+      <div id="voiceBox"></div>
+      <!-- Not the module's "no voice matches that": this is a machine with
+           nothing to choose between at all, and what to do about it is this
+           product's. The offer that fixes it installs a voice for every
+           Sammlung there is, so it is in Einstellungen and this names the
+           door. -->
+      <p class="note" id="voiceEmpty"></p>
       <!-- What a different voice costs, and - when there is nothing here to
            choose between - where voices come from. The offer to fetch them
            used to sit under this line; it is in Einstellungen now, with the

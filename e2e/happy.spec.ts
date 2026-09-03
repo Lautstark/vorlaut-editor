@@ -518,21 +518,21 @@ test("a voice can be chosen and is still ticked on reopening", async ({ page }) 
   // than in Einstellungen: what a talker sounds like is not a fact about the
   // browser it was built in.
   await openVoices(page);
-  const rows = page.locator("#voiceList .voiceRow");
+  const rows = page.locator("#voiceBox .voices__row");
   await expect(rows.first()).toBeVisible();
 
   // Offered because this page owns the piper runtime, and for no other
   // reason: vits-web can phonemise neither of these two. Kerstin is the one
   // voice that reaches the device at its own 16 kHz with no resample, so her
   // row going missing is broken wiring, not a catalogue opinion.
-  await expect(page.locator("#voiceList .voiceRow", { hasText: "Kerstin" }))
+  await expect(page.locator("#voiceBox .voices__row", { hasText: "Kerstin" }))
     .toHaveCount(1);
-  await expect(page.locator("#voiceList .voiceRow", { hasText: "John" }))
+  await expect(page.locator("#voiceBox .voices__row", { hasText: "John" }))
     .toHaveCount(1);
 
   const picked = (await rows.first().locator(".voice__name").textContent())!;
   await rows.first().locator("button.voice").click();
-  await expect(page.locator('#voiceList .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
   // No Save: choosing wrote it. The board's own status line is the proof,
   // and it is what every other edit on this page already says.
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
@@ -543,7 +543,7 @@ test("a voice can be chosen and is still ticked on reopening", async ({ page }) 
   // The regression this pins: listVoices() once dropped `chosen`, and the
   // sheet opened with nothing marked every time.
   await openVoices(page);
-  const on = page.locator('#voiceList .voice[aria-checked="true"]');
+  const on = page.locator('#voiceBox .voice[aria-checked="true"]');
   await expect(on).toHaveCount(1);
   await expect(on.locator(".voice__name")).toHaveText(picked);
   await page.locator("#collectionSheetClose").click();
@@ -562,20 +562,152 @@ test("the voice that rushes a single word says so, on its row alone", async ({ p
    * does not. Nothing here synthesises; the note is drawn from the list. */
   await openBoard(page);
   await openVoices(page);
-  await expect(page.locator("#voiceList .voiceRow").first()).toBeVisible();
+  await expect(page.locator("#voiceBox .voices__row").first()).toBeVisible();
 
-  const kerstin = page.locator("#voiceList .voiceRow", { hasText: "Kerstin" });
+  const kerstin = page.locator("#voiceBox .voices__row", { hasText: "Kerstin" });
   await expect(kerstin).toHaveCount(1);
-  await expect(kerstin.locator(".voice__hint")).toHaveText(label("ui.voice_rushes"));
+
+  /* Chosen first, and that is not a detour. The line under the facts carries
+   * two different notes now: the catalogue's, which is this test's subject,
+   * and this product's "nobody picked this one", which lands there too and
+   * sits on whichever voice the Sammlung's language happens to start on. With
+   * a voice ticked the second note is gone from every row, so what is left on
+   * a row is the catalogue's alone and the count below means what it says. */
+  await kerstin.locator("button.voice").click();
+  await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
+
+  /* The words are @lautstark/stimmquelle/voice-picker's now - it carries the
+   * sentence in both languages, and this repository's own copy of it went with
+   * the rows. So what is held here is the shape the comment above describes
+   * and nothing more: the flagged voice has a line, an unflagged one does not.
+   * Which voices carry the flag is the catalogue's, and asserting its wording
+   * from here would be this suite holding another repository's prose. */
+  await expect(kerstin.locator(".voice__hint")).toHaveCount(1);
+  await expect(kerstin.locator(".voice__hint")).not.toBeEmpty();
 
   // Two Thorstens are offered and neither is flagged, so this counts across
   // both rather than picking one of them.
-  const thorsten = page.locator("#voiceList .voiceRow", { hasText: "Thorsten" });
+  const thorsten = page.locator("#voiceBox .voices__row", { hasText: "Thorsten" });
   expect(await thorsten.count()).toBeGreaterThan(0);
   await expect(thorsten.locator(".voice__hint")).toHaveCount(0);
 
   await page.locator("#collectionSheetClose").click();
 });
+
+/* The keyboard in the voice list, which is the half this page never had.
+ *
+ * Three separate defects, all of them fixed by the list becoming
+ * @lautstark/stimmquelle/voice-picker's, and none of them visible in a
+ * screenshot - so they are held here.
+ *
+ * The list used to be a row of plain buttons in a group with no name. With an
+ * Azure key that is several hundred tab stops between the search field and the
+ * panels underneath, which is the very thing the search field was added to
+ * prevent, and a screen reader was told nothing about what the group was for.
+ *
+ * The third one is the reason this test presses the arrow twice rather than
+ * once, and it is a defect the two sibling products still had while having
+ * arrow keys: an arrow moves the choice, choosing calls back into the product,
+ * the product redraws the list, and the row that had focus is a detached node.
+ * Focus lands on the document and the second arrow does nothing at all. Arrows
+ * that work exactly once look like arrows that work. The module owns both the
+ * keys and the repaint, so it can put the keyboard back where it was standing;
+ * that repaint is chooseVoice() in src/shell/voices.ts calling refresh(), so
+ * this is a real round trip through this repository and not the module talking
+ * to itself.
+ */
+test("the voice list is one tab stop, is named, and the arrows keep their place",
+  async ({ page }) => {
+    await openBoard(page);
+    await openVoices(page);
+    const rows = page.locator("#voiceBox .voices__row");
+    await expect(rows.first()).toBeVisible();
+
+    // Named, so a screen reader says what the group is for.
+    await expect(page.locator("#voiceBox .voices")).toHaveAttribute("aria-label", /.+/);
+
+    /* One way in, whatever the list is holding. A roving tabindex is what makes
+       a group of radios one stop: exactly one row is reachable by Tab and the
+       rest are reached by the arrows. */
+    const many = await page.locator("#voiceBox .voice").count();
+    expect(many).toBeGreaterThan(2);
+    await expect(page.locator('#voiceBox .voice[tabindex="0"]')).toHaveCount(1);
+    await expect(page.locator('#voiceBox .voice[tabindex="-1"]')).toHaveCount(many - 1);
+
+    /** The id of the row the keyboard is standing on, or what it fell to. */
+    const standing = () => page.evaluate(() => {
+      const at = document.activeElement as HTMLElement | null;
+      return at?.classList.contains("voice") ? at.dataset.id ?? "" : `!${at?.tagName}`;
+    });
+
+    await page.locator('#voiceBox .voice[tabindex="0"]').focus();
+    const first = await standing();
+    expect(first.startsWith("!")).toBe(false);
+
+    // One press: the choice moves with the focus, which is what arrows do in a
+    // radio group.
+    await page.keyboard.press("ArrowDown");
+    const second = await standing();
+    expect(second).not.toBe(first);
+    expect(second.startsWith("!")).toBe(false);
+    await expect(page.locator('#voiceBox .voice[aria-checked="true"]'))
+      .toHaveAttribute("data-id", second);
+
+    /* And again, after this repository has redrawn the whole list underneath
+       it. Before the move this second press did nothing: the answer here was
+       "!BODY". */
+    await page.keyboard.press("ArrowDown");
+    const third = await standing();
+    expect(third).not.toBe(second);
+    expect(third.startsWith("!")).toBe(false);
+    await expect(page.locator('#voiceBox .voice[aria-checked="true"]'))
+      .toHaveAttribute("data-id", third);
+
+    // Still one way in after three repaints, on the row the keyboard is on.
+    await expect(page.locator('#voiceBox .voice[tabindex="0"]')).toHaveCount(1);
+    await expect(page.locator('#voiceBox .voice[tabindex="0"]'))
+      .toHaveAttribute("data-id", third);
+    await page.locator("#collectionSheetClose").click();
+  });
+
+/* The quality tier is on the name and nowhere else.
+ *
+ * This page used to translate it - "hohe Qualitaet" - and print it in the facts
+ * line beside the download size. Both halves were wrong once the picker shipped
+ * inside the package: labelOf() is stimmquelle's own published answer to what a
+ * voice is called, and a picker shipped in that package must not be a second
+ * one. The ambiguity is in the name, so what resolves it belongs on the name
+ * rather than four words away in a line where a reader has to work out which of
+ * the two rows differs.
+ *
+ * It stays the catalogue's code rather than a word, which is the same argument
+ * this repository already made for keeping `recommended` off a row: a tier in
+ * words reads as a ranking, and Kerstin is `low` for a reason that belongs to
+ * vits-web rather than to her.
+ */
+test("the tier that tells two Thorstens apart is in the name, not in the facts",
+  async ({ page }) => {
+    await openBoard(page);
+    await openVoices(page);
+    const thorsten = page.locator("#voiceBox .voices__row", { hasText: "Thorsten" });
+    // More than one, or there is no ambiguity for a tier to resolve and this
+    // test is asserting nothing.
+    expect(await thorsten.count()).toBeGreaterThan(1);
+
+    for (const row of await thorsten.all()) {
+      // The code in brackets, straight off the catalogue.
+      await expect(row.locator(".voice__name")).toHaveText(/^Thorsten \([a-z_]+\)$/);
+      // And not a second time in the line under it, translated or otherwise.
+      await expect(row.locator(".voice__facts")).not.toContainText("(");
+      await expect(row.locator(".voice__facts")).toHaveText(/MB$/);
+    }
+
+    // A voice with no twin keeps its plain name: a list holding one Kerstin has
+    // nothing to disambiguate, so nothing is appended.
+    await expect(page.locator("#voiceBox .voices__row", { hasText: "Kerstin" })
+      .locator(".voice__name")).toHaveText("Kerstin");
+    await page.locator("#collectionSheetClose").click();
+  });
 
 test("a Sammlung nobody has told anything opens on a voice, and says nobody chose it",
   async ({ page }) => {
@@ -591,11 +723,14 @@ test("a Sammlung nobody has told anything opens on a voice, and says nobody chos
      * would be the preselection not happening at all. */
     await openBoard(page);
     await openVoices(page);
-    await expect(page.locator("#voiceList .voiceRow").first()).toBeVisible();
+    await expect(page.locator("#voiceBox .voices__row").first()).toBeVisible();
 
-    const on = page.locator('#voiceList .voice[aria-checked="true"]');
+    const on = page.locator('#voiceBox .voice[aria-checked="true"]');
     await expect(on).toHaveCount(1);
-    await expect(on.locator(".voice__facts")).toContainText(within("ui.voice_auto_note"));
+    // Under the facts rather than among them. The facts line is four words
+    // that compare two voices; this is a clause about how this one came to be
+    // marked, and it is the picker's notes() hook that puts it on its own line.
+    await expect(on.locator(".voice__hint")).toContainText(within("ui.voice_auto_note"));
 
     // And the folded heading is the same answer rather than "none chosen yet",
     // which is the one line the panel is read for nine times out of ten.

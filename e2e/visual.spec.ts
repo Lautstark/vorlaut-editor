@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { openBoard } from "./diy.js";
-import { openPanel, openSettings } from "./sheets.js";
+import { openPanel, openSettings, openVoices } from "./sheets.js";
 
 /* What the settings surfaces look like, held against a picture of themselves.
  *
@@ -201,6 +201,49 @@ test("the symbol folder panel, unfolded", async ({ page }) => {
   // over a panel that had quietly lost it again.
   await expect(panel.locator("#metacomBox .acts button")).toHaveCount(4);
   await expect(panel).toHaveScreenshot("symbols-panel.png");
+});
+
+/* The list a voice is chosen from, which nothing here could see either - and
+ * for a plainer reason than the symbol folder's: it is not on this sheet at
+ * all. Every shot above is Einstellungen, and the picker is behind the open
+ * Sammlung's dots, one sheet over. Einstellungen holds only a count of what
+ * this machine can speak with.
+ *
+ * The whole block is @lautstark/stimmquelle/voice-picker's markup drawn from
+ * @lautstark/design's rules now, which is the position the middle test above
+ * describes for the two Sicherung boxes and the one the symbol folder is in.
+ * It is the sharper case of the two, though. Nobody had drawn `.metacom-panel`
+ * before it shipped; every one of these class names was drawn by three
+ * products at once, each with its own numbers, and this repository's copy of
+ * them has just been deleted from ui.css. So what this picture holds is
+ * exactly the claim that deletion makes: the shared rules land on the same
+ * appearance the deleted ones did.
+ *
+ * No mask, and the list underneath it is why that is safe. This page offers
+ * piper's voices and Azure's; the piper half comes out of a catalogue pinned
+ * in package.json, and the Azure half needs a stored key that a fresh profile
+ * has no way to have. Nothing here is read off the machine - no system voices,
+ * no download state on a row - so the rows are the same rows on any computer
+ * running this commit.
+ */
+test("the voice picker, unfolded", async ({ page }) => {
+  await openBoard(page);
+  await openVoices(page);
+  const panel = page.locator("#voicePanel");
+  /* The module's block drawn before the picture is taken, for the reason the
+     two panels above give: it is not in the markup - openCollectionSettings()
+     builds it and puts it into an empty div - so a shot of the panel alone
+     would be satisfied by that div staying empty, and a broken import would be
+     recorded as correct. */
+  await expect(panel.locator("#voiceBox .voice-picker")).toBeVisible();
+  // Three things this repository did not have until now, each of which a
+  // picture alone could lose again: the group has a name, the list has one way
+  // into it rather than several hundred, and the language pills are drawn
+  // because this catalogue holds two languages.
+  await expect(panel.locator(".voices[aria-label]")).toHaveCount(1);
+  await expect(panel.locator('.voice[tabindex="0"]')).toHaveCount(1);
+  await expect(panel.locator(".voice-picker__filters .chip").first()).toBeVisible();
+  await expect(panel).toHaveScreenshot("voice-picker.png");
 });
 
 test("the deletion panel, unfolded", async ({ page }) => {

@@ -17,11 +17,12 @@
 // is here - so the module that fetches it is the one that opens them. The
 // Azure and METACOM panels inside Einstellungen are settings.js, which this
 // calls into.
-import type { VoiceList } from "../core/types.js";
+import type { OfferedVoice, VoiceList } from "../core/types.js";
 import { byId, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
 import { languagePicker, type LanguagePicker } from "@lautstark/design/language";
-import { weighs } from "@lautstark/werkzeuge/bytes";
+import { voicePicker, type Pickable, type VoicePicker }
+  from "@lautstark/stimmquelle/voice-picker";
 import { reason } from "../core/errors.js";
 import { listVoices, voiceFetchState, startVoiceFetch } from "../backend/index.js";
 import { LANG, LANGUAGE_NAMES, LANGUAGES, rememberLanguage, setLanguage }
@@ -75,16 +76,23 @@ let fetchDone = false;   // finished in this dialog - worth saying so
 // would otherwise leave two of them polling and rendering over each other.
 let polling = false;
 
-// How the list narrows. A key of your own brings hundreds of voices, and all
-// of them at once pushed everything below the voice section out of the sheet -
-// the panel that holds the key among them, which is the one thing somebody
-// with no voices has come here to find. The old answer was to fold the list
-// down to the chosen voice and offer "show all"; this is mitreden's answer
-// instead, and it is better: the list scrolls in a box of its own, and what
-// somebody is looking for is reached by typing or by language rather than by
-// unfolding everything and scrolling past what they did not want.
-let query = "";
-let onlyLang: string | null = null;
+/* The list itself: @lautstark/stimmquelle/voice-picker, held so that a repaint
+ * and a language switch can reach it.
+ *
+ * How the list narrows is the module's now - the search field, the language
+ * pills, and what a row matches on. So is where the keyboard is standing,
+ * which is the half this repository never had: with an Azure key the list runs
+ * to several hundred plain buttons, and Tab walked every one of them to reach
+ * the panel underneath, which is the very thing the search field was added to
+ * prevent.
+ *
+ * Null until openCollectionSettings() builds one, and rebuilt on every open
+ * rather than kept: the search text and the language pill are the module's own
+ * state with no way in from out here, and this sheet narrows itself back on
+ * every open for the reason its panels fold back - a filter left on hides
+ * voices with no sign that it had. A fresh block is the whole of that reset.
+ */
+let picker: VoicePicker | null = null;
 
 async function loadVoices() {
   try {
@@ -102,22 +110,32 @@ function sampleText() {
   return editor().sample() || t("ui.voice_sample");
 }
 
-/* stimmquelle publishes three, and a corpus of several speakers is `mixed`
- * rather than a guess. Anything it adds later is shown as it came, which is
- * honest, rather than as the name of a missing translation. */
-function genderOf(gender: string): string {
-  return gender === "female" || gender === "male" || gender === "mixed"
-    ? t(`ui.gender_${gender}`) : gender;
-}
-
-/* The quality tier, in words. stimmquelle publishes four; anything it adds
- * later is shown as it came, the way genderOf() does, rather than as the name
- * of a missing translation. Where this is said at all is voiceRow()'s
- * question, not this one's. */
-function tierOf(quality: string): string {
-  return quality === "x_low" || quality === "low"
-      || quality === "medium" || quality === "high"
-    ? t(`ui.quality_${quality}`) : quality;
+/* One offered voice, in the shape the picker reads it in.
+ *
+ * A mapping rather than a rename of OfferedVoice, because the disagreement is
+ * only in spelling and the seam's spelling is the one the backend answers in:
+ * `label` where the package says `name`, `language` where it says `locale`.
+ *
+ * `quality` is the one field that is not a rename. This repository's seam
+ * publishes it as a string and writes the empty one wherever a backend names
+ * no tier at all, which is every cloud voice; the package's `Quality` is the
+ * four codes with *absent* standing for the same thing. An empty string is not
+ * one of the four, so it becomes undefined here - otherwise labelOf() would
+ * see a tier where there is none and print "Katja ()" the moment a second
+ * Katja arrived.
+ */
+function pickable(voice: OfferedVoice): Pickable {
+  return {
+    id: voice.id,
+    name: voice.label,
+    locale: voice.language,
+    gender: voice.gender,
+    quality: (voice.quality || undefined) as Pickable["quality"],
+    source: voice.source,
+    downloadBytes: voice.downloadBytes,
+    needsKey: voice.needsKey,
+    rushesFragments: voice.rushesFragments,
+  };
 }
 
 /* Who renders it. Not the model's name or the vendor's product name: what
@@ -132,7 +150,12 @@ function sourceOf(source: string): string {
          : source === "system" ? "ui.source_system" : "ui.source_piper");
 }
 
-/* What it speaks, named in the language of whoever is reading. */
+/* What it speaks, named in the language of whoever is reading.
+ *
+ * Still here after the rows went, because the panel's folded heading says it
+ * too and that line is this repository's own. The module has the same
+ * expression for the rows it draws; two copies of one Intl call is cheaper
+ * than a package exporting its furniture so a summary can borrow a word. */
 function speaks(code: string): string {
   const tag = (code || "").replaceAll("_", "-");
   if (!tag) return "";
@@ -141,152 +164,6 @@ function speaks(code: string): string {
   } catch {
     return tag;
   }
-}
-
-/** stimmquelle's rule: `de_DE`, `de-DE` and `de` all compare equal. */
-function language(code: string): string {
-  return (code || "").toLowerCase().replaceAll("_", "-").split("-")[0];
-}
-
-/* The display names this list holds more than one of.
- *
- * Read from every offered voice rather than from what the filter left
- * standing, so that typing in the search field cannot change what a row says
- * about itself. A row's facts are facts about the voice; they must not shift
- * under somebody who is narrowing the list. */
-function twiceNamed(): Set<string> {
-  const seen = new Set<string>();
-  const twice = new Set<string>();
-  for (const voice of voices.voices) {
-    if (seen.has(voice.label)) twice.add(voice.label);
-    seen.add(voice.label);
-  }
-  return twice;
-}
-
-function matches(voice) {
-  if (onlyLang && language(voice.language) !== onlyLang) return false;
-  if (!query) return true;
-  const hay = `${voice.label} ${voice.language} ${sourceOf(voice.source)} ${speaks(voice.language)}`;
-  return hay.toLowerCase().includes(query);
-}
-
-/* One voice, in the four facts that decide between two of them: who renders
- * it, what it speaks, whose voice it is, and what it costs to have. The list
- * used to be bare names, where "Thorsten" and "Katja" were indistinguishable
- * in every way that matters - one is on this machine, the other is a request
- * to Microsoft per sentence.
- *
- * Four facts and no verdict. stimmquelle's `recommended` is not among them and
- * deliberately is not carried into OfferedVoice either - see the note there.
- *
- * The quality tier is the fifth fact, and `shared` is why it is not simply the
- * fifth column. A tier is not neutral the way the other four are: "low" beside
- * "high" reads as a ranking, and Kerstin is `low` for a reason that is
- * vits-web's fault rather than hers - a word that steers somebody away from a
- * good voice is the same harm `recommended` was kept out for. Between two
- * voices that stimmquelle names identically it is not a ranking at all but the
- * answer to a question the row otherwise leaves standing: why one Thorsten
- * costs 63 MB and the other 114. So it is said exactly where it decides
- * something, and nowhere else.
- *
- * Two buttons per row, still: hearing a voice and choosing it are two
- * different decisions, and the first must not commit to the second. That is
- * why the row is a wrapper and not itself the button mitreden makes it - a
- * button inside a button is not a thing a browser will render. */
-function voiceRow(voice, note: string, mute: boolean, on: boolean,
-                  shared: boolean) {
-  const row = document.createElement("div");
-  row.className = "voiceRow";
-
-  const play = document.createElement("button");
-  play.className = "btn play";
-  play.type = "button";
-  play.textContent = "▶";
-  play.title = t("ui.play_title");
-  // Nothing to listen to for a voice that is not here. The button stays, so
-  // the row keeps its shape, but it cannot be pressed.
-  play.disabled = mute;
-  // The voice of this row, not the saved one - otherwise trying one out would
-  // mean committing to it first.
-  play.onclick = () => speak(sampleText(), play, voice.id || voices.active);
-
-  const pick = document.createElement("button");
-  pick.className = "voice";
-  pick.type = "button";
-  pick.setAttribute("role", "radio");
-  pick.setAttribute("aria-checked", String(on));
-
-  const naming = document.createElement("span");
-  naming.className = "voice__name";
-  naming.textContent = voice.label;
-
-  const facts = document.createElement("span");
-  facts.className = "voice__facts";
-  facts.textContent = [
-    sourceOf(voice.source),
-    speaks(voice.language),
-    genderOf(voice.gender || ""),
-    // Beside the size rather than after the name, because the size is what it
-    // explains.
-    shared && voice.quality ? tierOf(voice.quality) : "",
-    voice.needsKey ? t("ui.voice_needs_key")
-      : voice.downloadBytes ? weighs(voice.downloadBytes) : "",
-    note,
-  ].filter(Boolean).join(" · ");
-
-  pick.append(naming, facts);
-
-  /* The one thing a row can have to say that is not a fact about the voice's
-   * kind but about what it does to the text on a key.
-   *
-   * Not a fifth item in the facts line: those are four words that compare two
-   * voices, and a sentence among them would stop the line being scannable. Not
-   * a warning either - no colour, no icon, nothing that reads as a defect.
-   * Kerstin is a good voice, and she is the only one that reaches the device
-   * at its own sample rate; what she needs is a full stop, not avoiding. So
-   * this is a note in the meta line's own size and colour, on the row it is
-   * about, and it says the fix rather than the diagnosis.
-   *
-   * It matters here more than it would in most pickers: a talker's keys are
-   * mostly single words, so the case the catalogue flags is the ordinary case
-   * rather than an edge of it. */
-  if (voice.rushesFragments) {
-    const hint = document.createElement("span");
-    hint.className = "voice__hint";
-    hint.textContent = t("ui.voice_rushes");
-    pick.append(hint);
-  }
-
-  pick.onclick = () => chooseVoice(voice.id);
-
-  row.append(play, pick);
-  return row;
-}
-
-/* One chip per language the list actually holds, plus "all". Built from the
- * voices in hand rather than from LANGUAGES: the page speaks two, the
- * catalogue speaks a good many more, and a filter offering a language nothing
- * can speak is a filter that answers with nothing. */
-function renderFilters() {
-  const box = byId("voiceFilters");
-  box.innerHTML = "";
-  const codes = [...new Set(voices.voices.map((v) => language(v.language)))]
-    .filter(Boolean).sort();
-  // Nothing to narrow with one language in the list.
-  if (codes.length < 2) return;
-
-  const chip = (label: string, code: string | null) => {
-    const button = document.createElement("button");
-    button.className = "chip";
-    button.type = "button";
-    button.textContent = label;
-    button.setAttribute("aria-pressed", String(onlyLang === code));
-    button.onclick = () => { onlyLang = code; renderVoices(); };
-    box.appendChild(button);
-  };
-  chip(t("ui.voice_lang_all"), null);
-  for (const code of codes) chip(speaks(code), code);
 }
 
 // The button that fetches what is missing. Under the voice section whether or
@@ -313,60 +190,19 @@ function fetchRow() {
 }
 
 function renderVoices() {
-  const list = byId("voiceList");
-  list.innerHTML = "";
-  renderFilters();
-  if (!voices.voices.length) {
-    const empty = document.createElement("div");
-    empty.className = "voiceRow blank";
-    empty.textContent = t("ui.voice_none");
-    list.appendChild(empty);
-    renderOffer();
-    // Where to go, said on the one sheet where somebody is looking at nothing
-    // to choose between. This is the whole of the round trip the split costs:
-    // the offer that would fix it is installation-scoped and lives in
-    // Einstellungen, so an empty list here has to name the door rather than
-    // leave somebody in front of a search field with no voices behind it.
-    byId("voiceHint").textContent = t("ui.voice_none_where");
-    paintVoiceState();
-    return;
-  }
-  // An empty entry in layout.json means "whatever works here", and that is
-  // the normal case for a fresh one. It is not shown as a choice of its own:
-  // "Automatic" tells nobody anything, and a row that has to explain itself
-  // is a row too many. Instead the voice it comes out as stands marked, with
-  // a word to say nobody picked it by hand. Choosing any row writes it down,
-  // and from then on the layout carries a decision instead of a default.
-  const marked = voices.chosen || voices.active;
-  const box = document.createElement("div");
-  box.className = "voices";
-  box.setAttribute("role", "radiogroup");
-  const hits = voices.voices.filter(matches);
-  const twice = twiceNamed();
-  for (const voice of hits) {
-    box.appendChild(voiceRow(
-      voice,
-      !voices.chosen && voice.id === voices.active ? t("ui.voice_auto_note") : "",
-      false, voice.id === marked, twice.has(voice.label)));
-  }
-  if (!hits.length) {
-    const none = document.createElement("p");
-    none.className = "note";
-    none.textContent = t("ui.voice_no_match");
-    box.appendChild(none);
-  }
-  list.appendChild(box);
-  // A voice can be chosen and not be here: a key withdrawn, a model deleted,
-  // a layout carried over from another machine. It stays chosen on purpose -
-  // so it has to be visible, or the list would show nothing as chosen and the
-  // next save would quietly drop a deliberate decision.
-  if (voices.chosen && !voices.voices.some((v) => v.id === voices.chosen)) {
-    box.appendChild(voiceRow(
-      { id: voices.chosen, label: voices.chosenLabel || voices.chosen,
-        language: "", source: "", gender: "", quality: "", downloadBytes: 0,
-        needsKey: false },
-      t("ui.voice_gone"), true, true, false));
-  }
+  // Against whatever voices() and current() answer now - which is what the
+  // module reads them on every paint for. Null until this sheet has been
+  // opened once, and the two Azure buttons in Einstellungen come through here
+  // as well, so a repaint has to be able to reach nothing at all.
+  picker?.refresh();
+
+  const nothing = !voices.voices.length;
+  // Hidden rather than left to say "no voice matches that": a search field
+  // above an empty list is an invitation to type at a machine that has nothing
+  // to find. The module draws that sentence for a filter that matched nothing,
+  // which is a different fact and the only one it can know.
+  byId("voiceBox").hidden = nothing;
+  byId("voiceEmpty").textContent = nothing ? t("ui.voice_none") : "";
   // The other sheet, kept in step from the same pass. Neither is expensive and
   // they are never both on screen, but a fetch that finishes while the
   // Sammlung's sheet is open adds voices to both answers at once - so one
@@ -375,10 +211,15 @@ function renderVoices() {
   renderOffer();
   // The standing rule, whether or not anything was just ticked: a voice is
   // part of what every sentence is spoken with, so changing it re-records all
-  // of them rather than only the ones edited afterwards. It is the whole of
-  // what this line says now - a download's progress belongs to the panel that
-  // started it, which is on the other sheet.
-  byId("voiceHint").textContent = t("ui.voice_rebuild");
+  // of them rather than only the ones edited afterwards. A download's progress
+  // belongs to the panel that started it, which is on the other sheet.
+  //
+  // With nothing to choose between, where to go instead. This is the whole of
+  // the round trip the split costs: the offer that would fix it installs a
+  // voice for every Sammlung there is, so it is installation-scoped and lives
+  // in Einstellungen.
+  byId("voiceHint").textContent =
+    nothing ? t("ui.voice_none_where") : t("ui.voice_rebuild");
   paintVoiceState();
 }
 
@@ -479,7 +320,13 @@ function pollFetch() {
 // long as it has existed. What a voice change costs is said where it is
 // decided rather than guarded by a button: the hint under the list is the
 // standing note that every recording is spoken again on the next release.
-async function chooseVoice(id) {
+//
+// An arrow key reaches this too, now that the list is a radio group somebody
+// can walk. That is the same act as a click and is written the same way: in a
+// group of radios the arrows move the answer rather than only the focus, and a
+// keyboard that ticked without writing would be the one input on this sheet
+// whose choice did not survive closing it.
+async function chooseVoice(id: string) {
   if (id === voices.chosen) return;
   state.layout.voice = id;
   voices.chosen = id;
@@ -679,11 +526,6 @@ export function wireLanguage() {
       add(LANGUAGE_NAMES[code] || code, () => void chooseCollectionLanguage(code),
         { checked: code === live });
   });
-
-  // Typed into once and read on every render afterwards. The field is in the
-  // sheet's markup rather than rebuilt with the list, so the caret survives.
-  const search = byId<HTMLInputElement>("voiceQuery");
-  search.oninput = () => { query = search.value.trim().toLowerCase(); renderVoices(); };
 }
 
 /** Einstellungen, at the foot of the sidebar: what this browser and this
@@ -866,14 +708,71 @@ async function chooseSymbolSource(source: "arasaac" | "metacom"): Promise<void> 
   await save();
 }
 
+/** The list, thrown away and built again.
+ *
+ * Both halves matter. dispose() is not optional even though this module
+ * subscribes to nothing: a preview may still be in flight, and a piper model
+ * arriving after the sheet closed would otherwise write a per cent onto a
+ * button in a tree nobody can see. And a fresh block is how the search text
+ * and the language pill go back to nothing - they are the module's own state,
+ * and this sheet narrows itself back on every open for the reason its panels
+ * fold back.
+ */
+function buildPicker() {
+  picker?.dispose();
+  picker = voicePicker({
+    // Read on every paint rather than handed over once, which is what lets a
+    // key saved in Einstellungen, or a download that has just finished, show
+    // up here without the sheet being closed and opened again.
+    voices: () => voices.voices.map(pickable),
+    /* An empty entry in layout.json means "whatever works here", and that is
+       the normal case for a fresh Sammlung. It is not offered as a row of its
+       own - "Automatic" tells nobody anything - so the voice it comes out as
+       stands marked instead, and notes() below says nobody picked it. */
+    current: () => voices.chosen || voices.active,
+    pick: (id) => void chooseVoice(id),
+    /* No progress to report: synthesise() answers with a finished blob and
+       says nothing on the way, so the button stays on the module's "…" for as
+       long as this takes. That is exactly what the ▶ here did before, and
+       plumbing a share through the seam to make a number appear is a change to
+       the backend rather than to this sheet.
+
+       No button passed to speak(): the module owns this one and is already
+       labelling and disabling it, and two writers of one label is how a button
+       ends up stuck saying "…". */
+    hear: (voice) => speak(sampleText(), null, voice.id),
+    /* The one thing this product has to say about a row that the catalogue
+       does not: a voice that is in force without anybody having chosen it.
+       Only this Sammlung's storage makes that distinction, which is why it
+       comes through the hook rather than out of the module.
+
+       It lands under the facts rather than inside them, and that is the fix
+       this file's own comment asked for and did not make: the facts line is
+       four words that compare two voices, and a clause among them stops the
+       line being scannable. */
+    notes: (voice) => (!voices.chosen && voice.id === voices.active
+      ? [t("ui.voice_auto_note")] : []),
+    /* The name for a voice the layout still holds and this machine cannot
+       offer. Worked out by the backend, because that is where the naming rules
+       are; without it the row would be labelled with the id, and an id is
+       `azure:de-DE-KatjaNeural`. */
+    chosenName: () => voices.chosenLabel,
+    // A function because LANG is a live binding: this page changes language
+    // without reloading, and a locale captured once would go on answering in
+    // the language somebody has just left.
+    lang: () => (LANG === "en" ? "en" : "de"),
+  });
+  byId("voiceBox").replaceChildren(picker.node);
+}
+
 export async function openCollectionSettings() {
-  byId("voiceList").innerHTML = "";
+  // Emptied on the way in, not left standing while the catalogue is fetched:
+  // what was here is the last Sammlung's answer, and a list that shows one
+  // voice ticked and then another is a list that looked wrong for a moment.
+  picker?.dispose();
+  picker = null;
+  byId("voiceBox").replaceChildren();
   byId("voiceHint").textContent = "";
-  // The list is narrowed back on every open, for the reason the panels are
-  // folded back: a filter left on would hide voices with no sign that it had.
-  query = "";
-  onlyLang = null;
-  byId<HTMLInputElement>("voiceQuery").value = "";
   const language = byId<HTMLDetailsElement>("collectionLanguagePanel");
   language.hidden = isApp(state.layout);
   // Built from scratch on every open rather than emptied and refilled: an
@@ -929,6 +828,10 @@ export async function openCollectionSettings() {
   // language in that language's own word - "Deutsch" is "Deutsch" whichever
   // way this page is set.
   paintCollectionLanguage();
+  // After the catalogue has arrived, not before: the module paints as soon as
+  // it is built, and building it up with the panel would have drawn the list
+  // this sheet was holding the last time it was open.
+  buildPicker();
   renderVoices();
   if (fetching.running) pollFetch();
 }

@@ -724,8 +724,11 @@ export interface OfferedVoice {
    *  Here because the name alone cannot carry it: stimmquelle's displayName()
    *  answers with the catalogue's name and nothing else, on purpose, so both
    *  Thorstens are "Thorsten" and the two rows differed only in a download
-   *  size that said nothing about why. What the picker does with it is a
-   *  narrower question than "show the tier" - see voiceRow(). */
+   *  size that said nothing about why. What the picker does with it is
+   *  @lautstark/stimmquelle/voice-picker's question now: it goes through
+   *  labelOf(), which appends the code to the name and only where a twin
+   *  actually forces it, so a list holding one Thorsten still says
+   *  "Thorsten". A code, never a word - see shell/voices.ts's pickable(). */
   quality: string;
   /** Fetched before this voice first speaks. 0 for a cloud backend. */
   downloadBytes: number;
@@ -743,7 +746,8 @@ export interface OfferedVoice {
    *  cost an edit in two places instead of none.
    *
    *  Wordless, like `quality` and AzureState's `code`. Whether to say anything
-   *  about it, and in what words, is voiceRow()'s question. */
+   *  about it, and in what words, is the shared picker's question: it carries
+   *  the sentence in both languages and prints it under the facts. */
   rushesFragments?: boolean;
 }
 

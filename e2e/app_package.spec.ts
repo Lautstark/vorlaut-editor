@@ -160,8 +160,8 @@ async function fill(page: Page): Promise<void> {
   await page.locator("#azureSave").click();
 
   await openVoices(page);
-  await page.locator("#voiceList .voiceRow", { hasText: "Katja" }).locator("button.voice").click();
-  await expect(page.locator('#voiceList .voice[aria-checked="true"]')).toHaveCount(1);
+  await page.locator("#voiceBox .voices__row", { hasText: "Katja" }).locator("button.voice").click();
+  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
   // Out of the sheet: the ⋯ this test is heading for is behind it, and a modal
   // <dialog> makes everything under it inert rather than merely covered.
   await page.locator("#collectionSheetClose").click();

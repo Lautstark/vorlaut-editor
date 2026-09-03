@@ -92,9 +92,9 @@ async function ready(page: Page): Promise<void> {
   await page.locator("#azureSave").click();
 
   await openVoices(page);
-  await page.locator("#voiceList .voiceRow", { hasText: "Katja" })
+  await page.locator("#voiceBox .voices__row", { hasText: "Katja" })
     .locator("button.voice").click();
-  await expect(page.locator('#voiceList .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
   await page.locator("#collectionSheetClose").click();
   await expect(page.locator("#collectionSheet")).toBeHidden();
 }

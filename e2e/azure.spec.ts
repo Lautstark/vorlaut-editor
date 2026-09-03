@@ -34,9 +34,6 @@ const AZURE_UNREACHABLE = new RegExp(`^(${table("ui.azure_unreachable")
   .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`);
 const AZURE_NONE = new RegExp(`^(${table("ui.azure_key_none")
   .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`);
-const VOICE_GONE = new RegExp(`(${table("ui.voice_gone")
-  .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`);
-
 /* A regex, not a glob: the region rides in the SUBDOMAIN
  * (westeurope.tts.speech...), and a glob's "**\/" wants a slash exactly where
  * the hostname has a dot - the first version of this pattern matched nothing
@@ -76,14 +73,14 @@ test("a working key answers with its voices, sheet still open", async ({ page })
   await expect(page.locator("#voices")).toBeVisible();
   await expect(page.locator("#azureState")).toHaveText(AZURE_OK);
   await openVoicePanel(page);
-  await expect(page.locator("#voiceList .voiceRow", { hasText: "Katja" }))
+  await expect(page.locator("#voiceBox .voices__row", { hasText: "Katja" }))
     .toBeVisible();
 
   // And the choice completes: picking Katja writes her, with no Save to press
   // and no dialog closing underneath the person who picked.
-  await page.locator("#voiceList .voiceRow", { hasText: "Katja" })
+  await page.locator("#voiceBox .voices__row", { hasText: "Katja" })
     .locator("button.voice").click();
-  await expect(page.locator('#voiceList .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
   await expect(page.locator("#collectionSheet")).toBeVisible();
 });
 
@@ -97,7 +94,7 @@ test("a region that is not one gets said on the panel, not swallowed", async ({ 
   // was right and stays. The list is inside a folded panel now, so it has to
   // be unfolded before anything in it can be asserted visible.
   await openVoicePanel(page);
-  await expect(page.locator("#voiceList .voiceRow", { hasText: "Thorsten" }).first())
+  await expect(page.locator("#voiceBox .voices__row", { hasText: "Thorsten" }).first())
     .toBeVisible();
 });
 
@@ -111,7 +108,7 @@ test("a stored key can be removed, and the azure rows leave with it", async ({ p
   }));
   await typeKeyAndSave(page, "westeurope");
   await openVoicePanel(page);
-  await expect(page.locator("#voiceList .voiceRow", { hasText: "Katja" }))
+  await expect(page.locator("#voiceBox .voices__row", { hasText: "Katja" }))
     .toBeVisible();
 
   // Its own button, not a reading of the empty field - the empty field means
@@ -129,9 +126,9 @@ test("a stored key can be removed, and the azure rows leave with it", async ({ p
 
   // And the rows it cost are gone from the list next door.
   await openVoicePanel(page);
-  await expect(page.locator("#voiceList .voiceRow", { hasText: "Katja" }))
+  await expect(page.locator("#voiceBox .voices__row", { hasText: "Katja" }))
     .toHaveCount(0);
-  await expect(page.locator("#voiceList .voiceRow", { hasText: "Thorsten" }).first())
+  await expect(page.locator("#voiceBox .voices__row", { hasText: "Thorsten" }).first())
     .toBeVisible();
 
   // And gone from storage, not just from the screen: a fresh visit holds no
@@ -156,10 +153,10 @@ test("a chosen Azure voice keeps its name after the key stops working", async ({
 
   // Chosen while the key still works, which is the only moment anybody ever
   // sees this voice called anything.
-  const katja = page.locator("#voiceList .voiceRow", { hasText: "Katja" });
+  const katja = page.locator("#voiceBox .voices__row", { hasText: "Katja" });
   await expect(katja).toBeVisible();
   await katja.locator("button.voice").click();
-  await expect(page.locator('#voiceList .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
 
   // And now the key goes. The voice stays chosen on purpose - dropping it
   // would throw away a deliberate decision - so it has to keep being shown,
@@ -172,7 +169,19 @@ test("a chosen Azure voice keeps its name after the key stops working", async ({
   // to keep its name is drawn.
   await openVoicePanel(page);
 
-  const gone = page.locator("#voiceList .voiceRow", { hasText: VOICE_GONE });
+  /* The row is found by what makes it that row, not by the sentence on it.
+   *
+   * The sentence belongs to @lautstark/stimmquelle/voice-picker now, and the
+   * two keys this repository said it with went when the drawing did - so
+   * naming it here would be this suite holding another repository's prose, and
+   * spelling it out would put German in a file where tests/language.py wants
+   * English. The disabled play button is the sturdier handle, and it is also
+   * the thing worth holding: there is nothing to listen to, and the act is
+   * drawn and disabled rather than removed, so it stays visible as one that
+   * exists and cannot run right now. It is the only such row - every voice
+   * still on offer can be heard. */
+  const gone = page.locator("#voiceBox .voices__row")
+    .filter({ has: page.locator("button.voices__play:disabled") });
   await expect(gone).toHaveCount(1);
   // The name somebody picked her by, not the id she is stored under. This row
   // printed `azure:de-DE-KatjaNeural` before there was a name to print, and
@@ -181,6 +190,11 @@ test("a chosen Azure voice keeps its name after the key stops working", async ({
   await expect(gone.locator(".voice__name")).toHaveText("Katja");
   await expect(gone).not.toContainText("azure:");
   await expect(gone).not.toContainText("Neural");
+  /* And it invents nothing to fill the line under the name. Every other row
+     joins four facts with a middle dot; this voice has none to give - no
+     source that can render it, no language, no size - so the line is the one
+     sentence and the separator is what says so without naming a word. */
+  await expect(gone.locator(".voice__facts")).not.toContainText("\u00b7");
   // The folded heading is the same answer in one line, and it fell back to the
   // same raw id.
   await expect(page.locator("#voiceState")).toContainText("Katja");
