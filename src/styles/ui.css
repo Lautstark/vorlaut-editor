@@ -722,15 +722,6 @@ dl.transfer dd { margin: 0; font-size: 14px; }
 .voiceOffer:not(:empty) { border-top: 1px solid var(--line); margin: 4px 16px 0; }
 .offer { padding: 14px 0 4px; }
 .offer .note { margin: 8px 0 0; color: var(--text-dim); font-size: 12px; }
-.voiceMore { display: flex; }
-/* Reads as a link, behaves as a button: it reveals the rest of the list, it
-   does not settle anything. So it does not carry a box that would make it
-   look like a second choice next to the voice above it. */
-.linkish {
-  background: none; border: none; padding: 4px 2px; color: var(--accent);
-  font-size: 13px;
-}
-.linkish:hover, .linkish:focus-visible { background: none; text-decoration: underline; }
 
 /* The folded panels are components.css's now - vorlaut wrote this component
    first and it went into the shared file, so what was here was the original
