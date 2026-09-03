@@ -99,7 +99,19 @@ export const LANGUAGES = BUILT_IN_LANGUAGES;
  * Here rather than beside any one of them because three controls now draw from
  * it, in three modules, and it was written out twice before the third came
  * along: the page's own language, a Sammlung's device language, and the
- * question the create dialog asks. */
+ * question the create dialog asks.
+ *
+ * @lautstark/design/language ships the same two names, and this table did not
+ * go when the page's own picker moved onto that module. Two reasons, and the
+ * second is the one that decides it. The shallow one is that the package draws
+ * a segmented row and the other two controls are a menu and a dialog field,
+ * so there is nothing for them to adopt. The real one is that "the language of
+ * this page" and "the language of this Sammlung" are different questions -
+ * boot.ts and shell/voices.ts have the long version - and the set of languages
+ * a device menu can be built in is this product's answer rather than the
+ * design system's. So this stays the table, and voices.ts hands it to the
+ * picker as `names` so that the row and the two controls beside it cannot
+ * start disagreeing about what a language is called. */
 export const LANGUAGE_NAMES: Record<string, string> = { de: "Deutsch", en: "English" };
 export let TEXTS = BUILT_IN_TEXTS[LANG];
 

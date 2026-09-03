@@ -69,17 +69,25 @@ export const markup = `
       <span class="state" id="languageState"></span>
     </summary>
     <div class="setting">
-      <!-- The same segmented control as the scheme below it, and that pairing
-           is the point: two facts about this page, offered the same way. It was
-           a button and a menu, which put the choice behind a press - a menu is
-           for a list of things to do, and this is a list of what it already is.
-           Not a select either: the open list of one is drawn by the operating
-           system and so cannot follow the tokens.
-           The accessible name is bilingual and fixed. It is the one label on
-           this page that must not be translated, because somebody who cannot
-           read the page is who reaches for it. -->
-      <div class="segmented" id="langPick" role="group"
-        aria-label="Sprache / Language"></div>
+      <!-- An anchor, not the control. The segmented row is built by
+           @lautstark/design/language and takes this element's place, id and
+           all - see wireLanguage() in voices.ts. Three products had drawn the
+           same row by hand and each had remembered to add something the others
+           had not; the package is where that stopped being an accident.
+           What the row is, and why it is not either of the two things it has
+           been: the same segmented control as the scheme below it, and that
+           pairing is the point - two facts about this page, offered the same
+           way. It was a button and a menu, which put the choice behind a
+           press, and a menu is for a list of things to do while this is a list
+           of what the page already is. Not a select either: the open list of
+           one is drawn by the operating system and so cannot follow the
+           tokens.
+           The names on the buttons are each language's own, and the accessible
+           name around them is bilingual and fixed. voices.ts passes the second
+           in and argues for it; the module ships the first and argues for it
+           there. One reason under both: somebody who cannot read the page is
+           who reaches for this. -->
+      <div id="langPick"></div>
       <p class="note" id="languageNote"></p>
     </div>
   </details>

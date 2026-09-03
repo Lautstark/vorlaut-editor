@@ -20,6 +20,7 @@
 import type { VoiceList } from "../core/types.js";
 import { byId, status } from "./dom.js";
 import { menuOn } from "@lautstark/design/menu";
+import { languagePicker, type LanguagePicker } from "@lautstark/design/language";
 import { weighs } from "@lautstark/werkzeuge/bytes";
 import { reason } from "../core/errors.js";
 import { listVoices, voiceFetchState, startVoiceFetch } from "../backend/index.js";
@@ -596,21 +597,24 @@ export async function forgetAzureKey() {
   status(t("ui.azure_key_removed"));
 }
 
-/** The button says which language is in force; the menu offers the others. */
+/* The page's own language picker, built once and kept.
+ *
+ * It used to be rebuilt from scratch on every repaint, which a hand-written
+ * row can afford; the module hands back the row plus a refresh() that moves
+ * the pressed button, so what has to be held is the handle rather than the
+ * element. Null until wireLanguage() runs - openSettings() and a language
+ * switch both repaint, and neither can happen before the page is wired. */
+let languageRow: LanguagePicker | null = null;
+
+/** Moves the mark to whichever language is now in force.
+ *
+ * Nothing else here reads it, so this is the whole cost of the control not
+ * being a <select>: a select showed its own selected option, and anything that
+ * replaces one has to be redrawn by us. The module reads current() on every
+ * call rather than the value it was built with, which is what makes this a
+ * one-liner across a live binding that moves. */
 export function paintLanguage() {
-  const box = byId("langPick");
-  box.textContent = "";
-  for (const code of LANGUAGES) {
-    const button = document.createElement("button");
-    button.type = "button";
-    // Each language names itself, whatever the page is set to. The control is
-    // what somebody reaches for when they cannot read the interface around it,
-    // so it must not depend on being able to read the interface around it.
-    button.textContent = LANGUAGE_NAMES[code] || code;
-    button.setAttribute("aria-pressed", String(code === LANG));
-    button.onclick = () => void chooseLanguage(code);
-    box.appendChild(button);
-  }
+  languageRow?.refresh();
 }
 
 /** The same pair for the Sammlung's own language: the button that names it and
@@ -629,10 +633,39 @@ export function paintCollectionLanguage() {
 }
 
 export function wireLanguage() {
-  // Drawn rather than wired: paintLanguage() builds the buttons and hangs the
-  // handlers on them, and is called again on every switch so the pressed one
-  // moves. See paintTheme() in settings.ts, which is the same shape.
-  paintLanguage();
+  /* Built here and put in the anchor's place, id and all, so that the row in
+     the document is the module's element rather than something wrapped around
+     it: settings_sheet.ts writes an empty <div id="langPick">, and what stands
+     there afterwards is the .segmented the module drew. A wrapper would have
+     been the cheaper edit and would have put the group's role and name one
+     level away from the buttons they belong to. */
+  const anchor = byId("langPick");
+  languageRow = languagePicker({
+    languages: LANGUAGES,
+    // Read on every refresh() and never captured: LANG is a live binding and
+    // a copy taken here would freeze the mark on whatever the page opened in.
+    current: () => LANG,
+    choose: (code) => void chooseLanguage(code),
+    /* The one label on this page that is not translated, and the argument is
+       the module's own argument for shipping endonyms: this is the control
+       somebody reaches for when they cannot read the interface around it, so
+       it must not depend on being able to read the interface around it. A
+       group named "Language" is no use to a reader stranded in the German
+       build, and one named the other way is no use in the English one. So the
+       string is fixed and says both, and it is passed in from here because
+       naming a group is the product's business - the package could not know
+       that this product answers the question this way. */
+    label: "Sprache / Language",
+    /* The product's table wins where it has an entry. The module ships the
+       same two names today, so this changes nothing on screen; what it stops
+       is the day boot_data.ts learns a third language and the row shows a
+       two-letter code beside a heading that has the name. One table answers
+       for every language control here - see LANGUAGE_NAMES in core/boot.ts,
+       which the Sammlung's own two controls read as well. */
+    names: LANGUAGE_NAMES,
+  });
+  languageRow.node.id = anchor.id;
+  anchor.replaceWith(languageRow.node);
 
   // The Sammlung's stays a button and a menu, and the difference is not
   // oversight. This one is not a preference of whoever is reading: it is a
