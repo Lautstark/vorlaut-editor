@@ -1,0 +1,60 @@
+# Recording the visual baselines on the machine that will compare them.
+#
+# The screenshots in e2e/visual.spec.ts-snapshots are a picture of the settings
+# surfaces, and their whole purpose is to fail when one of them changes by
+# accident. That only works where the comparison actually happens - and pixels
+# belong to the machine that drew them. A baseline recorded on a laptop is a
+# baseline the Linux runner has never seen, so the runner writes its own and
+# passes, which is worse than no check at all: a green tick for a comparison
+# that did not take place. Playwright says as much in the file names, which
+# carry the platform they were taken on.
+#
+# The obvious fix is to record in the matching `mcr.microsoft.com/playwright`
+# image locally. That does not work on an Apple Silicon machine: the runner is
+# amd64, and amd64 under QEMU segfaults during `npm ci`. An arm64 image would
+# run natively and produce baselines nobody could prove match the runner.
+#
+# So the recording happens here. Run this by hand, download the artifact and
+# commit the PNGs beside the darwin ones - that is the whole of it. The spec
+# asks the snapshot directory whether a baseline exists for the platform it is
+# running on, so committing the files is what turns the comparison on. Nothing
+# else to flip, and nothing to remember to flip back.
+name: Record visual baselines
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    name: Record visual baselines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # device/fixtures/, pinned - see third_party/README.md. The same
+          # reason ci-tests.yml gives: the build this suite screenshots does
+          # not come up without it.
+          submodules: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Install the Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: The page, built
+        # playwright.config.ts builds nothing itself - its webServer only
+        # serves what is already in dist/ - so the page has to be built here
+        # the way package.json's test:e2e builds it before handing over.
+        run: BASE_PATH=/ npm run build
+      - name: Record
+        run: npx playwright test e2e/visual.spec.ts --update-snapshots
+      - name: Hand them back
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: e2e/visual.spec.ts-snapshots/*-linux.png
+          if-no-files-found: error

@@ -1,4 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { existsSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { openBoard } from "./diy.js";
 import { openPanel, openSettings } from "./sheets.js";
 
@@ -29,20 +31,46 @@ import { openPanel, openSettings } from "./sheets.js";
  * alarm in a file whose entire value is that its alarms are true.
  */
 
-/* Recorded on macOS, and the images say so in their own names - Playwright
- * suffixes a snapshot with the platform it was taken on, because text is not
- * rasterised the same way on two operating systems. Nothing is compared here
- * on a machine that has no baseline of its own: CI is Linux and has none, and
- * the alternative to skipping is a suite that fails there forever on a
- * difference nobody introduced.
+/* Where the baselines are, and the one condition under which this file has
+ * nothing to say.
  *
- * To have it run somewhere else, record a baseline there once - the images are
- * per platform and sit beside each other:
+ * Playwright files a snapshot per project and per platform, and the images say
+ * so in their own names, because text is not rasterised the same way on two
+ * operating systems. A machine with no baseline of its own cannot compare
+ * anything: it would write its own picture and pass, which is worse than no
+ * check at all - a green tick for a comparison that never happened.
+ *
+ * So the guard asks the snapshot directory whether a picture exists for the
+ * platform this run is on, rather than naming a platform outright. It named
+ * darwin once, and that spelling had to be edited by hand on the day Linux
+ * baselines arrived - a switch somebody has to remember to flip is a switch
+ * that stays where it is. Recording a baseline on a new platform and
+ * committing it is now the whole of turning the comparison on there:
  *
  *   npx playwright test e2e/visual.spec.ts --update-snapshots
+ *
+ * .github/workflows/baselines.yml is how the Linux pictures are recorded on
+ * the very runner that will later compare them.
  */
-test.skip(process.platform !== "darwin",
-          "no baseline for this platform - record one with --update-snapshots");
+const SNAPSHOTS = fileURLToPath(new URL("./visual.spec.ts-snapshots", import.meta.url));
+
+function recordedHere(): boolean {
+  if (!existsSync(SNAPSHOTS)) return false;
+  return readdirSync(SNAPSHOTS).some((name) => name.endsWith(`-${process.platform}.png`));
+}
+
+/* The empty pattern is Playwright's requirement, not a slip: it reads the
+   destructuring to work out which fixtures a hook wants, and this one wants
+   none of them - only the run's own settings, which arrive beside it. */
+test.beforeEach(async ({}, testInfo) => {
+  /* 'missing' and 'none' are the modes that only ever compare; 'all' and
+     'changed' are the ones that write, and a run that is here to write must
+     not skip itself out of ever producing a first baseline. */
+  const recording = testInfo.config.updateSnapshots === "all"
+    || testInfo.config.updateSnapshots === "changed";
+  test.skip(!recording && !recordedHere(),
+            `no baseline for ${process.platform} - record one with --update-snapshots`);
+});
 
 /* Everything about the window that a picture depends on, pinned.
  *

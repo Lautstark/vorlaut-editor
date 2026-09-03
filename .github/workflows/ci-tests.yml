@@ -48,6 +48,11 @@ on:
       - playwright.config.ts
       - renovate.json5
       - .github/workflows/ci-tests.yml
+      # Not a file this job reads. It is here for the sweeps: test_language.py
+      # and test_links.py take their list from `git ls-files` and so read this
+      # workflow too, and a file no run ever reaches is a file they cannot
+      # catch anything in.
+      - .github/workflows/baselines.yml
   pull_request:
     paths: *paths
 
