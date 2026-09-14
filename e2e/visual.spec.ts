@@ -258,3 +258,59 @@ test("the deletion panel, unfolded", async ({ page }) => {
   // at run time. Masking here on principle would only hide the panel.
   await expect(panel).toHaveScreenshot("danger-panel.png");
 });
+
+/* The two surfaces outside the sheets, which nothing here could see either.
+ *
+ * Every shot above is a panel inside a modal, and that was the right place to
+ * spend the first five: the settings sheet is where the shared stylesheet
+ * landed. It leaves the page itself unphotographed, and the page is where two
+ * of the names components.css owns are drawn - `.title-input` in the work head
+ * and `.footer` under the board.
+ *
+ * That gap had teeth. `.footer` carried `padding-top: 12px` against the
+ * package's 14 for no reason anybody had written down, and nothing in this
+ * repository could have told anyone: no assertion reads a padding, and no
+ * picture held the footer. The two pixels came back when the override went,
+ * and these are the pictures that would have shown them going.
+ *
+ * Element shots rather than a full page, for the reason the five above give:
+ * a page shot of either of these is mostly a board that has nothing to do with
+ * them, and it would fail on any change to it.
+ */
+
+/* A name of its own before the picture, and it is not tidiness: a new Sammlung
+ * is named for the word and the day it was made, so the field would hold a
+ * different string tomorrow and the baseline would rot on the calendar. Typing
+ * one in fixes that AND is the state worth holding - the field's floor and
+ * ceiling are this repository's own, measured against a name of about this
+ * length, and an empty field would photograph neither.
+ *
+ * Typing leaves the field focused, and it is left that way on purpose. At rest
+ * this component draws a transparent border - that is the whole of what it is
+ * for, a field that does not look like one until it is reached for - so a shot
+ * of the resting state shows a word on the page's own ground and nothing that
+ * says where the field ends. The width is exactly what is this repository's
+ * own here, and the focus ring is what makes it something a picture can hold.
+ */
+test("the work head, with a name in it", async ({ page }) => {
+  await openBoard(page);
+  await page.locator("#collectionName").fill("Kitchen board");
+  const head = page.locator(".workhead");
+  await expect(head).toBeVisible();
+  /* The one thing on this row written at run time: it says whether the last
+     write landed, and it rests to nothing a moment later. What it says depends
+     on whether anything has been saved yet, which is a fact about the run and
+     not about the stylesheet. */
+  await expect(head).toHaveScreenshot("work-head.png",
+                                      { mask: [page.locator("#status")] });
+});
+
+test("the footer, under the board", async ({ page }) => {
+  await openBoard(page);
+  const foot = page.locator("main > footer.footer");
+  await expect(foot).toBeVisible();
+  // No mask. Four labels, all of them out of the text table, and the run pins
+  // the locale - so there is nothing on this row a second machine draws
+  // differently.
+  await expect(foot).toHaveScreenshot("footer.png");
+});
