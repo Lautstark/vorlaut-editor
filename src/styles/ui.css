@@ -304,8 +304,12 @@ main {
    the page card's name - and moved none of them, because every box it landed
    in sizes its row by the field itself. Measured, before and after, at the
    computed value and the bounding box of every element in the page carrying
-   the class. The one place it was ever visible is `.setting .field` below,
-   which existed only to put the stretch back.
+   the class. The one place it would ever have shown is `.setting .field`
+   below - that box is a column, so flex-start there is a field shrunk to its
+   own content instead of filling the row - and that rule was already putting
+   the stretch back. Its `align-self: stretch` is the initial value now and
+   could go; it is left because taking it out is a change to a photographed
+   surface and not to any of the names this pass is about.
    shadows .field: what is left is the disabled state, which components.css
    does not draw at all - it has no :disabled rule for a field - so this adds a
    state rather than replacing the drawing of one. */
