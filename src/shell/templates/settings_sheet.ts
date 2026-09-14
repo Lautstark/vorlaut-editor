@@ -53,7 +53,12 @@
 import { mount } from "./mount.js";
 
 export const markup = `
-<dialog id="voices" class="sheet">
+<!-- panels: a column of <details>, 900px. The id is historic - this is the
+     settings sheet, see the header. It showed the same column at 600px while
+     wochenwerk showed it at 900, and wochenwerk had the reason written down.
+     See design/docs/conventions.md 4.14. collection_sheet and legal stay at
+     600: one asks a question about a Sammlung, the other is running text. -->
+<dialog id="voices" class="sheet panels">
   <div class="head">
     <strong id="settingsHeading"></strong>
     <button id="voiceClose" class="btn quiet icon" type="button">✕</button>

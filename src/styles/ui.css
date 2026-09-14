@@ -568,9 +568,22 @@ dialog.sheet { max-height: 88vh; }
    hazard components.css warns about one level up, in its note on
    `.sheet > .head` - a vocabulary this small and this reused has to be scoped,
    and here a rule written for one instance caught the whole component. */
-#voices, #legal {
-  width: min(520px, 92vw); max-width: min(520px, 92vw); padding: 0;
-}
+#voices, #legal { padding: 0; }
+/* The width used to be here too, for both, at min(520px, 92vw) - and an id
+   beats any class, so it quietly outranked whatever components.css drew for a
+   sheet. That is how this product came to show the settings sheet at 520px
+   while bildhaft showed the same column of panels at 600, wochenwerk at 900 and
+   mitreden at whatever the window was. Four widths for one thing, and this was
+   the narrowest.
+
+   #voices takes the family's figure now, through `class="sheet panels"` -
+   900px, wochenwerk's number and the only one anybody had written a reason
+   for. See design/docs/conventions.md 4.14.
+
+   #legal keeps its own, and that is the divergence being kept rather than
+   overlooked: it is running text, and 520px is a comfortable measure for
+   reading a paragraph, where 900 is not. */
+#legal { width: min(520px, 92vw); max-width: min(520px, 92vw); }
 /* Only while it is open. An unqualified display here would beat the
    browser's own dialog:not([open]) { display: none } - the sheet would then
    sit in the page for good, below everything else, and closing it would
