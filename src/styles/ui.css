@@ -31,6 +31,13 @@ body {
    - the word for it plus a date - is 23, so it arrived clipped in the one case
    that happens without anybody typing. It grows into the row instead, from a
    floor that fits that name. */
+/* shadows .title-input: components.css draws this field at `flex: 1` and
+   `min-width: 0`, which is a title that may be squeezed to nothing by whatever
+   shares its row. Here the row holds the status line, the transfer button and
+   the menu, and they take their room first - so the two declarations are
+   replaced rather than added to, and the floor below is the measured one. The
+   look of the field - the hover border, the focus lift, the type - is still
+   the package's and is not restated. */
 .title-input {
   /* It may grow into the row and must not shrink below the name this page
      invents - `1 1 26ch` let it, because the two controls beside it take the
@@ -178,7 +185,15 @@ body.collapsed .frame { grid-template-columns: minmax(0, 1fr); }
 /* The footer is components.css's and sits at the bottom of this column, which
    is where both siblings keep theirs. It was a band across the whole window,
    under the sidebar as well - a shape neither of them has. */
-.footer { margin-top: auto; padding-top: 12px; }
+/* Narrowed to the column it is mounted into - footer.render() is handed
+   `main` - because the only thing this product has to say about the footer is
+   where it sits, and a bare rule of the name says it about every footer there
+   might ever be.
+   It also carried `padding-top: 12px`, against the package's 14. Nothing
+   asked for the two pixels and the paragraph above claims the opposite - that
+   the footer is components.css's - so the override went and the shared figure
+   stands. That is the whole visible change here. */
+main > .footer { margin-top: auto; }
 .footer a { color: inherit; text-decoration: underline; }
 
 /* Capped and centred, like both siblings, and the number is chosen for height
@@ -282,9 +297,18 @@ main {
 }
 .tab.add { border: 1px dashed var(--line); }
 .row { display: flex; gap: 8px; }
-/* .field carries the fill, the border and the focus lift; what stays here is
-   how a field sits in vorlaut's boxes, which is layout and not vocabulary. */
-.field { flex: 0 1 auto; align-self: flex-start; }
+/* The bare `.field { flex: 0 1 auto; align-self: flex-start; }` stood here and
+   is gone. `flex: 0 1 auto` is the initial value, so it never did anything at
+   all; `align-self: flex-start` reached five controls - the sheet's two
+   dropdown triggers, the spoken-text field, the picture column's search and
+   the page card's name - and moved none of them, because every box it landed
+   in sizes its row by the field itself. Measured, before and after, at the
+   computed value and the bounding box of every element in the page carrying
+   the class. The one place it was ever visible is `.setting .field` below,
+   which existed only to put the stretch back.
+   shadows .field: what is left is the disabled state, which components.css
+   does not draw at all - it has no :disabled rule for a field - so this adds a
+   state rather than replacing the drawing of one. */
 /* A field somebody may look at but not set: the Azure key away from the
    machine it runs on, the METACOM path when docker-compose.yml hands it in.
    Both were already disabled and neither looked it - a field that takes no
