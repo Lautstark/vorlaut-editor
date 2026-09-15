@@ -31,66 +31,39 @@
  * - because both answer the question a menu in a list of five cannot: which
  * one. docs/sammlung-settings.md carries the wording; ~/Code/design is its own
  * session and this file may not edit it.
+ *
+ * What is here is the list, the name field, opening and deleting one, and the
+ * wiring. The four things have their own modules beside this one where they
+ * are more than a few lines: collectionNew.ts makes one, collectionExport.ts
+ * writes one out, sidebar.ts is the column and the drawer, gridSizes.ts is
+ * the control both the new-Sammlung sheet and the tablet's grid panel draw,
+ * and openCollection.ts is what all of them share.
  */
 import { byId, status } from "./dom.js";
 import { menuOn, type AddItem } from "@lautstark/design/menu";
-import { confirmDialog, openDialog } from "./dialog.js";
+import { confirmDialog } from "./dialog.js";
 import { renameField, type RenameField } from "@lautstark/design/rename";
 import { drawCollections } from "@lautstark/design/collections";
 import { reason } from "../core/errors.js";
 import {
-  createCollection, deleteCollection,
-  layoutOf, listCollections, readSettings, renameCollection, useCollection,
-  writeSettings,
+  createCollection, deleteCollection, layoutOf, listCollections,
+  renameCollection, useCollection,
 } from "../backend/index.js";
 import { editorFor, editorOf, FIRST_TARGET } from "../core/editor.js";
-import { openDeviceExport, openPackageExport } from "./packageExport.js";
 import { openCollectionSettings } from "./voices.js";
-import { homeSymbol, homeSymbolSource, takeHomeSymbol } from "./homekey.js";
 import { state } from "../core/state.js";
-import * as symbols from "../data/symbols.js";
 import { load, saveNow } from "../core/save.js";
 import { t } from "../core/texts.js";
-// A pure rule about names, not a way out of the page - which is why it comes
-// from the package that owns it rather than through backend/index.ts. It used
-// to be data/store.ts's safeName(), on the reading that a download's file name
-// is an object-store key's question asked about a different destination. It is
-// not: a key is read back and a file name is only ever read. shell/filename.ts
-// was where that split landed; all three products share the rule now.
-import { downloadSlug } from "@lautstark/werkzeuge/filename";
-import { GRID, LANG, LANGUAGE_NAMES, LANGUAGES } from "../core/boot.js";
 import { isApp } from "../core/types.js";
-import type { CollectionList, GridSize, Layout, Target } from "../core/types.js";
-
-/** The list as it was last read. Kept so that the name field and the menu do
- *  not each have to go back to the store to find out which one is open. */
-let held: CollectionList = { collections: [], current: null };
+import type { Layout } from "../core/types.js";
+import { chooseExport } from "./collectionExport.js";
+import { create } from "./collectionNew.js";
+import { defaultName, held, nameOf, usePaint } from "./openCollection.js";
+import { closeOnPick, wireSidebar } from "./sidebar.js";
 
 /** The bound name field, once wireCollections() has bound it. Held because
  *  paintCollections() may only reach the input through it - see there. */
 let name: RenameField | null = null;
-
-/** What to call a Sammlung nobody has named.
- *
- * Only the one carried across from the single-layout database is ever unnamed -
- * everything made since is named for the day - so this is a fallback for one
- * row in one browser, and it is deliberately not derived from where that row
- * sits. It was "Sammlung {n}" from its position, which reads fine in a list
- * ordered by creation and renames itself in a list ordered by what was written
- * last: making a second Sammlung would have turned "Sammlung 1" into
- * "Sammlung 2" without anybody touching it. */
-const nameOf = (name: string): string => name.trim() || t("ui.collection_unnamed");
-
-/** A new one is named for the day, the way a new notebook is.
- *
- * Both halves follow the page's language: the words through t(), and the date
- * through LANG, so an English page does not read "Sammlung vom 08/24/2026" or a
- * German one "Collection of 24.08.2026". Every caller has to be somewhere the
- * language is already settled - see nameIfUnnamed(). */
-const defaultName = (): string =>
-  t("ui.collection_default", { date: new Date().toLocaleDateString(LANG, {
-    day: "2-digit", month: "2-digit", year: "numeric",
-  }) });
 
 /* --- Drawing ---------------------------------------------------------------- */
 
@@ -138,9 +111,10 @@ const subtitles = new Map<string, string>();
  * The store is up to a second behind it - the save is debounced - and a count
  * that lags the thing it is beside reads as a bug. */
 function readOpen(): void {
-  if (!held.current) return;
-  counts.set(held.current, rowCount(state.layout));
-  subtitles.set(held.current, rowSubtitle(state.layout));
+  const current = held.list.current;
+  if (!current) return;
+  counts.set(current, rowCount(state.layout));
+  subtitles.set(current, rowSubtitle(state.layout));
 }
 
 /**
@@ -169,7 +143,8 @@ function rowCount(layout: Layout): number {
 
 /** The sidebar and the work head, from whatever the store last said. */
 export async function paintCollections(): Promise<void> {
-  held = await listCollections();
+  held.list = await listCollections();
+  const { collections, current } = held.list;
 
   /* How much is in each one, and which device it is for - the second line
    * costing no read that was not already happening. The open one is not read
@@ -178,8 +153,8 @@ export async function paintCollections(): Promise<void> {
    * number in the registry and being wrong about it. */
   counts.clear();
   subtitles.clear();
-  await Promise.all(held.collections.map(async (one) => {
-    if (one.id === held.current) return readOpen();
+  await Promise.all(collections.map(async (one) => {
+    if (one.id === current) return readOpen();
     const layout = await layoutOf(one.id);
     // Each Sammlung counted by *its own* editor, not by whichever one is on
     // screen. This read `editor().count(...)` while there was one, and the
@@ -193,7 +168,7 @@ export async function paintCollections(): Promise<void> {
 
   drawList();
 
-  const at = held.collections.findIndex((one) => one.id === held.current);
+  const at = collections.findIndex((one) => one.id === current);
   const field = byId<HTMLInputElement>("collectionName");
   // Through refresh() rather than by assigning, which is the whole reason that
   // function exists: it declines while the field is being typed in and while a
@@ -205,10 +180,14 @@ export async function paintCollections(): Promise<void> {
   //
   // Optional only because the binding is module state: app.ts wires before it
   // paints and always has, so in practice there is always a field here.
-  name?.refresh(at < 0 ? "" : held.collections[at]!.name);
+  name?.refresh(at < 0 ? "" : collections[at]!.name);
   field.placeholder = at < 0 ? t("ui.collection_name") : t("ui.collection_unnamed");
   field.disabled = at < 0;
 }
+
+// The modules that make, open and delete a Sammlung ask for this paint
+// through openCollection.ts, and this is the paint they get.
+usePaint(paintCollections);
 
 /** The open Sammlung's row, brought back into line with what is on screen.
  *
@@ -237,7 +216,7 @@ export async function paintCollections(): Promise<void> {
  * of rows: a fraction of the render() that commit() has just done anyway.
  */
 export function paintOpenCollection(): void {
-  if (!held.current) return;
+  if (!held.list.current) return;
   readOpen();
   drawList();
 }
@@ -256,18 +235,19 @@ export function paintOpenCollection(): void {
  * for the same reason: there is no second thing to add.
  */
 function drawList(): void {
+  const { collections, current } = held.list;
   const list = byId("collectionList");
   list.setAttribute("aria-label", t("ui.collections"));
   drawCollections(list, {
-    rows: held.collections.map((one) => ({
+    rows: collections.map((one) => ({
       id: one.id, name: nameOf(one.name), count: counts.get(one.id),
       subtitle: subtitles.get(one.id),
     })),
-    open: held.current ? [held.current] : [],
+    open: current ? [current] : [],
     onPick: (id) => { closeOnPick(); void open(id); },
   });
 
-  if (!pages || !held.current) return;
+  if (!pages || !current) return;
   const row = list.querySelector(".collections__item--active");
   if (!row) return;
   const into = document.createElement("div");
@@ -311,77 +291,7 @@ export async function nameIfUnnamed(): Promise<void> {
   await renameCollection(open.id, defaultName());
 }
 
-/* --- The size of a tablet Sammlung's grid ---------------------------------- */
-
-/** What askTarget() answers with: which editor, and - for a tablet - how big
- *  its pages are. `grid` is absent for the talker, which has no grid. */
-export interface Made {
-  target: Target;
-  grid?: GridSize;
-  /** Which language the device shows its own menu in. The talker's only: on a
-   *  tablet package localeFor() reads the locale off the voice first, so this
-   *  would be a field with nothing downstream of it. */
-  language?: string;
-}
-
-/** The four sizes, drawn rather than named, with the one on `chosen` pressed.
- *
- * A row of pictures instead of two number fields, because what somebody is
- * choosing is how much fits on a page - "6 x 11" is the answer to that, not
- * the question - and because a number field is a place to mistype 1 for 11 and
- * lose two pages of buttons.
- *
- * Exported because it is drawn in two places that are a whole Sammlung apart:
- * here while one is being made, and in the grid panel editor-app puts in that
- * Sammlung's own sheet once it exists. The arrow only runs one way
- * (tests/unit/layers.test.ts), so the shared control lives on the shell side
- * and the editor reaches for it - the same direction editor-app takes for
- * every other thing it borrows from this file.
- *
- * The mini grid is an `<i>` per cell rather than a picture, so that 3x5 and
- * 6x11 differ in the way the real thing does: the same width, smaller cells,
- * more of them. `aria-pressed` says which one is in force, and the accessible
- * name spells the pair out - "3 x 5" read aloud is a multiplication.
- */
-export function sizeChoices(chosen: GridSize,
-                            onPick: (size: GridSize) => void): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "sizes";
-  row.setAttribute("role", "group");
-  row.setAttribute("aria-label", t("ui.app_grid_size"));
-
-  for (const size of GRID.sizes) {
-    const one = document.createElement("button");
-    one.type = "button";
-    one.className = "size";
-    const held = size.rows === chosen.rows && size.columns === chosen.columns;
-    one.setAttribute("aria-pressed", held ? "true" : "false");
-
-    const mini = document.createElement("span");
-    mini.className = "size__mini";
-    mini.setAttribute("aria-hidden", "true");
-    mini.style.setProperty("--c", String(size.columns));
-    mini.style.setProperty("--r", String(size.rows));
-    for (let n = 0; n < size.rows * size.columns; n++) {
-      mini.appendChild(document.createElement("i"));
-    }
-
-    const pair = document.createElement("b");
-    pair.textContent = `${size.rows} \u00d7 ${size.columns}`;
-    const many = document.createElement("small");
-    many.textContent = t("ui.app_grid_size_buttons", { n: size.rows * size.columns });
-    one.setAttribute("aria-label",
-      `${size.rows} ${t("ui.app_grid_rows")} \u00d7 `
-      + `${size.columns} ${t("ui.app_grid_columns")}, ${many.textContent}`);
-
-    one.append(mini, pair, many);
-    one.onclick = () => onPick(size);
-    row.appendChild(one);
-  }
-  return row;
-}
-
-/* --- The four things --------------------------------------------------------- */
+/* --- Opening one, and deleting one ------------------------------------------- */
 
 /** Put a different Sammlung on screen.
  *
@@ -390,14 +300,8 @@ export function sizeChoices(chosen: GridSize,
  * *after* load() had replaced state.layout - and it would write the old text
  * into the new Sammlung, under the new one's version.
  */
-/* Choosing one closes the drawer: the layer is in the way of the thing that was
- * just asked for. Only where it is a layer - on a desktop the column stays. */
-function closeOnPick(): void {
-  if (narrow()) closeDrawer();
-}
-
 async function open(id: string): Promise<void> {
-  if (id === held.current) return;
+  if (id === held.list.current) return;
   await saveNow();
   await useCollection(id);
   // load() re-reads the layout, adopts its own language, resets the version
@@ -408,550 +312,6 @@ async function open(id: string): Promise<void> {
   await paintCollections();
 }
 
-/* Which editor a new Sammlung gets, asked once and never again.
- *
- * A dialog rather than two buttons in the sidebar, because "+ Neue Sammlung"
- * is one act with a question inside it and two entries would put the whole of
- * this decision in the width of a rail. Dismissing it makes nothing at all -
- * the rule this page keeps everywhere, and the reason the question comes
- * before the write rather than after.
- *
- * The note under the two says it does not change later. That is the one thing
- * somebody could reasonably expect to be able to undo, and the moment to say
- * so is while they are choosing rather than when they go looking for a switch.
- *
- * ## The tablet leads, and it is already chosen
- *
- * The talker was first and nothing was chosen, so every new Sammlung cost a
- * press on the rarer of the two before the primary button would even light.
- * That order is this repository's history rather than anybody's use of it: the
- * tablet app is what most people are building for, and the five-key talker is
- * the one you go out of your way to make.
- *
- * So the tablet card is first and opens pressed. The dialog still asks - both
- * cards are there, either can be pressed, and the note underneath still says
- * the answer is final - but it asks the way a form with a sensible default
- * asks, which is by being right most of the time and correctable always. What
- * it costs is that somebody who wanted the talker must notice a choice already
- * made rather than make one; the pressed card carries aria-pressed and the
- * grid question under it is open, so what has been chosen is on the screen
- * rather than implied by an enabled button.
- */
-function askTarget(): Promise<Made | null> {
-  return new Promise((resolve) => {
-    /* Settled from the presses, with a guard, and the `close` event only for
-     * the ways out that are not a press. That is design.md §3.4's rule, and
-     * this file talked itself out of it once: the reasoning was that the
-     * presses close the dialog, so one exit through `close` covers everything.
-     * It does not. `close` is what a *host* fires, and a host that hides the
-     * dialog without firing it leaves this promise pending for the life of the
-     * page - what somebody sees is a button that did nothing, with no error
-     * anywhere. e2e/collections.spec.ts makes the host into exactly that one,
-     * and it is the test that caught this.
-     *
-     * So the making button resolves for itself, `close` resolves null for the
-     * dismissal, and `settled` makes the second of those a no-op. A host that
-     * fires `close` twice still resolves once; a host that fires none still
-     * resolves. */
-    let settled = false;
-    const finish = (made: Made | null) => {
-      if (settled) return;
-      settled = true;
-      resolve(made);
-      // After resolving, so that a close event arriving as a consequence of
-      // this call finds the guard already set.
-      sheet?.close();
-    };
-
-    /* What the two presses set rather than what they resolve, which is the
-     * change: a tablet Sammlung has a second question inside the first, and a
-     * button that made the Sammlung on the way past would ask it too late.
-     * The talker goes through the same footer press for one press more,
-     * because two ways out of one sheet is two things to keep in step. */
-    let target: Target | null = null;
-    let size: GridSize = { rows: GRID.rows, columns: GRID.columns };
-    /* The page's own language, which is the best guess there is at the moment
-     * of making: somebody working in German is more likely than not building a
-     * German talker. Both blank() implementations already start a Sammlung off
-     * this way; what is new is that it is on screen and can be corrected while
-     * the Sammlung is being made rather than found afterwards.
-     *
-     * Asked here rather than answered by a "default language" setting in
-     * Einstellungen. A deferred default is one control whose effect appears
-     * somewhere else, later, and unseen - which is the shape of the bug this
-     * whole change removes. */
-    let language = LANG;
-
-    const body: HTMLElement[] = [];
-    const choices = new Map<Target, HTMLButtonElement>();
-    /* The tablet first. See the head of this function: this order is the answer
-     * to "what is somebody most likely making", not the order the two editors
-     * were written in. */
-    for (const one of ["app", "diy"] as const) {
-      const choice = document.createElement("button");
-      choice.className = "btn choice";
-      choice.type = "button";
-      choice.setAttribute("aria-pressed", "false");
-      const head = document.createElement("strong");
-      head.textContent = t(`ui.collection_target_${one}`);
-      const note = document.createElement("span");
-      note.textContent = t(`ui.collection_target_${one}_note`);
-      choice.append(head, note);
-      choice.onclick = () => pick(one);
-      choices.set(one, choice);
-      body.push(choice);
-    }
-
-    /* How much fits on a page, asked only of the target that has pages.
-     *
-     * Under the tablet choice rather than inside it: a control inside a
-     * control is markup no keyboard can walk and no validator allows, which
-     * is the same reason a cell in the grid is a box holding two widgets
-     * rather than a button holding a button.
-     *
-     * Beside it rather than after the Sammlung exists, because it is the one
-     * thing about a new board somebody already knows - and it says so of
-     * itself that it is not final: growing later costs nothing. */
-    const sizes = document.createElement("div");
-    sizes.className = "sizeask";
-    sizes.hidden = true;
-    const asks = document.createElement("span");
-    asks.className = "lbl";
-    asks.textContent = t("ui.app_grid_size");
-    const later = document.createElement("p");
-    later.className = "note";
-    later.textContent = t("ui.app_grid_later");
-    const drawSizes = () => {
-      sizes.replaceChildren(asks, sizeChoices(size, (picked) => {
-        size = picked;
-        drawSizes();
-      }), later);
-    };
-    drawSizes();
-    body.push(sizes);
-
-    /* The language of the device's own menu, asked only of the target that has
-     * one to show.
-     *
-     * Target-conditional the way the grid above it is, which is the shape this
-     * dialog already had: one act with a question inside it, and the question
-     * differs by what is being made. The voice is deliberately not here - a
-     * new Sammlung starts on whatever the catalogue says its language speaks
-     * with, which is a sensible answer nobody has to give, and the Sammlung's
-     * own sheet is where it is corrected. */
-    const langAsk = document.createElement("div");
-    langAsk.className = "sizeask";
-    langAsk.hidden = true;
-    const asksLang = document.createElement("span");
-    asksLang.className = "lbl";
-    asksLang.id = "collectionNewLangLabel";
-    asksLang.textContent = t("ui.collection_language");
-    const anchor = document.createElement("span");
-    anchor.className = "menu-anchor start";
-    const langPick = document.createElement("button");
-    langPick.className = "btn quiet sm dropdown";
-    langPick.type = "button";
-    langPick.setAttribute("aria-haspopup", "menu");
-    langPick.setAttribute("aria-expanded", "false");
-    langPick.setAttribute("aria-labelledby", asksLang.id);
-    // The options name themselves, out of the same table the two other
-    // language controls read - see LANGUAGE_NAMES in core/boot.ts.
-    const sayLang = () => { langPick.textContent = LANGUAGE_NAMES[language] || language; };
-    sayLang();
-    langPick.onclick = () => menuOn(langPick, (add) => {
-      for (const code of LANGUAGES) {
-        add(LANGUAGE_NAMES[code] || code, () => { language = code; sayLang(); },
-            { checked: code === language });
-      }
-    });
-    anchor.appendChild(langPick);
-    const langNote = document.createElement("p");
-    langNote.className = "note";
-    langNote.textContent = t("ui.collection_language_note");
-    langAsk.append(asksLang, anchor, langNote);
-    body.push(langAsk);
-
-    const note = document.createElement("p");
-    note.className = "note";
-    note.textContent = t("ui.collection_target_note");
-    body.push(note);
-
-    const make = document.createElement("button");
-    make.className = "btn primary";
-    make.type = "button";
-    make.disabled = true;
-    make.textContent = t("ui.collection_create");
-    make.onclick = () => {
-      if (!target) return;
-      finish(target === "app" ? { target, grid: size } : { target, language });
-    };
-
-    function pick(one: Target): void {
-      target = one;
-      for (const [which, choice] of choices) {
-        choice.setAttribute("aria-pressed", which === one ? "true" : "false");
-      }
-      sizes.hidden = one !== "app";
-      langAsk.hidden = one !== "diy";
-      make.disabled = false;
-    }
-
-    /* Standing on the tablet before anybody presses anything, which is the
-     * whole of what "default" means here: the card is pressed, its grid
-     * question is open under it, and Erstellen is live. Through pick() rather
-     * than by setting the three of them here, so that the opening state and
-     * every state after a press are made by one piece of code - the version
-     * that set them separately is how a dialog comes to open showing a
-     * question belonging to the other choice. */
-    pick("app");
-
-    const sheet: ReturnType<typeof openDialog> | undefined = openDialog({
-      title: t("ui.collection_target"),
-      body,
-      footer: [make],
-      onClose: () => finish(null),
-    });
-    /* The rhythm between the things in the body, which this body has to ask
-     * for. components.css spaces a sheet body with `p + p` - right for the
-     * sheets that are prose, and it reaches nothing here: the two choices are
-     * buttons, the two conditional questions are divs, and so the closing note
-     * had no space above it at all. A modifier on the shared component rather
-     * than a redefinition of it, which is the move the button sheet already
-     * makes for its two columns; ui.css carries what the gap is and why. */
-    sheet.dialog.classList.add("sheet--target");
-  });
-}
-
-/**
- * The picture the start key of a brand new tablet Sammlung points at, fetched
- * into this browser and then drawn.
- *
- * blank() names the picture; this is what makes the name resolve. The two are
- * apart because they can only be apart: naming it is one expression and
- * fetching it is a download, and blank() answers a synchronous question the
- * shell asks of every editor.
- *
- * **Not awaited, and after the Sammlung exists rather than before it.** A
- * Sammlung being made is a press somebody is waiting on, and making it wait on
- * a pictogram download would put the network between "new" and a board - on a
- * page whose whole point is that everything else in it works offline. So the
- * Sammlung is written, opened and named first, this runs behind it, and the
- * board is drawn again when the picture lands. Until then the key is a key with
- * a picture that is not here yet, which is a state every board in this product
- * can already be in and already says out loud.
- *
- * Which collection is asked is read off the Sammlung blank() has just made
- * rather than asked afresh. That answer is live - a METACOM folder arrives and
- * leaves without a reload - so two reads of it are two chances to fetch a
- * picture nothing points at, or to leave the one that is pointed at unfetched.
- * A METACOM start key needs nothing fetched at all: the reference resolves out
- * of somebody's own licensed folder, which is the rule the whole symbol seam is
- * built around.
- *
- * A failure costs the picture and nothing else, and it is said in the status
- * line rather than swallowed: an ARASAAC that could not be reached is worth
- * knowing about, because the remedy is to try again in a minute and the key is
- * one press from being given a picture by hand.
- */
-async function keepHomeSymbol(made: Layout, id: string): Promise<void> {
-  if (!isApp(made)) return;
-  const source = homeSymbolSource();
-  const wanted = (made.firstColumn ?? [])
-    .some((one) => one.symbol === homeSymbol(source));
-  if (!wanted) return;
-  try {
-    await takeHomeSymbol(source);
-  } catch (error) {
-    status(t("ui.symbol_failed", { error: reason(error) }));
-    return;
-  }
-  /* Drawn again, because the board was drawn while the picture was still on
-   * its way and every cell holding it decided then that there was none.
-   *
-   * Guarded on the Sammlung still being the open one: a download takes long
-   * enough for somebody to have clicked away to another Sammlung, and
-   * re-rendering there would draw this Sammlung's board over theirs. Nothing
-   * is lost by not drawing - the file is in the store, and the board is
-   * correct the next time it is opened. */
-  if (held.current === id) editorOf(state.layout).render();
-}
-
-async function create(): Promise<void> {
-  const made = await askTarget();
-  // Dismissed. Nothing was written and nothing is said: a dialog somebody
-  // closes should cost exactly what it looked like it would.
-  if (!made) return;
-  await saveNow();
-  const blank = editorFor(made.target).blank(made.grid);
-  /* What was chosen while it was being made. blank() already starts a Sammlung
-   * off at the page's language, so this only ever differs when somebody
-   * changed the field - but it is written unconditionally rather than
-   * compared, because "the answer the dialog gave" is the thing this line is
-   * about and a guess that happens to agree is still a guess. */
-  if (made.language) blank.language = made.language;
-  /* And which symbol collection its pictures will come from, taken from what
-   * this browser is set to.
-   *
-   * The pattern the voice and bildhaft already use one level along: the app's
-   * setting is the default for a new Sammlung, and the Sammlung carries its
-   * own from then on. Written here rather than in blank(), because blank() is
-   * the editor's and the setting is the shell's - and because "what this
-   * machine is set to" is a fact about the moment a Sammlung is made, not
-   * about what a blank one is.
-   *
-   * readSettings() has already refused "metacom" where no folder answers, so
-   * a Sammlung cannot be born asking for a collection this browser has never
-   * seen. */
-  blank.symbolSource = symbols.activeSource();
-  const id = await createCollection(defaultName(), blank);
-  await useCollection(id);
-  await load();
-  await paintCollections();
-  // Straight into the name, selected: the first keystroke replaces the date it
-  // was given. Focusing without selecting would make the invented name a chore
-  // to delete rather than a suggestion to type over.
-  const field = byId<HTMLInputElement>("collectionName");
-  field.focus();
-  field.select();
-  // And the start key's picture, behind all of that - see keepHomeSymbol. The
-  // caret is already in the name field by the time this so much as asks the
-  // network, which is the whole reason it is the last line here.
-  void keepHomeSymbol(blank, id);
-}
-
-/** The open Sammlung's name as somebody would read it, fallback included. */
-const currentName = (): string => {
-  const at = held.collections.findIndex((one) => one.id === held.current);
-  return at < 0 ? "" : nameOf(held.collections[at]!.name);
-};
-
-/** The name of the Sammlung, as something a file system will take.
- *
- *  One rule for both exports, which is the only thing this line is for: the
- *  package and the talker's .obz are separate writers by design
- *  (exchange/SPEC.md 5.2), and what they are called is not one of the things
- *  they are allowed to differ about. Somebody who exports the same Sammlung
- *  twice should get two files with one name and two extensions.
- *
- *  downloadSlug() rather than the store's safeName(), and the difference is a
- *  Sammlung with an umlaut in it: this one spells the letter out where that
- *  one punched a `_` through it. */
-const fileStem = (): string => downloadSlug(currentName());
-
-/** One card of the export sheet: which of the exports it names, and its door.
- *
- * `which` is the middle of `ui.collection_export_for_*`, and `run` is the
- * function it presses. A door rather than a target, a kind or a flag: what is
- * carried here is already a decision about which writer to call, so there is
- * nothing left for a writer to branch on. That is the shape
- * exchange/SPEC.md §5.2 asks for, held one line further out than it asks.
- */
-interface ExportDoor {
-  which: string;
-  run(): void;
-}
-
-/** What this Sammlung can honestly be written as, the one it is for first.
- *
- * **The Sammlung has known this all along.** Every one of them carries a
- * Target, the sidebar shows it under the name, and the export sheet used to
- * ask anyway - so somebody with a five-key Sammlung was asked, every time,
- * whether the file was for a tablet. `lead` is the answer that was already
- * there; `otherwise` is what is left, and it is left behind a fold.
- *
- * **The document export is not offered any more, and that is a decision
- * rather than a fault in it.** The card under ui.collection_export_for_other
- * wrote data/obf.ts's .obz - the keys and the names of the pictures, for other
- * AAC software to open - and it sat in the talker's fold from the day the
- * fold was made. It
- * was asked for and taken away: a card in a fold is still read past by
- * everybody who opens the fold for the one beside it, and this was the one
- * nobody was pressing. The writer stays where it is - backend/local.ts's
- * exportBoard(), which tools/obfcheck.html drives and
- * tests/unit/obf_roundtrip.test.ts holds - so what went is a door and not a
- * format. adr/0005's interoperability story is the argument for reopening it,
- * and reopening it is one ExportDoor here.
- *
- * If it is ever reopened it belongs in the talker's fold and nowhere else,
- * which was measured rather than reasoned: on an app layout obf.ts's
- * layoutToDocument() reads `layout.sets || []`, undefined and then empty, and
- * exportObz() answers 188 bytes of zip holding no boards at all - a file,
- * downloaded, named after the Sammlung, with none of it inside.
- *
- * **A tablet Sammlung has nothing to put in the fold, and that is a finding
- * rather than a simplification.** The talker's export was opened on an app
- * layout and watched: exportDevicePackage() refuses it outright - it checks
- * isDiy() and throws, because there are no sets and so nothing a device could
- * show. It is not demoted, because it is not an option: an entry that writes a
- * useless file is worse than no entry, which is exchange/SPEC.md §7.4's
- * argument about a control that looks live and does the wrong thing. So `lead`
- * stands alone and chooseExport() does not ask a question with one answer.
- *
- * **The other direction does work, and was checked the same way.** A talker
- * Sammlung exports as an app package: buildAppPackage() branches on
- * layout.target and diyBoards() is a written half of it, one board per set -
- * that is the path vorlaut-app's BuilderPackageTest opens. It is demoted, not
- * dropped, and it is the whole of the fold now.
- *
- * The writers are still three functions, and this decides only which of them
- * are offered. Nothing here is passed to one.
- */
-function exportsFor(layout: Layout): { lead: ExportDoor; otherwise: ExportDoor[] } {
-  const talker: ExportDoor = { which: "talker", run: () => { void exportDevice(); } };
-  const app: ExportDoor = { which: "app", run: () => { void exportApp(); } };
-  return isApp(layout)
-    ? { lead: app, otherwise: [] }
-    : { lead: talker, otherwise: [app] };
-}
-
-/** The one entry, the doors behind it, and the one this Sammlung is for.
- *
- * **One button, two doors, three writers, and keeping those facts apart is the
- * whole of this.** What a person presses is one act - export this Sammlung -
- * which is what adr/0011 meant by "one action ... whatever kind of board it
- * is", and it says in the same breath that the writers stay three. They share
- * no code path because exchange/SPEC.md §5.2 makes that a licensing guarantee
- * rather than a tidiness preference: the talker's export never writes a
- * METACOM symbol as pixels, and a refusal enforced by an argument is one call
- * site away from being untrue.
- *
- * So the choice is spent here and never travels. Each card names one of the
- * functions below literally, and each of those names one door; nothing
- * carries a kind, a flag or a target past this line for a writer to branch on.
- * A dispatch that decided *inside* an export which package to write is the
- * thing §5.2 forbids by name, and there is no such value to pass.
- *
- * **It leads with an answer rather than opening with a question**, and that is
- * the change. This was three equal cards under a heading asking what the file
- * was for - a question the Sammlung had already answered. exportsFor()
- * above reads that answer. The Sammlung's own export is the one card standing
- * on its own above the fold; whatever else it can honestly be written as is
- * inside a panel that has to be opened. The title says the act now, out of the
- * same key the menu entry uses, because a sheet that is not asking anything
- * should not be headed with a question mark.
- *
- * A card fires rather than selects, which is where this differs from
- * askTarget(): that dialog has a second question inside it and this one has
- * none. Nothing is written on the press either - both exports cost minutes,
- * and each opens the sheet that names the Sammlung and asks again before
- * anything is synthesised.
- *
- * **Dismissed, it does nothing at all** - not even the save each export
- * begins with, because the save is inside them rather than in front of them. A
- * cancelled dialog costs nothing, and the answer to one that costs something
- * is never to take the dialog away.
- */
-function chooseExport(): void {
-  if (held.collections.findIndex((one) => one.id === held.current) < 0) return;
-
-  const offered = exportsFor(state.layout);
-  /* One door is not a choice, and a sheet asking which of one is a press
-   * spent on nothing. A tablet Sammlung goes straight through to its own
-   * export - which still opens the sheet that names it and asks before
-   * anything is synthesised, so nothing here skips a confirmation. */
-  if (!offered.otherwise.length) { offered.lead.run(); return; }
-
-  // Assigned below and read from the presses, which happen later. The cards
-  // have to exist before the sheet that holds them does.
-  let sheet: ReturnType<typeof openDialog> | undefined;
-  const card = (door: ExportDoor, leads: boolean): HTMLButtonElement => {
-    const choice = document.createElement("button");
-    // No aria-pressed, unlike askTarget's cards: these fire rather than hold a
-    // selection, and a button claiming a pressed state it never keeps is worse
-    // for somebody reading it out than one that claims nothing. The lead card
-    // is marked with a class of its own for that reason - it is the one to
-    // press, which is not the same claim as the one in force.
-    choice.className = leads ? "btn choice choice--lead" : "btn choice";
-    choice.type = "button";
-    const head = document.createElement("strong");
-    head.textContent = t(`ui.collection_export_for_${door.which}`);
-    const note = document.createElement("span");
-    note.textContent = t(`ui.collection_export_for_${door.which}_note`);
-    choice.append(head, note);
-    choice.onclick = () => { sheet?.close(); door.run(); };
-    return choice;
-  };
-
-  /* The fold, and it is design's own <details class="panel"> rather than
-   * anything invented here: a heading that says what is behind it, the
-   * browser's own toggle and keyboard behaviour, and no JavaScript of ours in
-   * the middle of it. Its summary holds text and no button, which that
-   * component requires and this one has no reason to break.
-   *
-   * Closed on open, every time. The point of the fold is that the Sammlung's
-   * own export is the only thing to press until somebody says otherwise. */
-  const more = document.createElement("details");
-  more.className = "panel";
-  const summary = document.createElement("summary");
-  const heading = document.createElement("span");
-  heading.className = "section";
-  heading.textContent = t("ui.collection_export_otherwise");
-  summary.append(heading);
-  const inside = document.createElement("div");
-  inside.className = "body";
-  inside.append(...offered.otherwise.map((door) => card(door, false)));
-  more.append(summary, inside);
-
-  sheet = openDialog({
-    // The act, out of the menu entry's own key. The sheet used to be headed
-    // with a question about what the file was for, and is not asking it now.
-    title: t("ui.collection_export"),
-    body: [card(offered.lead, true), more],
-    // No footer. There is nothing to confirm - the cards are the presses - and
-    // an Abbrechen beside a corner ✕ would be two buttons for one act.
-  });
-  // The gap between the cards, which components.css does not reach: its sheet
-  // body spaces `p + p`, and these are buttons. ui.css carries the rest.
-  sheet.dialog.classList.add("sheet--choices");
-}
-
-/** The Sammlung as the talker's own .obz: the sources, the negation flags and
- * the 16 kHz WAVs a talker plays.
- *
- * The third door, all the way down, for the reason the other two are two -
- * exchange/SPEC.md §5.2 and adr/0010. It is the card a talker Sammlung's
- * export sheet leads with now rather than one entry of three, and that changed
- * nothing here: what a person presses and what gets written are different
- * questions, and only the first of them was ever three-by-accident.
- *
- * **It is also, since adr/0011, the only way a Sammlung reaches a device.**
- * The button that sent one is gone and so is the build behind it; this file is
- * what a talker is given, and loader/ is the page that gives it. Two things
- * follow. It gets the same progress-and-stop sheet the app package has, since
- * it synthesises rather than copying a build that was already paid for. And
- * the sheet says where the file goes next, because the page that finishes the
- * job is an address nobody would guess - shell/packageExport.ts's
- * openDeviceExport() is where both live.
- */
-async function exportDevice(): Promise<void> {
-  if (held.collections.findIndex((one) => one.id === held.current) < 0) return;
-  await saveNow();
-  openDeviceExport(currentName(), fileStem());
-}
-
-/** The Sammlung as the package the Android viewer opens: pictures and
- * recordings baked in as files.
- *
- * A second function rather than an option on the first, all the way down to
- * the backend - exchange/SPEC.md §5.2, and the note above exportAppPackage().
- * The menu entry it used to have of its own goes through chooseExport() now;
- * the door is untouched, which is the only half that rule is about.
- *
- * Both kinds of Sammlung reach it and they reach it differently, which is
- * exportsFor()'s doing. A tablet Sammlung is led straight here, because this
- * is the only thing it can honestly be written as. A talker Sammlung finds it
- * folded away under its own export, because it works there too - buildAppPackage()
- * has a diyBoards() half - but it is not what that Sammlung is for.
- *
- * The wait, the count and the way to stop are in shell/packageExport.ts, and
- * they are there because a full tablet Sammlung is hundreds of syntheses.
- */
-async function exportApp(): Promise<void> {
-  if (held.collections.findIndex((one) => one.id === held.current) < 0) return;
-  await saveNow();
-  openPackageExport(currentName(), fileStem());
-}
-
 /** Gone, once somebody has said so to a question that named what goes.
  *
  * The count is in the question because a Sammlung is a folder somebody cannot
@@ -960,10 +320,10 @@ async function exportApp(): Promise<void> {
  * other way deletes nothing.
  */
 async function remove(): Promise<void> {
-  const id = held.current;
+  const { collections, current: id } = held.list;
   if (!id) return;
-  const at = held.collections.findIndex((one) => one.id === id);
-  const name = nameOf(held.collections[at]!.name);
+  const at = collections.findIndex((one) => one.id === id);
+  const name = nameOf(collections[at]!.name);
   const which = editorOf(state.layout);
   const n = which.count(state.layout);
   // What is being counted is the editor's answer - sets on the device, buttons
@@ -991,42 +351,6 @@ async function remove(): Promise<void> {
   // visit gets and is a better answer than a page with nothing on it.
   await load();
   await paintCollections();
-}
-
-/* --- The sidebar itself ------------------------------------------------------- */
-
-/* Whether the column is there at all. A choice about the shape of the window is
- * not one to make every visit, so it is remembered - and in the settings record
- * with every other preference rather than in localStorage, because a preference
- * living in two stores is one that gets restored by one and overwritten by the
- * other. conventions.md §1.3.
- *
- * A desktop question only. Below 820px there is no column to collapse, only a
- * layer to dismiss - see openDrawer() below - and the remembered answer is
- * deliberately not consulted down there. */
-async function showSidebar(open: boolean, remember = true): Promise<void> {
-  document.body.classList.toggle("collapsed", !open);
-  byId("sidebarShow").hidden = open;
-  if (remember) await writeSettings({ sidebarOpen: open });
-}
-
-/** Below this the sidebar is a layer over the work, not a column beside it.
- *  The number is conventions.md §3.1's, and it is the one the stylesheet
- *  breaks at - the two have to agree or the controls and the layout disagree
- *  about which arrangement is on screen. */
-const narrow = (): boolean => matchMedia("(max-width: 820px)").matches;
-
-/* The drawer. Opening is a moment rather than a preference, so nothing here is
- * written down: closing the tab closes it, which is what somebody expects of a
- * thing they slid over their work. §1.3 is about the column, not this. */
-function openDrawer(): void {
-  byId("sidebar").classList.add("open");
-  byId("scrim").hidden = false;
-}
-
-function closeDrawer(): void {
-  byId("sidebar").classList.remove("open");
-  byId("scrim").hidden = true;
 }
 
 /* --- Wiring ------------------------------------------------------------------ */
@@ -1073,7 +397,7 @@ let pages: ((into: HTMLElement) => void) | null = null;
 
 export function collectionPages(draw: ((into: HTMLElement) => void) | null): void {
   pages = draw;
-  if (held.current) drawList();
+  if (held.list.current) drawList();
 }
 
 /**
@@ -1093,21 +417,17 @@ export function paintPages(): void {
 
 export function wireCollections(): void {
   byId<HTMLButtonElement>("collectionNew").onclick = () => { void create(); closeOnPick(); };
-  byId<HTMLButtonElement>("sidebarHide").onclick = () => { void showSidebar(false); };
-  byId<HTMLButtonElement>("sidebarShowBtn").onclick = () => { void showSidebar(true); };
-  byId<HTMLButtonElement>("sidebarOpenBtn").onclick = openDrawer;
-  byId<HTMLButtonElement>("sidebarClose").onclick = closeDrawer;
-  byId("scrim").onclick = closeDrawer;
-  void readSettings().then((held) => showSidebar(held.sidebarOpen !== false, false));
+  wireSidebar();
 
   // The debounce, the write on the way out, and the rule that a repaint never
   // types over you are all @lautstark/design/rename's now. What is left here is
   // the half that is this product's: trimming, which Sammlung is being renamed,
   // and what to say when the write fails.
   name = renameField(byId<HTMLInputElement>("collectionName"), async (typed) => {
-    if (!held.current) return;
+    const current = held.list.current;
+    if (!current) return;
     try {
-      await renameCollection(held.current, typed.trim());
+      await renameCollection(current, typed.trim());
       await paintCollections();
     } catch (error) {
       status(t("ui.save_failed", { error: reason(error) }));
