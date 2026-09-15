@@ -4,7 +4,7 @@
 // this directory.
 import type { AppLayout, GridSize } from "../core/types.js";
 import { t } from "../core/texts.js";
-import { sizeChoices } from "../shell/collections.js";
+import { sizeChoices } from "../shell/gridSizes.js";
 import { outside, resize, shareFirstColumn, shared, spreadFirstColumn } from "./pages.js";
 import { board, commit, wordColor } from "./standing.js";
 
