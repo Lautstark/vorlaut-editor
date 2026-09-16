@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { OPENS_WITH, PANELS } from "../../src/shell/voices.js";
+import { OPENS_WITH, PANELS } from "../../src/shell/voices.svelte.js";
 
 /*
  * The settings sheet folds every panel when it opens, and this is the list it
@@ -20,8 +20,17 @@ import { OPENS_WITH, PANELS } from "../../src/shell/voices.js";
  * middle of the sheet but appended here would read as a list nobody maintains.
  */
 
+/* The component, read as text.
+ *
+ * It was a template string in shell/templates/settings_sheet.svelte.ts until
+ * adr/0025; it is shell/SettingsSheet.svelte now, and the two regexes below
+ * read it unchanged - a `<details ... id="themePanel">` is the same nine
+ * characters whichever file it is written in. What moved is only which file,
+ * and the reason for reading it as text rather than rendering it has not
+ * changed either: what this holds the list against is the markup somebody
+ * edits, and rendering would put a compiler between the two. */
 const markup = readFileSync(
-  fileURLToPath(new URL("../../src/shell/templates/settings_sheet.ts", import.meta.url)),
+  fileURLToPath(new URL("../../src/shell/SettingsSheet.svelte", import.meta.url)),
   "utf8",
 );
 

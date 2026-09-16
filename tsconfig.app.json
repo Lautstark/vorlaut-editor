@@ -1,12 +1,13 @@
 {
+  /* The four versions and the compiler options every app in the family shares
+     come from @lautstark/toolchain now - see its README. What is left below is
+     what is vorlaut-editor's own: the two strictness flags this repository
+     argued about, the project's own build-info file, and the pair of `include`
+     lines under them. 2026-09-16. */
+  "extends": "@lautstark/toolchain/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
     "types": ["vite/client"],
 
-    "strict": true,
     /* The port from JavaScript was a rename, not a rewrite: the modules came
        across unchanged so that the frozen references still measure the same
        code. One strictness flag is what that still costs, rather than two.
@@ -41,11 +42,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "noEmit": true,
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo"
   },
@@ -59,5 +56,11 @@
      it holds a whole checkout of that repository for device/fixtures/, and a
      compiler that reads code out of it is the one edit that would quietly
      reinstate the dependency adr/0011 removed. */
-  "include": ["src"]
+  /* The components as well as the modules. `npm run typecheck` is svelte-check
+     against this file, and svelte-check reads what `include` names - a
+     directory alone would have it check the .ts half of src/ and silently skip
+     every .svelte in it, which is the shape of green this repository has been
+     bitten by twice. Written as two globs rather than "src" for exactly that
+     reason. */
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.svelte"]
 }

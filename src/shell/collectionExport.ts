@@ -1,8 +1,9 @@
 /* Exporting the open Sammlung: one entry, the doors behind it, and the one
- * this Sammlung is for. The writers are in shell/packageExport.ts and behind
+ * this Sammlung is for. The writers are in shell/packageExport.svelte.ts and behind
  * it; this decides only which of them are offered. */
-import { openDialog } from "./dialog.js";
-import { openDeviceExport, openPackageExport } from "./packageExport.js";
+import { openParts } from "./parts.js";
+import ExportChoiceBody from "./ExportChoiceBody.svelte";
+import { openDeviceExport, openPackageExport } from "./packageExport.svelte.js";
 import { state } from "../core/state.js";
 import { saveNow } from "../core/save.js";
 import { t } from "../core/texts.js";
@@ -113,6 +114,14 @@ function exportsFor(layout: Layout): { lead: ExportDoor; otherwise: ExportDoor[]
  * cancelled dialog costs nothing, and the answer to one that costs something
  * is never to take the dialog away.
  */
+/** What the sheet is holding: the door this Sammlung is for, whatever else it
+ *  can be written as, and what a press on one does. */
+export interface ExportChoice {
+  lead: ExportDoor;
+  otherwise: ExportDoor[];
+  take(door: ExportDoor): void;
+}
+
 export function chooseExport(): void {
   if (!haveCurrent()) return;
 
@@ -123,52 +132,18 @@ export function chooseExport(): void {
    * anything is synthesised, so nothing here skips a confirmation. */
   if (!offered.otherwise.length) { offered.lead.run(); return; }
 
-  // Assigned below and read from the presses, which happen later. The cards
-  // have to exist before the sheet that holds them does.
-  let sheet: ReturnType<typeof openDialog> | undefined;
-  const card = (door: ExportDoor, leads: boolean): HTMLButtonElement => {
-    const choice = document.createElement("button");
-    // No aria-pressed, unlike askTarget's cards: these fire rather than hold a
-    // selection, and a button claiming a pressed state it never keeps is worse
-    // for somebody reading it out than one that claims nothing. The lead card
-    // is marked with a class of its own for that reason - it is the one to
-    // press, which is not the same claim as the one in force.
-    choice.className = leads ? "btn choice choice--lead" : "btn choice";
-    choice.type = "button";
-    const head = document.createElement("strong");
-    head.textContent = t(`ui.collection_export_for_${door.which}`);
-    const note = document.createElement("span");
-    note.textContent = t(`ui.collection_export_for_${door.which}_note`);
-    choice.append(head, note);
-    choice.onclick = () => { sheet?.close(); door.run(); };
-    return choice;
+  const choice: ExportChoice = {
+    lead: offered.lead,
+    otherwise: offered.otherwise,
+    take(door) { sheet.close(); door.run(); },
   };
 
-  /* The fold, and it is design's own <details class="panel"> rather than
-   * anything invented here: a heading that says what is behind it, the
-   * browser's own toggle and keyboard behaviour, and no JavaScript of ours in
-   * the middle of it. Its summary holds text and no button, which that
-   * component requires and this one has no reason to break.
-   *
-   * Closed on open, every time. The point of the fold is that the Sammlung's
-   * own export is the only thing to press until somebody says otherwise. */
-  const more = document.createElement("details");
-  more.className = "panel";
-  const summary = document.createElement("summary");
-  const heading = document.createElement("span");
-  heading.className = "section";
-  heading.textContent = t("ui.collection_export_otherwise");
-  summary.append(heading);
-  const inside = document.createElement("div");
-  inside.className = "body";
-  inside.append(...offered.otherwise.map((door) => card(door, false)));
-  more.append(summary, inside);
-
-  sheet = openDialog({
+  const sheet = openParts<ExportChoice>({
     // The act, out of the menu entry's own key. The sheet used to be headed
     // with a question about what the file was for, and is not asking it now.
     title: t("ui.collection_export"),
-    body: [card(offered.lead, true), more],
+    state: choice,
+    body: ExportChoiceBody,
     // No footer. There is nothing to confirm - the cards are the presses - and
     // an Abbrechen beside a corner ✕ would be two buttons for one act.
   });
@@ -192,7 +167,7 @@ export function chooseExport(): void {
  * follow. It gets the same progress-and-stop sheet the app package has, since
  * it synthesises rather than copying a build that was already paid for. And
  * the sheet says where the file goes next, because the page that finishes the
- * job is an address nobody would guess - shell/packageExport.ts's
+ * job is an address nobody would guess - shell/packageExport.svelte.ts's
  * openDeviceExport() is where both live.
  */
 async function exportDevice(): Promise<void> {
@@ -215,7 +190,7 @@ async function exportDevice(): Promise<void> {
  * folded away under its own export, because it works there too - buildAppPackage()
  * has a diyBoards() half - but it is not what that Sammlung is for.
  *
- * The wait, the count and the way to stop are in shell/packageExport.ts, and
+ * The wait, the count and the way to stop are in shell/packageExport.svelte.ts, and
  * they are there because a full tablet Sammlung is hundreds of syntheses.
  */
 async function exportApp(): Promise<void> {

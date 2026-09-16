@@ -14,7 +14,7 @@
 // left is what the callers could not have written for themselves and must not
 // each own a copy of: which source is offered, what an empty answer means, the
 // fact that an ARASAAC pick is a download while a METACOM one is a reference,
-// and the sentence the licence requires. See shell/sheet.ts's drawPick(),
+// and the sentence the licence requires. See shell/pieces/Pick.svelte,
 // which is the only thing that draws any of it now.
 //
 // The name survives the dialog because the job did: this is still where a
@@ -176,7 +176,7 @@ function wayBackIn(): SymbolAct | null {
  * back - for a thing that is one browser prompt away.
  *
  * A label and a promise rather than an element, so that the seam stays what it
- * was: this module says what is true and what could be done, and sheet.ts
+ * was: this module says what is true and what could be done, and sheet.svelte.ts
  * decides what a button looks like. The promise answers whether anything
  * changed, because the only thing worth doing afterwards is running the search
  * again - and a refusal must not.

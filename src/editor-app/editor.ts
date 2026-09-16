@@ -11,117 +11,77 @@
 // What is here is the editor's face to the shell - render(), wireEditor(),
 // the `app` object - and the key a new Sammlung starts with. The parts are
 // their own modules beside this one, cut along the sections this file used
-// to have: standing.ts (where the editor stands, and the two ways a change
+// to have: standing.svelte.ts (where the editor stands, and the two ways a change
 // reaches the page), pageHead.ts (the name and the facts line over the board,
-// and the page's delete question), grid.ts (the cells), buttonSheet.ts (one
-// button, edited as a draft), panels.ts (the two panels in the Sammlung's
-// sheet) and pageList.ts (the pages down the sidebar).
+// and the page's delete question), grid.ts (the cells), buttonSheet.svelte.ts (one
+// button, edited as a draft), panels.svelte.ts (the two panels in the Sammlung's
+// sheet) and PageList.svelte (the pages down the sidebar).
 //
 // The graph itself is in pages.ts, deliberately without a document anywhere
 // near it: what happens to the buttons that pointed at a deleted page is the
 // part of this that is expensive to get wrong, so it is the part that can be
 // tested without a browser.
-import { byId, status } from "../shell/dom.js";
+import { status } from "../shell/dom.js";
 import { state } from "../core/state.js";
 import type { Editor } from "../core/editor.js";
 import { isApp } from "../core/types.js";
 import type { AppButton, GridSize, Layout } from "../core/types.js";
 import { GRID, LANG } from "../core/boot.js";
-import { saveSoon } from "../core/save.js";
-import { collectionPages, paintPages } from "../shell/collections.js";
+import { collectionPages } from "../shell/collections.js";
 /* Which house a start key opens with, and which collection it comes out of.
  * The shell's, not this file's: exchange/SPEC.md §5.1 allows one symbol source
  * per package, so "the prescribed picture" is a different answer per
  * collection, and which collection is in force is something a browser knows
  * and an editor does not. */
 import { homeSymbol, homeSymbolSource, homeWord } from "../shell/homekey.js";
-import { collectionSheetPanel } from "../shell/voices.js";
-import { blankButton, blankPage, pageById, reachable } from "./pages.js";
-import { at, board, commit, page, usePaint } from "./standing.js";
-import { askDelete, drawFacts, drawPageHead } from "./pageHead.js";
-import { drawGrid } from "./grid.js";
-import { accessPanel, gridPanel } from "./panels.js";
-import { drawPageList } from "./pageList.js";
+import { collectionSheetPanel } from "../shell/voices.svelte.js";
+import { blankButton, blankPage } from "./pages.js";
+import { at, page, render } from "./standing.svelte.js";
+import { sheetPanels } from "./panels.svelte.js";
+import PageList from "./PageList.svelte";
 
-/* --- Drawing, and the two controls that are not in a sheet ---------------- */
+/* --- Drawing, and the one hand-over that is left ------------------------- */
 
-export function render(): void {
-  const layout = board();
-  if (!pageById(layout, at.here)) at.here = layout.pages[0]!.id;
-  const found = reachable(layout);
-  drawPageHead(found);
-  drawFacts(found);
-  drawGrid();
-  /* The list in the sidebar carries which page is open and what each costs,
-   * and both change here. It belongs to the shell, so it is asked to repaint
-   * rather than reached into - the layers test forbids the other direction. */
-  paintPages();
-}
-
-// The parts ask standing.ts to redraw, and this is the drawing they get. Once,
-// at load, before anything is wired.
-usePaint(render);
+/* render() is standing.svelte.ts's and is one line: the note that the layout
+ * moved. It used to be here, because it was the four calls that redrew the four
+ * parts of this editor in the right order - the page head, the facts line, the
+ * grid, and the list in the sidebar - and it had to live where all four could be
+ * named. Every one of those is a component reading the layout now, so there is
+ * no order to get right and nothing to call. adr/0025. */
 
 export function wireEditor(): () => void {
-  /* The page's name is the field that renames it, the way the Sammlung's is
-   * one floor up. Typed straight into the page, saved on the debounce that
-   * every other field here uses - no sheet, no Fertig, nothing to dismiss. */
-  const named = byId<HTMLInputElement>("appPageName");
-  named.oninput = () => {
-    page().name = named.value;
-    /* The sidebar row for this page carries the same name, so it is repainted
-     * with every keystroke - a handful of rows, and the alternative is a list
-     * that disagrees with the field above it until something else happens. */
-    paintPages();
-    saveSoon();
-  };
-
-  byId<HTMLButtonElement>("appPageStart").onclick = () => {
-    board().home = page().id;
-    commit();
-  };
-
-  byId<HTMLButtonElement>("appPageDelete").onclick = () => {
-    void askDelete(page());
-  };
-
   /* The list of pages under the open Sammlung in the sidebar. Handed over
    * rather than drawn here for the reason the grid panel is: the sidebar is
    * the shell's, an editor may import the shell and not the other way round
    * (tests/unit/layers.test.ts), and a talker Sammlung must not be given a
-   * list of pages when this editor leaves the page. */
-  collectionPages(drawPageList);
+   * list of pages when this editor leaves the page.
+   *
+   * A component where it was a function taking a container. What the shell does
+   * with it is the same thing - put it under the open row - and what it costs
+   * the shell is one mount rather than a call on every render. */
+  collectionPages(PageList);
 
   /* The package used to be added here, as an entry in the ⋯ beside the
    * Sammlung's name - before that it was a filled button in the work head, and
-   * templates/board.ts has why that symmetry was given up.
+   * Board.svelte has why that symmetry was given up.
    *
    * It is the shell's own export entry now, under the same label and out of
    * the same key it always used. What this editor was adding was never a
-   * second act, only the same one reached from the other side of the seam:
-   * the shell's entry opened a sheet asking what the file was for, and a
-   * tablet Sammlung has one honest answer, so it was given the door directly
-   * instead. That sheet leads with the Sammlung's own target now and asks
-   * nothing where there is nothing to ask - collections.ts's exportsFor() is
-   * where which doors a target has is decided - so the entry is one entry
-   * again and this editor has nothing to add to that menu.
+   * second act, only the same one reached from the other side of the seam.
    *
    * Nothing crossed the seam to make that true. The shell already knew the
    * Target, which is what core/editor.ts's registry is keyed by, and
    * tests/unit/layers.test.ts still holds the arrow pointing one way. */
 
-  /* The grid and the press timings are panels in the sheet behind that same ⋯,
-   * and unchanged by any of this. Taken back with the rest when this editor
-   * leaves the page: the shell outlives it, and a talker Sammlung must not be
-   * offered a grid to resize - nor a hold time, which is the tablet viewer's
-   * to honour and no part of the device's firmware.
+  /* The grid and the press timings are panels in the sheet behind that same ⋯.
+   * Taken back with the rest when this editor leaves the page: the shell
+   * outlives it, and a talker Sammlung must not be offered a grid to resize -
+   * nor a hold time, which is the tablet viewer's to honour and no part of the
+   * device's firmware.
    *
    * In the order they are drawn, the grid first: it is what somebody opens this
    * sheet for, and Bedienung is set once for a user and then left alone. */
-  collectionSheetPanel([
-    { name: "collectionEditor", build: gridPanel },
-    { name: "collectionAccess", build: accessPanel },
-  ]);
+  collectionSheetPanel(sheetPanels());
   return () => {
     collectionPages(null);
     collectionSheetPanel(null);
@@ -184,7 +144,7 @@ export const app: Editor = {
    *
    * The colour is deliberately not "fill" here, and this is not the same
    * decision as the `?? "fill"` two readers make of a layout that has no such
-   * field - see wordColor() in standing.ts and app_package.ts's. Those two are
+   * field - see wordColor() in standing.svelte.ts and app_package.ts's. Those two are
    * about a Sammlung drawn before the field existed, which has to keep looking
    * the way it was drawn; this is about a Sammlung being drawn now, which has
    * nothing to keep. So the value is written rather than left to a fallback,

@@ -15,7 +15,7 @@ import type { AppLayout } from "../../src/core/types.js";
  * on a dark key.
  *
  * So the suggestion is asserted here as part of the *answer*, before anything
- * draws it. What it looks like is shell/sheet.ts's and ui.css's; what it is -
+ * draws it. What it looks like is shell/sheet.svelte.ts's and ui.css's; what it is -
  * offered for these words, offered even when the collection has nothing, and
  * never offered for a word that merely starts the same way - is this file's.
  */

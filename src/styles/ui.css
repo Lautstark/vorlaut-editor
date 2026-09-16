@@ -355,7 +355,7 @@ button, select, input, textarea { font-family: inherit; }
    is now a token - --accent-ink is the same idea solved rather than guessed,
    and it comes out at 6.0:1. */
 /* `.play` stood here: the 40px square the voice list's ▶ was drawn as. It had
-   exactly one emitter, voiceRow() in shell/voices.ts, and it left with it -
+   exactly one emitter, the voice rows, which are @lautstark/stimmquelle/voice-picker's, and it left with it -
    the button is `.voices__play` now and components.css draws it, with tabular
    numerals this rule never had because the per cent it prints is the module's
    idea rather than this one's. The editors' own play buttons never wore this
@@ -795,7 +795,7 @@ dl.transfer dd { margin: 0; font-size: 14px; }
    vocabulary it is written in - .btn, .tab, the tokens - comes from
    @lautstark/design one layer down. */
 /* The page over the board: its own head, one line of facts, and nothing else.
-   A path, a row of page tiles and a picker stood here; templates/board.ts holds
+   A path, a row of page tiles and a picker stood here; editor-app/Board.svelte holds
    the argument for why all three are gone and where each of them went. */
 
 /* The head. The name is the field that renames it, so it is a field that does
@@ -856,7 +856,7 @@ dl.transfer dd { margin: 0; font-size: 14px; }
 .facts__one:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* The one zero that is a fault. A page leading nowhere is a leaf and most
    pages are leaves; nothing leading to a page that is not the start page is a
-   page the tablet cannot reach. Only the second is coloured - drawFacts(). */
+   page the tablet cannot reach. Only the second is coloured - editor-app/Facts.svelte. */
 .facts__zero { color: var(--warn, #c76a00); }
 
 /* What the open number says. Text links with middots between them: a row of
@@ -1306,7 +1306,7 @@ a.factlinks__line:hover { text-decoration: underline; }
  *
  * --home-plate is set on the element from HOME_TONES, and #homeTone is the
  * filter those same numbers are - mounted once with the frame, which is what
- * templates/frame.ts means by a filter being reachable by id from anywhere in
+ * shell/Shell.svelte means by a filter being reachable by id from anywhere in
  * the document. invert(1) is not this map; the note there says why. */
 /* Every way back to the start page, coloured or not.
  *
@@ -1369,7 +1369,7 @@ a.factlinks__line:hover { text-decoration: underline; }
   pointer-events: none;
 }
 /* The other SVG in the page, and the opposite kind: nothing to look at, only
-   something for a filter: rule to point at by id. templates/frame.ts mounts
+   something for a filter: rule to point at by id. shell/Shell.svelte mounts
    it and says why it is there rather than inside the sheet that uses it.
 
    Taken out of the flow entirely rather than hidden with [hidden] or
@@ -1799,7 +1799,7 @@ dialog.sheet--page { max-width: 520px; }
 /* The third thing a search comes back with: hits that are the nearest the
    collection holds rather than the word that was typed. Above the grid and
    outside it, because the grid scrolls and this must not scroll off the
-   pictures it is about - see drawPick() in shell/sheet.ts.
+   pictures it is about - see shell/pieces/Pick.svelte.
 
    --text-dim rather than the --text-faint the sentences inside the box wear.
    Those replace the results and are read because there is nothing else to
@@ -1843,7 +1843,7 @@ dialog.sheet--page { max-width: 520px; }
    cell is a little column and the row it is in grows by the height of that
    word. That is the point rather than a cost: it is the one thing in the box
    the collection did not answer with, and a tile that took exactly the room a
-   hit takes would be a hit. See homeTile() in shell/sheet.ts.
+   hit takes would be a hit. See the prescribed tile in shell/pieces/Pick.svelte.
 
    White is the grid's rendering rule and this is the exception to it. The
    exception is declared rather than smuggled in: the dark plate, the caption
@@ -1857,7 +1857,7 @@ dialog.sheet--page { max-width: 520px; }
    not scheme-dependent: this is the tablet's tile, and what the tile looks
    like does not change when the editor goes light. */
 .pick__hit--home { background: var(--home-plate); }
-/* #homeTone is mounted with the frame - see templates/frame.ts, which says why
+/* #homeTone is mounted with the frame - see shell/Shell.svelte, which says why
    a colour matrix cannot be a CSS filter shorthand and why invert(1) is not
    this map. */
 .pick__hit--home img { filter: url(#homeTone); }
@@ -1873,7 +1873,7 @@ dialog.sheet--page { max-width: 520px; }
    label is cut is a button nobody presses. */
 .pick__acts { display: flex; flex-wrap: wrap; gap: 8px; }
 /* The whole row goes while a square is being chosen, because nothing in it
-   applies then - see beginCrop() in shell/sheet.ts. [hidden] is the user
+   applies then - see the crop in shell/pieces/Pick.svelte. [hidden] is the user
    agent's rule and loses to the display above, the same way it loses to
    .reveal and .scrim further up this file. */
 .pick__acts[hidden] { display: none; }
@@ -1885,7 +1885,7 @@ dialog.sheet--page { max-width: 520px; }
   display: flex; align-items: center; gap: 8px; cursor: pointer;
   font-size: 13px;
 }
-/* And here it had been losing all along. sheet.ts has always set .hidden on
+/* And here it had been losing all along. the picture column has always set .hidden on
    this label when there is no picture to cross out, and the display above has
    always beaten it - so a key with no picture offered to cross one out, which
    is the "permanently there and permanently dead" the comment above the
@@ -1923,7 +1923,7 @@ dialog.sheet--page { max-width: 520px; }
 /* A row whose control is a button takes the width the button needs, not the
    column's. A dropdown is not one of those: it answers a question the way the
    fields above and below it do, so it spans the row as they do - see the note
-   at dropdown() in shell/sheet.ts for why it wears .field rather than .btn.
+   at shell/pieces/Dropdown.svelte for why it wears .field rather than .btn.
    The anchor is what the row is handed; the trigger inside it is already
    width: 100% from .field. */
 .form__row > .btn { justify-self: start; }
@@ -1990,7 +1990,7 @@ dialog.sheet--page { max-width: 520px; }
 
 /* An open list, kept inside the sheet.
 
-   fit() in shell/sheet.ts measures the room the body has left and writes a
+   fit() in shell/sheet.svelte.ts measures the room the body has left and writes a
    max-height; these two are the drawing half of it. Without the overflow the
    cap would only cut the last rows off, and without the flip a menu near the
    foot - the eleven word classes - would be capped at nothing worth opening.
@@ -2032,7 +2032,8 @@ dialog.sheet--page { max-width: 520px; }
    with the path: a page's name is now the field that renames it, and the two
    acts left have words of their own over the board - see .pagehead.
 
-   On the talker it is on every tab, not only the current one - see drawTabs().
+   On the talker it is on every tab, not only the current one - see
+   editor-diy/Tabs.svelte.
    Hidden with `visibility`, which keeps the box: that strip reflowed on every
    switch, because the tab being left grew a control and the tab being arrived
    at lost one, and every tab after them slid; those tabs are also dragged to
@@ -2129,7 +2130,7 @@ dialog.sheet--page { max-width: 520px; }
    design that wrote the first half into the product would work in most German
    houses and strand the rest with no way back - so all four are typed the
    first time, and only the ones worth doubting are quiet the next.
-   shell/tabletSend.ts takes the flag off the moment one is touched. */
+   shell/tabletSend.svelte.ts takes the flag off the moment one is touched. */
 .address-row__box[data-known="1"] {
   background: transparent;
   border-color: var(--line);
@@ -2149,7 +2150,7 @@ dialog.sheet--page { max-width: 520px; }
 .address-row__note[hidden] { display: none; }
 
 /* The ways on from a finished export, in the foot beside the one that
-   dismisses it - see shell/packageExport.ts, which fills this after the file
+   dismisses it - see shell/packageExport.svelte.ts, which fills this after the file
    exists rather than when the sheet opens.
 
    `display: contents`, so the buttons are the foot's own flex items: a box
