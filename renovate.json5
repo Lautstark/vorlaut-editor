@@ -1,58 +1,51 @@
 // Renovate, for this repository.
 //
-// Everything general lives in Lautstark/.github, which is where the preset
-// moved on 2026-08-28; it was written here to be lifted without an edit, and
-// it was. What is left below is the part that is true of this repository and
-// of no other, and that is the whole point of the split.
+// Everything general - when updates arrive, what groups with what, what may
+// merge itself, and since 2026-09-16 how the family's own packages and the
+// toolchain are handled - lives in Lautstark/.github and is true of every
+// repository. What is here is the part that is true of this one and would be
+// wrong to inherit.
+//
+// The .json5 is spelled out on purpose: the //path/to/file syntax implies a
+// .json extension, so omitting it looks for a file that is not there and
+// Renovate stops before it does anything. The shorter "owner/repo:name" form
+// implies it too.
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
-
-  // The .json5 is spelled out on purpose: the //path/to/file syntax implies
-  // a .json extension, so omitting it looks for a file that is not there
-  // and Renovate stops before it does anything. The shorter "owner/repo:name"
-  // form implies it too, so it cannot be used for this file either.
   extends: ["github>Lautstark/.github//renovate-shared.json5"],
 
   packageRules: [
     // -----------------------------------------------------------------------
-    // The four shared packages: Renovate does not touch them
+    // The shared packages: what "a bump is a decision" means since 2026-09-16
     // -----------------------------------------------------------------------
     //
-    // @lautstark/bildquelle, design, sicherung and stimmquelle are pinned as
-    // github: dependencies by release tag, and none is on npm:
+    // Until that date this file disabled Renovate for @lautstark/** outright:
+    // the packages were github: tags, hard for the npm manager to follow, and
+    // a bump of one was a decision rather than an update - made by a person
+    // moving the pin, with pins.js saying when one had fallen behind.
     //
-    //     "@lautstark/stimmquelle": "github:Lautstark/stimmquelle#v2.7.0"
+    // The packages are on npmjs.org now, released from their main branches by
+    // CI, and the decision has not gone away; it has moved to where the
+    // information is. The package's author makes it in the commit subject -
+    // feat is a minor, fix a patch, feat! a major - and this repository's
+    // tests make it again on the branch Renovate pushes. So the shared preset
+    // says: a minor or a patch of a shared package merges to main on its own
+    // once the tests here are green, and a major waits for a person with the
+    // changelog in front of them. That rule is not repeated here.
     //
-    // Renovate can be made to follow those, but not with the npm manager that
-    // finds them: it needs git-refs or github-tags wired up by hand, with a
-    // versioning scheme told to it, per package. docs/packages.md already
-    // records that neither Renovate nor Dependabot bumps a github: dependency
-    // reliably, tag or sha.
-    //
-    // It is disabled here rather than configured, for a reason that is not
-    // about the plumbing: **a bump of these is a decision, not an update.**
-    // A refresh that moves section 1 or 2 of stimmquelle's contract
-    // re-renders every recording on every device in the field. Its CHANGELOG
-    // says which edits a consumer has to make, and it means it. A pull
-    // request that arrives on a Monday morning and merges itself is the wrong
-    // shape for that.
-    //
-    // What keeps the pins from going stale is a check rather than a service:
-    //
-    //     node node_modules/@lautstark/design/pins.js
-    //
-    // runs early in both workflows, asks each repository for its newest tag,
-    // and names the pins that are behind. It warns and never fails.
-    //
-    // This rule is also the clearest thing that must NOT move into the shared
-    // preset, and it did not: Lautstark/.github holds the schedule, the
-    // grouping and the automerge policy, and names no package anywhere. This
-    // is about four specific packages and one specific contract, and a
-    // repository that inherited it would be silently opting out of updates to
-    // dependencies it does not have.
+    // One package is the exception, and it is kept here rather than in the
+    // preset because it is about what this repository does with it:
+    // @lautstark/bildquelle owns the METACOM folder and the licensing rule
+    // that no byte of it leaves the browser. A green test suite is not the
+    // answer to "may this change what leaves"; a person reading the release
+    // note is. So a bump of bildquelle, whatever its size, arrives as a branch
+    // and a dashboard entry and waits. This is one line to flip the day that
+    // reads as too careful.
     {
-      matchPackageNames: ["@lautstark/**"],
-      enabled: false,
+      matchPackageNames: ["@lautstark/bildquelle"],
+      groupName: "bildquelle",
+      automerge: false,
+      labels: ["dependencies", "shared", "licensing"],
     },
 
     // -----------------------------------------------------------------------
