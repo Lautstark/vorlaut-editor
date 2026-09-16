@@ -69,20 +69,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# The browser half is TypeScript now, so plain `node` cannot run these
-# harnesses. vite-node can - it is vitest's own loader, already installed, and
-# it resolves imports exactly the way the bundle does. Deliberately no build
-# step in between: a frozen reference compared against compiled output has
-# stopped measuring the source it names.
+# The browser half is TypeScript, and plain `node` runs it: node strips types
+# itself since 22.18, and tests/node_ts.mjs adds the one thing it does not do -
+# resolving the `.js` names the sources import each other by to the `.ts`
+# files they are. Until 2026-09-16 vite-node did this, and it was the reason
+# these two repositories could not leave vitest 2. Deliberately no build step
+# in between: a frozen reference compared against compiled output has stopped
+# measuring the source it names.
 #
-# The binary rather than `npx vite-node`, because npx reads its first argument
-# as a command name and would try to execute the harness itself.
-JS_RUNNER = str(ROOT / "node_modules" / ".bin" / "vite-node")
+# --disable-warning: node 22 announces type stripping as experimental on
+# stderr, and stderr here is what a failure is reported with.
+JS_RUNNER = ["node", "--disable-warning=ExperimentalWarning",
+             "--import", str(ROOT / "tests" / "node_ts.mjs")]
 
 
 def have_js() -> bool:
-    """Whether the loader is installed. `npm install` puts it there."""
-    return Path(JS_RUNNER).exists()
+    """Whether node is on PATH. Nothing has to be installed for this half."""
+    return shutil.which("node") is not None
 
 REFERENCE = ROOT / "tests" / "reference"
 LOCK = REFERENCE / "obf.lock.json"
@@ -518,7 +521,7 @@ def ask_node(jobs: dict) -> dict:
         json.dump(jobs, handle)
         payload = handle.name
     try:
-        result = subprocess.run([JS_RUNNER, str(DRIVER), payload],
+        result = subprocess.run([*JS_RUNNER, str(DRIVER), payload],
                                 capture_output=True, text=True)
     finally:
         Path(payload).unlink(missing_ok=True)

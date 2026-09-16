@@ -62,8 +62,9 @@ PREFLIGHT = HERE.parent / "tools" / "installcheck.mjs"
 def install_is_current() -> bool:
     """Whether node_modules holds the versions package.json pins.
 
-    Three of the tests below drive node_modules/.bin/vite-node, so a stale
-    install reaches this file too. The rule itself lives in
+    The frozen-reference test below runs src/ under plain node and needs no
+    install for that (tests/node_ts.mjs); what it compares against is still
+    what package.json pins, so a stale install reaches this file too. The rule itself lives in
     tools/installcheck.mjs and is not restated here: two implementations of one
     rule drift, and a drifted staleness check is a worse thing to own than none.
 

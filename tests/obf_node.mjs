@@ -50,11 +50,12 @@ async function answered(work) {
 /* The jobs come from a file named on the command line, not from stdin.
  *
  * They used to come down a pipe, read with readFileSync(0). That works under
- * plain node and does not under vite-node, which is what runs this now that
- * obf is TypeScript: it leaves stdin non-blocking, so the synchronous read
- * throws EAGAIN, and reading it asynchronously instead let the process exit
- * before a large payload had arrived - a clean exit printing nothing, which is
- * the worst of the three. A file has none of those failure modes. */
+ * plain node and did not under vite-node, which ran this from 2026-08 until
+ * 2026-09-16: it left stdin non-blocking, so the synchronous read threw
+ * EAGAIN, and reading it asynchronously instead let the process exit before
+ * a large payload had arrived - a clean exit printing nothing, which is the
+ * worst of the three. A file has none of those failure modes, and there is
+ * no reason to go back to the pipe now that plain node runs this again. */
 const jobs = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const out = { helpers: [], exports: [], imports: [], licensing: [],
               obz: [], unobz: [] };
