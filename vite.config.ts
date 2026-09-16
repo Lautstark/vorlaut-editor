@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { piperVendor } from "@lautstark/stimmquelle/vite";
 
 /* A project site is served from /<repo>/, so the bundle needs that base.
@@ -22,7 +23,16 @@ export default defineConfig({
    * were the sort a second consumer rediscovers the hard way. `vendor/` is
    * still the directory, because piperRuntime() in backend/local.ts defaults
    * to the same name; the two are ends of one string. */
-  plugins: [piperVendor()],
+  /* The compiler, and then piper's runtime pieces.
+   *
+   * svelte() reads svelte.config.js beside this file for its one setting, which
+   * is TypeScript inside components. Nothing else about the page changed: the
+   * entry point is still index.html naming src/main.ts, the stylesheets are
+   * still imported there rather than linked, and styles/ui.css is still the
+   * product's own layout - the components carry the same classes ui.css has
+   * always drawn, which is what makes the visual baselines the check on this
+   * conversion rather than a thing to re-record after it. adr/0025. */
+  plugins: [svelte(), piperVendor()],
   build: {
     outDir: "dist",
     /* One page, which is why rollupOptions.input is not here.

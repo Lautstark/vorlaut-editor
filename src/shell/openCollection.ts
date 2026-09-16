@@ -3,8 +3,8 @@
  * shell/collections.ts used to hold the list, the four things somebody can
  * do to it and the sidebar around it in one file, and every part read the
  * same `held` at the top. The parts are their own modules now - the list
- * (collections.ts), making one (collectionNew.ts), exporting one
- * (collectionExport.ts), the column and the drawer (sidebar.ts) - and this is
+ * (collections.ts), making one (collectionNew.svelte.ts), exporting one
+ * (collectionExport.ts), the column and the drawer (sidebar.svelte.ts) - and this is
  * what they share: the list as it was last read, the name a Sammlung goes
  * by, and the one way to ask for the list to be painted again.
  */

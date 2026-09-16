@@ -250,7 +250,7 @@ describe("the round trip", () => {
 
   it("refuses a file from a newer vorlaut rather than reading it wrong", async () => {
     await seed();
-    // The code, not a sentence: this module has no language. ui/settings.ts is
+    // The code, not a sentence: this module has no language. ui/settings.svelte.ts is
     // where it becomes one.
     await expect(importBackup({ ...(await exportEverything(NOTICE)), version: 99 }))
       .rejects.toThrow(TOO_NEW);

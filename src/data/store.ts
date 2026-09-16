@@ -596,7 +596,7 @@ export async function close(): Promise<void> {
  * aborts - so that database is still sitting there, at its own version, with
  * everything in it, and the page is looking at an open() that rejected. What a
  * person is owed before they agree to discard any of it is the contents, in a
- * file. These two are how shell/rescue.ts gives it to them.
+ * file. These two are how shell/rescue.svelte.ts gives it to them.
  */
 
 /** Every record in whatever version of the database is on disk, without

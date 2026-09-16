@@ -16,7 +16,7 @@ import { check } from "./harness.js";
  * An import is how that stops being true, and it stops being true quietly:
  * `import { render } from "../editor-diy/editor.js"` in the save loop compiles,
  * runs, and passes every other test in this repository. It was there, three
- * times over, before this file existed - save.ts, picker.ts and voices.ts each
+ * times over, before this file existed - save.ts, picker.ts and voices.svelte.ts each
  * reached for the board renderer - and each of those was one line that made
  * the shell unable to draw anything else.
  *
@@ -57,13 +57,22 @@ const inEditor = (name: string): boolean =>
  *  editors and mounts whichever one a Sammlung needs. Nothing else. */
 const ROOT = new Set(["main.ts", "app.ts"]);
 
-/** Every module under src/, however deep, as a path under src/. */
+/** Every module under src/, however deep, as a path under src/.
+ *
+ * A component is a module for every purpose this file has. `.svelte` arrived on
+ * 2026-09-16 (adr/0025) and carries imports exactly as a `.ts` file does - the
+ * difference is that half the file is markup, which the two readers below skip
+ * for free because neither of them is looking for anything markup contains. A
+ * walk that stopped at `.ts` would have gone quiet about most of the page: the
+ * shell's frame, both editors' boards and every sheet body are components, and
+ * `import { diy } from "../editor-diy/editor.js"` written inside one would have
+ * been invisible to the rule this file exists to hold. */
 function modules(dir = SRC): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out.push(...modules(full));
-    else if (entry.endsWith(".ts")) {
+    else if (entry.endsWith(".ts") || entry.endsWith(".svelte")) {
       out.push(relative(SRC, full).split(/[\\/]/).join("/"));
     }
   }
@@ -79,6 +88,9 @@ function importsOf(name: string): string[] {
   const out: string[] = [];
   for (const [, spec] of text.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)) {
     if (!spec.startsWith(".")) continue;           // a package, not our file
+    /* `./x.js` is what the browser would fetch and `./x.ts` is the file; a
+       component is imported under its own name and needs no rewriting, which is
+       what leaving anything that is not `.js` alone comes to. */
     out.push(posix
       .normalize(posix.join(posix.dirname(name), spec))
       .replace(/\.js$/, ".ts"));
@@ -182,6 +194,19 @@ check("no editor reaches into another editor", strays.length === 0,
  *  specifiers in general, so that a fifth one costs a line and a look. */
 const PINNED_PACKAGES = [
   "@lautstark/", "@diffusionstudio/", "idb", "onnxruntime-web",
+  /* The fifth, and the one that cost an argument: Svelte, since adr/0025.
+   *
+   * It is not a `github:` tag like the four Lautstark ones and not a library the
+   * page calls into like the two below - it is a compiler, and what is imported
+   * from it at run time is `mount`, `unmount` and the type of a component. Three
+   * modules name it: main.ts mounts the shell, app.ts mounts whichever editor a
+   * Sammlung needs, and shell/collections.ts mounts the page list under a row.
+   * Every other use of it is the compiler's own output, which never appears as a
+   * specifier in this tree.
+   *
+   * A line here rather than a rule about bare specifiers in general, which is
+   * what this list is for: a sixth costs a line and a look. */
+  "svelte",
 ];
 
 /** The one absolute URL the page loads code from, and the argument for it.
@@ -274,7 +299,7 @@ check("and it read the imports it was meant to", specifiers > all.length,
  * merge it forbids is the one somebody will propose without ever seeing the
  * sentence forbidding it.
  *
- * shell/tabletSend.ts is the same shape approached from the other end. It does
+ * shell/tabletSend.svelte.ts is the same shape approached from the other end. It does
  * not write a package - it takes bytes that already exist - so §5.2's own
  * words do not reach it, and the rule that does is the reason behind them.
  * Three exports write a file here. Exactly one of them has anywhere to send it:
@@ -289,23 +314,43 @@ check("and it read the imports it was meant to", specifiers > all.length,
  * from anywhere else is the first line of the thing being prevented, it
  * compiles, and it passes every other test in this repository.
  */
-const SEND = "shell/tabletSend.ts";
-const MAY_SEND = "shell/packageExport.ts";
+const SEND = "shell/tabletSend.svelte.ts";
+/** Who may name it.
+ *
+ * One of these is the rule and two of them are the door's own face.
+ *
+ * `packageExport` is the rule: it is the export that has a tablet at the end of
+ * it, and the argument above is about which *export* may reach this module.
+ *
+ * `SendBody` and `SendFoot` are the sheet this module opens, which was four
+ * hundred lines of document.createElement inside it until adr/0025 and is two
+ * components beside it now. What they take is the shape of the state object the
+ * module hands them - the address, whether it is running, what went wrong - and
+ * a component that could not name that could not draw the sheet at all. Adding
+ * them here is therefore the conversion paying the bill the rule charges rather
+ * than the rule being loosened: the set is still a set, a fourth name still
+ * costs an edit and an argument, and the thing being prevented - a second export
+ * finding its way to `send()` - is untouched, because neither of these two
+ * exports anything and neither is imported by anything but this module's sheet.
+ */
+const MAY_SEND = new Set([
+  "shell/packageExport.svelte.ts", "shell/SendBody.svelte", "shell/SendFoot.svelte",
+]);
 
 check(`there is a ${SEND} for this rule to be about`, all.includes(SEND),
       all.includes(SEND) ? SEND : `no ${SEND} under src/`);
 
 const reaching = all.filter((name) =>
-  name !== MAY_SEND && importsOf(name).includes(SEND));
+  !MAY_SEND.has(name) && importsOf(name).includes(SEND));
 
-check("only the app package's export may reach the send door",
+check("only the app package's export, and the door's own sheet, may reach the send door",
       reaching.length === 0,
       reaching.length ? reaching.map((one) => `${one} -> ${SEND}`).join(", ")
-                      : `${MAY_SEND} alone, out of ${all.length} modules`);
+                      : `${[...MAY_SEND].join(", ")}, out of ${all.length} modules`);
 
 /* And that the one permitted caller really does import it, so the rule above
  * is not green because nothing reaches the module at all - which is what it
  * would say the day somebody moved the send door and left this behind. */
 check("and the export it belongs to does reach it",
-      importsOf(MAY_SEND).includes(SEND),
-      importsOf(MAY_SEND).join(", "));
+      importsOf("shell/packageExport.svelte.ts").includes(SEND),
+      importsOf("shell/packageExport.svelte.ts").join(", "));

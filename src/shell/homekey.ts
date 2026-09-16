@@ -103,7 +103,7 @@ const HOUSE = {
  * two tones, `out = light - (light - plate) * in`.
  *
  * Written out as the five columns of an feColorMatrix, because that is what
- * both readers take - templates/frame.ts mounts the filter these numbers are,
+ * both readers take - shell/Shell.svelte mounts the filter these numbers are,
  * and the Android viewer hands the same numbers to ColorFilter.colorMatrix. A
  * shared shape rather than two derivations of one formula, so the editor and
  * the tablet cannot drift by a rounding.
@@ -198,7 +198,7 @@ export const asksForHome = (word: string): boolean =>
   ASKS.has(word.trim().toLowerCase());
 
 /* Kept out of this file deliberately: anything that draws. The tile is
- * shell/sheet.ts's, the filter is templates/frame.ts's, and the dark plate is
+ * shell/sheet.svelte.ts's, the filter is shell/Shell.svelte's, and the dark plate is
  * a rule in ui.css. What is here is which picture, where it comes from, and
  * what a press to take it costs - the three answers a caller cannot work out
  * and must not each hold a copy of. */

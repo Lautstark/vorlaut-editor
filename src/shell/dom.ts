@@ -1,5 +1,20 @@
-// The two things every module reaches for: an element and the status line.
+// The one thing every module reaches for: the status line.
 import { announcer, type Announcer } from "@lautstark/design/toast";
+//
+// `byId` was the other, and it has gone with the markup it looked into. It was
+// re-exported from @lautstark/werkzeuge/dom so that `byId("appGrid")` read the
+// same in every module; what it did was find an element some template had
+// mounted, by a string the compiler has no opinion about, and the header of
+// tests/unit/layers.test.ts is a page and a half about what that costs - an
+// element id is a dependency the module graph cannot see, and five of them
+// were found when the second editor was written. The templates are components
+// now and a component holds its own nodes, so there is nothing left to look
+// up. adr/0025.
+//
+// The ids themselves are still on the elements. They are what e2e/ presses and
+// what ui.css draws a handful of rules against, and taking them off would have
+// made this conversion a change to the page rather than to how it is drawn.
+// What went is anything in src/ *reading* one.
 //
 // The menu that used to sit below them is @lautstark/design/menu now - it was
 // the same file in mitreden, and bildhaft's was the same behaviour in a
@@ -11,25 +26,6 @@ import { announcer, type Announcer } from "@lautstark/design/toast";
 // network standing open beside the one the seam provides, which is the
 // arrangement the seam exists to end. Nothing under static/ has a URL to give
 // it any more except the ARASAAC download in backend/local.js.
-/* An element that has to be there, by id.
- *
- * This was `$` until 2026-09-02, and the throw and the type parameter that
- * stood here are @lautstark/werkzeuge/dom's now — this file is where they came
- * from. Two reasons for the move, and the second is the one that matters.
- *
- * `$` reads well inside one file and is a name nobody can search for in a
- * package. And across the family the *finding* had two names while the word
- * `el` was doing the finding in mitreden and the **making** in bildhaft and
- * wochenwerk — one word, two contradictory meanings, in sibling repositories
- * somebody moves between every week. `el` makes, `byId` finds, everywhere.
- *
- * What survives unchanged is the argument: throwing rather than answering null,
- * because a null is not a case to handle — it is a template and a module that
- * have drifted apart, and 267 call sites should not each carry a branch for a
- * page that is already broken.
- */
-export { byId } from "@lautstark/werkzeuge/dom";
-import { byId } from "@lautstark/werkzeuge/dom";
 
 /** How long a resting status stays lit. Long enough to be read by somebody who
  *  looked over, short enough to be gone by the next time anything happens. */
@@ -37,7 +33,7 @@ const RESTS_FOR = 4000;
 
 /* The line in the header, and the one place this page reports anything.
  *
- * The element carries role="status" - see templates/header.ts - so writing to
+ * The element carries role="status" - see shell/WorkHead.svelte - so writing to
  * it is also announcing it, which it was not before. That rule is
  * @lautstark/design/toast's now: it takes the region this page already mounted
  * and never adds or removes it, which is the failure mitreden and bildhaft
@@ -47,22 +43,35 @@ const RESTS_FOR = 4000;
  * the half worth naming: a failed write arriving while "saved" was fading must
  * not inherit its fade.
  *
- * Made lazily, because #status arrives with templates/header.ts and this
- * module is imported before that has run. */
+ * **The element is handed in rather than looked up**, which is the one change
+ * this module needed. It used to be `byId("status")`, made lazily because the
+ * span arrives with a template and this module is imported before that has
+ * run. The span is a component's now, so the component says which node it is -
+ * once, as it mounts - and the laziness that guarded against the ordering goes
+ * with the ordering.
+ *
+ * Every call before that point is dropped on purpose. The window is the same
+ * one the lazy lookup had and is over before the first round trip; a status
+ * said into a page that has not drawn yet is a status nobody could have read,
+ * and the alternative - a queue - would replay it into a page that has since
+ * moved on. */
 let line: Announcer | undefined;
-const region = (): Announcer =>
-  (line ??= announcer(byId("status"), {
+
+/** Called once, by the component that mounts the region. */
+export function useStatus(node: HTMLElement): void {
+  line = announcer(node, {
     rest: RESTS_FOR,
-    onRest: (node) => node.classList.add("status--rested"),
+    onRest: (one) => one.classList.add("status--rested"),
     /* The inverse, and the reason it is not optional here: a fade that has
        already fired leaves its class behind, so without this the line came
        back reading "not saved yet" still wearing the fade that belonged to
        "saved". The e2e for that is editor_app.spec.ts, "the saved status steps
        back, without taking its words with it". */
-    onWake: (node) => node.classList.remove("status--rested"),
-  }));
+    onWake: (one) => one.classList.remove("status--rested"),
+  });
+}
 
-export const status = (text: string): void => { region().say(text); };
+export const status = (text: string): void => { line?.say(text); };
 
 /**
  * Said, and then allowed to go quiet.
@@ -81,48 +90,5 @@ export const status = (text: string): void => { region().say(text); };
  * have made two dozen tests race a timer for a fact that had not changed.
  */
 export function statusRests(text: string): void {
-  region().rests(text);
+  line?.rests(text);
 }
-
-/**
- * The negation cross, as an element to lay over a picture.
- *
- * German AAC negates by crossing the symbol out rather than by using a
- * different picture - see Slot.negated in core/types.ts, which is the field
- * this draws. bildhaft draws the same mark from the same convention; the two
- * do not share code, and the shape is what they agree on.
- *
- * SVG with preserveAspectRatio="none", so one element serves a square preview,
- * a cell the width of a grid column and a tile: the stroke stretches to
- * whatever box it is put in and still reads as one line across the whole
- * symbol rather than through its middle. Sized and coloured by CSS - see
- * .negate in ui.css - because the page has two colour schemes and a hex
- * written here would be right in one of them.
- *
- * aria-hidden, and deliberately: what the cross means belongs on the thing it
- * is over, in words, not on the decoration. The cell's own accessible name
- * carries it.
- */
-export function negationCross(): SVGSVGElement {
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("class", "negate");
-  svg.setAttribute("viewBox", "0 0 100 100");
-  svg.setAttribute("preserveAspectRatio", "none");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  const path = document.createElementNS(NS, "path");
-  path.setAttribute("d", "M12 12 L88 88 M88 12 L12 88");
-  svg.appendChild(path);
-  return svg;
-}
-
-// Replaces the contents of a box with one line of prose. Used where a result
-// list has something to say instead of results.
-export function say(box: HTMLElement, text: string): void {
-  box.innerHTML = "";
-  const note = document.createElement("p");
-  note.textContent = text;
-  box.appendChild(note);
-}
-

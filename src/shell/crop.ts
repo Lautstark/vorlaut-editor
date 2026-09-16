@@ -21,7 +21,7 @@
  *
  * ## Why there is no second dialog
  *
- * shell/sheet.ts's head says a modal over a modal to choose a symbol is the
+ * shell/sheet.svelte.ts's head says a modal over a modal to choose a symbol is the
  * thing this design set out to remove, and .pick__preview is already a square
  * box with `overflow: hidden` and `position: relative` - it *is* the viewport.
  * So the crop happens inside it and the column's own two buttons change what

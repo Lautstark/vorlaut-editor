@@ -1,11 +1,11 @@
 /* Taking a file in as a new Sammlung, and what to say when it will not go.
  *
- * Extracted from settings.ts's wireImport(), which was the only caller until
+ * Extracted from settings.svelte.ts's wireImport(), which was the only caller until
  * shelf.ts arrived. Two callers doing this in two places is how the second one
  * ends up forgetting addSymbols() — and a Sammlung whose pictures never landed
  * is a board of grey crosses that looks like the file was wrong.
  *
- * The order below is load-bearing and is settings.ts's, unchanged:
+ * The order below is load-bearing and is settings.svelte.ts's, unchanged:
  *
  *   read → create the Sammlung → add the pictures → open it → draw
  *

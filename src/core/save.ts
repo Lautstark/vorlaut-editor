@@ -3,12 +3,13 @@
 // saveTimer, unsaved and layoutVersion live here and nowhere else. They were
 // three of the eleven at the top of the old script; nothing outside this file
 // ever read them, and nothing can now.
-import { byId, status, statusRests } from "../shell/dom.js";
+import { status, statusRests } from "../shell/dom.js";
+import { conflict } from "../shell/conflict.svelte.js";
 import { reason } from "./errors.js";
 import { loadLayout, saveLayout } from "../backend/index.js";
 import { state } from "./state.js";
 import { t } from "./texts.js";
-import { paintCollectionLanguage } from "../shell/voices.js";
+import { paintCollectionLanguage } from "../shell/voices.svelte.js";
 import { editorFor, FIRST_TARGET, showEditorFor } from "./editor.js";
 import type { Layout } from "./types.js";
 
@@ -60,7 +61,7 @@ export async function load() {
   // switched now - this paints one control in a sheet nothing else here
   // touches - and it stays first only because that is where it has always been.
   sayCollectionLanguage();
-  byId("conflict").classList.remove("show");
+  conflict.shown = false;
   unsaved = false;
   status("");
   // Which editor this Sammlung needs, put on screen, and then told to let go
@@ -202,9 +203,8 @@ async function doSave() {
     if (result.conflict) {
       // Nothing was written. Which of the two states counts is not this
       // page's decision to make.
-      byId("conflictText").textContent =
-        t("ui.conflict_elsewhere");
-      byId("conflict").classList.add("show");
+      conflict.text = t("ui.conflict_elsewhere");
+      conflict.shown = true;
       status(t("ui.not_saved"));
       return;
     }
@@ -220,34 +220,37 @@ async function doSave() {
     // came back without a layout at all takes the same branch, and for the
     // same reason: it has certainly not saved what is on screen.
     if (!saved || comparable(saved) !== comparable(state.layout)) {
-      byId("conflictText").textContent =
-        t("ui.conflict_mismatch");
-      byId("conflict").classList.add("show");
+      conflict.text = t("ui.conflict_mismatch");
+      conflict.shown = true;
       status(t("ui.saved_wrong"));
       return;
     }
 
     unsaved = false;
-    byId("conflict").classList.remove("show");
+    conflict.shown = false;
     statusRests(t("ui.saved"));
   } catch (error) {
     status(t("ui.save_failed", { error: reason(error) }));
   }
 }
 
-// The conflict banner, and the two ways out of it. Wired here rather than in
-// main.js because both answers are about layoutVersion, which does not leave
-// this file.
-export function wireConflict() {
-  // Deliberately force through what this page holds.
-  byId<HTMLButtonElement>("overwriteBtn").onclick = async () => {
-    const fresh = await loadLayout(editorFor(FIRST_TARGET).blank());
-    layoutVersion = fresh.version;
-      await save();
-  };
-  byId<HTMLButtonElement>("reloadBtn").onclick = () => load();
+/** The banner's first answer: deliberately force through what this page holds.
+ *
+ * Here rather than on the component that draws the button, because it is about
+ * layoutVersion, which does not leave this file. The other answer is load()
+ * above and needs no wrapper. shell/Conflict.svelte binds both. */
+export async function keepMine(): Promise<void> {
+  const fresh = await loadLayout(editorFor(FIRST_TARGET).blank());
+  layoutVersion = fresh.version;
+  await save();
+}
 
-  // Whoever closes the window while something is outstanding should notice.
+/** Whoever closes the window while something is outstanding should notice.
+ *
+ * The whole of what is left of wireConflict(), which also bound the banner's
+ * two buttons by id. They are handlers on shell/Conflict.svelte now; this one
+ * is a listener on the window and belongs to nothing that is drawn. */
+export function wireConflict() {
   window.addEventListener("beforeunload", (event) => {
     if (!unsaved) return;
     event.preventDefault();

@@ -28,22 +28,24 @@ import "@lautstark/design/tokens/vorlaut.css";
 import "@lautstark/design/components.css";
 import "./styles/ui.css";
 
-// The page's structure. Each of these sits beside the module that owns it;
-// index.html is the shell they go into, and the order here is the order they
-// appear on screen.
+// The page's structure, as one component tree.
 //
-// The editors are not here. frame.ts lays out the page with a hole in the
-// middle of it - the list of Sammlungen down the side, and #editor - and one
-// editor fills the hole, but *which* one is a fact about the Sammlung that has
-// not been read out of the database yet. So the templates mount in app.ts, at
-// the moment a layout arrives and again whenever a different one does. This
-// file and app.ts are still the two that may name both halves; see
-// tests/unit/layers.test.ts.
-import * as frame from "./shell/templates/frame.js";
-import * as footer from "./shell/templates/footer.js";
-import * as settingsSheet from "./shell/templates/settings_sheet.js";
-import * as collectionSheet from "./shell/templates/collection_sheet.js";
-import * as legal from "./shell/templates/legal.js";
+// There were five mount points here and each was a markup string put in the
+// document with innerHTML: a frame, a footer, and three sheets, every one of
+// them filled in afterwards by a module that looked its elements up by id.
+// shell/Shell.svelte is all five, and the words are read out of the text table
+// where they are drawn rather than in a pass that named a hundred elements.
+// adr/0025.
+//
+// The editors are not here, and that has not changed. Shell.svelte lays out the
+// page with a hole in the middle of it - the list of Sammlungen down the side,
+// and #editor - and one editor fills the hole, but *which* one is a fact about
+// the Sammlung that has not been read out of the database yet. So app.ts mounts
+// the editor's own page at the moment a layout arrives and again whenever a
+// different one does. This file and app.ts are still the two that may name both
+// halves; see tests/unit/layers.test.ts.
+import { flushSync, mount } from "svelte";
+import Shell from "./shell/Shell.svelte";
 import { initTheme } from "@lautstark/design/theme";
 
 // Before anything renders, though the attribute it would set is already set by
@@ -52,23 +54,20 @@ import { initTheme } from "@lautstark/design/theme";
 // keeps it right when the OS turns over under a page that is following it.
 initTheme("vorlaut.theme");
 
-frame.render();
-// Under the board, and it is the last thing in the page's flow. The two after
-// it are dialogs: they sit over everything when they are open and take no room
-// at all when they are not, so where they mount decides nothing.
+// Synchronously, which is what keeps the ordering this file has always had: the
+// structure is in the document before the module that wires it is imported. See
+// the note in app.ts for why a separate module is what makes that hold rather
+// than a comment asking people to be careful.
 //
-// There were three. The symbol picker was one, and it went when both editors
-// grew a picture column of their own - see src/shell/sheet.ts. The sheets that
-// replaced it are built when they open and removed when they close, so they
-// mount nowhere at all.
-footer.render(document.querySelector("main")!);
-settingsSheet.render();
-// The Sammlung's own, behind the ⋯ beside its name. Mounted here with the
-// other two and for the same reason: it is one document, it opens over
-// everything and it takes no room at all while it is closed, so where it sits
-// in the flow decides nothing.
-collectionSheet.render();
-legal.render();
+// flushSync() is the half of that which is Svelte's rather than the module
+// graph's. mount() puts the elements in the document and *queues* the effects;
+// the components use theirs to hand over the four nodes the page's wiring needs
+// - the status line, the name field, the list of Sammlungen, and the hole an
+// editor's board is mounted into. A queue drains on a microtask, and the two
+// awaits below happen to be two of those, so in practice this was already
+// ordered - which is exactly the kind of "in practice" the note above is about.
+mount(Shell, { target: document.body });
+flushSync();
 
 /* Before anything reads the database. Where a folder is the store it is the
    truth, and a first paint from the browser's copy would be a board that changes

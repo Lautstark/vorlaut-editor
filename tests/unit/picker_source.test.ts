@@ -84,7 +84,8 @@ describe("the collection the picker offers", () => {
   });
 
   it("reads a tablet Sammlung the same way", () => {
-    // Both editors open the same picture column, through drawPick(). One fix.
+    // Both editors open the same picture column, shell/pieces/Pick.svelte.
+    // One fix.
     state.layout = tablet("metacom:ja");
     expect(offeredSource()).toBe("metacom");
     state.layout = tablet("arasaac-1.png");

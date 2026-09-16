@@ -107,11 +107,11 @@ export const LANGUAGES = BUILT_IN_LANGUAGES;
  * a segmented row and the other two controls are a menu and a dialog field,
  * so there is nothing for them to adopt. The real one is that "the language of
  * this page" and "the language of this Sammlung" are different questions -
- * boot.ts and shell/voices.ts have the long version - and the set of languages
- * a device menu can be built in is this product's answer rather than the
- * design system's. So this stays the table, and voices.ts hands it to the
- * picker as `names` so that the row and the two controls beside it cannot
- * start disagreeing about what a language is called. */
+ * boot.ts and shell/voices.svelte.ts have the long version - and the set of
+ * languages a device menu can be built in is this product's answer rather than
+ * the design system's. So this stays the table, and voices.svelte.ts hands it
+ * to the picker as `names` so that the row and the two controls beside it
+ * cannot start disagreeing about what a language is called. */
 export const LANGUAGE_NAMES: Record<string, string> = { de: "Deutsch", en: "English" };
 export let TEXTS = BUILT_IN_TEXTS[LANG];
 

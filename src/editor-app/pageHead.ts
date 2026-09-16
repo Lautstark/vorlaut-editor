@@ -1,4 +1,10 @@
-/* --- The page: its own head, and the two facts about it -------------------
+/* --- The page: what its head and its facts line are drawn from ------------
+ *
+ * The drawing itself is editor-app/PageHead.svelte and editor-app/Facts.svelte.
+ * What is left here is the three questions those two ask that are about the
+ * graph rather than about the screen - what leads to this page, what the
+ * cheapest way to it is, and what the buttons on it do - and the question asked
+ * before a page goes. adr/0025.
  *
  * What stood here was a path, a row of tiles and a picker, and all three are
  * gone. The row showed the pages the page on screen opened, so it was empty on
@@ -21,230 +27,12 @@
  * sidebar; where a page leads is the buttons on the board, each of which
  * carries a corner that follows it.
  */
-import { byId } from "../shell/dom.js";
 import type { AppButton, AppLayout, AppPage } from "../core/types.js";
 import { t } from "../core/texts.js";
 import { confirmDialog } from "../shell/dialog.js";
 import { deletePage, inboundTo, opens, pageById, sharedColumn } from "./pages.js";
 import { effortByPage, pageEffort } from "./effort.js";
-import { at, board, commit, decimals, goToPage, page, pageName, render } from "./standing.js";
-
-/**
- * The page's own head: the name, and the two things that can be done to it.
- *
- * **The name is the field that renames it.** shell/templates/frame.ts settles
- * that for a Sammlung - "renaming a thing you are looking at should be typing
- * over its name" - and a page was the last name in this editor that had to go
- * through a menu to change. With renaming out of it, the ⋯ that used to sit
- * beside the path held two entries, and then one, and a menu with one entry is
- * not a menu.
- *
- * **The ⌂ appears only on the start page.** It is a mark for a state, not a
- * switch for one: on any other page it would be a house standing over a page
- * that is not the start page, which is the sort of thing a reader has to test
- * by pressing. Getting there is an act, so it is an act - a quiet word at the
- * right end, and only where it would do something.
- */
-export function drawPageHead(found: Set<string>): void {
-  const layout = board();
-  const one = page();
-
-  const house = byId("appPageHome");
-  house.hidden = one.id !== layout.home;
-  house.textContent = "⌂";
-  house.title = t("ui.app_page_home");
-
-  const name = byId<HTMLInputElement>("appPageName");
-  name.setAttribute("aria-label", t("ui.app_page_name"));
-  name.placeholder = t("ui.app_page_n", { n: layout.pages.indexOf(one) + 1 });
-  // Only when it is not the field somebody is typing in: writing the value
-  // back under the caret moves it to the end on every keystroke.
-  if (document.activeElement !== name) name.value = one.name;
-
-  const warn = byId("appPageWarn");
-  warn.hidden = found.has(one.id);
-  warn.textContent = "⚠";
-  warn.title = t("ui.app_page_unreachable");
-
-  const start = byId<HTMLButtonElement>("appPageStart");
-  start.hidden = one.id === layout.home;
-  start.textContent = t("ui.app_page_home_set");
-
-  const remove = byId<HTMLButtonElement>("appPageDelete");
-  remove.textContent = t("ui.app_page_delete");
-}
-
-/**
- * One line of numbers: what leads here, where it leads, what it costs, how much
- * is on it. Three of the four unfold.
- *
- * **Both directions are real edges.** inboundTo() and opens() are the graph
- * read forwards and backwards; nothing here is derived from a walk that had to
- * pick a parent. That is the whole difference between this line and the five
- * drawings it replaces.
- *
- * **Only one zero is a fault, and only it is coloured.** Nothing leading to a
- * page that is not the start page is the state that makes it invisible on the
- * tablet. A page leading nowhere is a leaf, and most pages of a board are
- * leaves - a board where every page led onward would be a board with no words
- * on it. Colouring that would be an editor tutting at ordinary work.
- *
- * The start page has nothing leading to it and that is not a fault either: the
- * tablet opens with it. Its zero is left plain and says so when unfolded.
- */
-export function drawFacts(found: Set<string>): void {
-  const layout = board();
-  const one = page();
-  const row = byId("appFacts");
-  row.innerHTML = "";
-
-  const into = inboundPages(layout, one.id);
-  const outOf = opens(layout, one.id);
-  const cost = effortByPage(layout).get(one.id);
-
-  row.appendChild(fact("in", t("ui.app_page_here"), into.length,
-    into.length === 0 && one.id !== layout.home));
-  row.appendChild(dot());
-  row.appendChild(fact("out", t("ui.app_page_from_here"), outOf.length, false));
-  row.appendChild(dot());
-  if (cost === undefined) {
-    const nil = document.createElement("span");
-    nil.className = "facts__plain facts__zero";
-    nil.textContent = t("ui.app_page_unreachable");
-    row.appendChild(nil);
-  } else {
-    row.appendChild(fact("cost", t("ui.app_page_effort"), cost, false));
-  }
-  row.appendChild(dot());
-  const n = one.buttons.length + sharedColumn(layout).length;
-  row.appendChild(fact("full", "", n, false));
-
-  drawUnfolded(found, into, outOf, cost);
-}
-
-/** The separator between two facts. A middot rather than a rule: the line is a
- *  sentence of numbers, and a rule would make it a toolbar. */
-function dot(): HTMLElement {
-  const mark = document.createElement("span");
-  mark.className = "facts__dot";
-  mark.setAttribute("aria-hidden", "true");
-  mark.textContent = "·";
-  return mark;
-}
-
-/** One number, pressable, with what it says beside it.
- *
- * The button count is the one that reads the other way round - "12 Tasten"
- * rather than "Tasten 12" - because it is a quantity of things and the two
- * before it are directions with a count. So it composes its own words and this
- * takes them whole. */
-function fact(key: string, label: string, value: number, bad: boolean): HTMLElement {
-  const shown = key === "cost" ? decimals.format(value) : String(value);
-  const one = document.createElement("button");
-  one.type = "button";
-  one.className = "facts__one" + (bad ? " facts__zero" : "");
-  one.textContent = key === "full"
-    ? t(value === 1 ? "ui.app_pages_buttons_one" : "ui.app_pages_buttons", { n: value })
-    : `${label} ${shown}`;
-  one.setAttribute("aria-expanded", String(at.unfolded === key));
-  one.onclick = (event) => {
-    event.stopPropagation();
-    at.unfolded = at.unfolded === key ? null : key;
-    render();
-  };
-  return one;
-}
-
-/**
- * What the open number says, under the line.
- *
- * Text links with middots between them, not chips: a row of names reads as a
- * sentence and a row of boxes reads as a second toolbar, which is the thing
- * this whole change is removing.
- */
-function drawUnfolded(found: Set<string>, into: AppPage[], outOf: AppPage[],
-                      cost: number | undefined): void {
-  const layout = board();
-  const box = byId("appFactLinks");
-  box.innerHTML = "";
-  box.hidden = at.unfolded === null;
-  if (at.unfolded === null) return;
-
-  /* How full the page is, which is the fact the bare count was missing.
-   *
-   * Twelve buttons means something different on a 3x5 than on a 6x11, and the
-   * difference is not cosmetic: `field_size` in the effort number grows with
-   * every button on screen, so how full a page is *is* part of what it costs.
-   * The second line is the shared first column, which is on this page and on
-   * every other one - it is counted here because it is drawn here, and said
-   * because somebody wondering why a page has more buttons than they put on it
-   * deserves the answer. */
-  if (at.unfolded === "full") {
-    const { rows, columns } = layout.grid;
-    const column = sharedColumn(layout);
-    const drawn = [...page().buttons, ...column];
-    const fill = document.createElement("span");
-    fill.className = "factlinks__line";
-    fill.textContent = t("ui.app_page_buttons_fill",
-                         { n: drawn.length, all: rows * columns });
-    box.appendChild(fill);
-    const split = kinds(drawn, column.length);
-    if (split.length) box.appendChild(counted(split));
-    return;
-  }
-
-  if (at.unfolded === "cost") {
-    if (cost === undefined) { box.hidden = true; return; }
-    box.appendChild(sum(layout));
-    const what = document.createElement("span");
-    what.className = "factlinks__line";
-    what.textContent = t("ui.app_page_effort_what", { n: decimals.format(1) });
-    box.appendChild(what);
-    /* Where the arithmetic comes from, and deliberately nothing more. The CARE
-     * numbers published beside it average this over English core word lists,
-     * so they are no yardstick for a German board - see effort.ts. */
-    const more = document.createElement("a");
-    more.className = "factlinks__line";
-    more.href = "https://www.openaac.org/vocabularies/";
-    more.target = "_blank";
-    more.rel = "noreferrer noopener";
-    more.textContent = t("ui.app_page_effort_more");
-    box.appendChild(more);
-    return;
-  }
-
-  const set = at.unfolded === "in" ? into : outOf;
-  if (!set.length) {
-    const nil = document.createElement("span");
-    nil.className = "factlinks__line";
-    if (at.unfolded === "out") {
-      nil.textContent = t("ui.app_page_opens_none");
-    } else if (page().id === layout.home) {
-      nil.textContent = t("ui.app_page_here_home");
-    } else {
-      nil.className += " facts__zero";
-      nil.textContent = t("ui.app_page_here_none");
-    }
-    box.appendChild(nil);
-    return;
-  }
-  set.forEach((one, index) => {
-    if (index) box.appendChild(dot());
-    const link = document.createElement("button");
-    link.type = "button";
-    link.className = "factlinks__to";
-    if (!found.has(one.id)) {
-      const lost = document.createElement("span");
-      lost.className = "tab__lost";
-      lost.textContent = "⚠";
-      lost.title = t("ui.app_page_unreachable");
-      link.appendChild(lost);
-    }
-    link.appendChild(document.createTextNode(pageName(one)));
-    link.onclick = (event) => { event.stopPropagation(); goToPage(one.id); };
-    box.appendChild(link);
-  });
-}
+import { at, board, commit } from "./standing.svelte.js";
 
 /**
  * What the buttons on this page do, counted, and only where there are any.
@@ -267,7 +55,7 @@ function drawUnfolded(found: Set<string>, into: AppPage[], outOf: AppPage[],
  * The shared first column comes last, because it is the answer to the question
  * the fill line provokes: why does this page hold more than somebody put on it.
  */
-function kinds(drawn: AppButton[], shared: number): Array<[string, number]> {
+export function kindsOf(drawn: AppButton[], shared: number): Array<[string, number]> {
   const tally = new Map<string, number>();
   const add = (key: string) => tally.set(key, (tally.get(key) ?? 0) + 1);
   for (const one of drawn) {
@@ -291,34 +79,6 @@ function kinds(drawn: AppButton[], shared: number): Array<[string, number]> {
     .map((key) => [t(`ui.app_page_kind_${key}`), tally.get(key)!]);
 }
 
-/** A label and a number, then the next: the same shape as the facts line over
- *  it, which is what lets both avoid a plural of every word in them. */
-function counted(pairs: Array<[string, number]>): HTMLElement {
-  const line = document.createElement("span");
-  line.className = "factlinks__line factlinks__sum";
-  line.textContent = pairs.map(([label, n]) => `${label} ${n}`).join("  ·  ");
-  return line;
-}
-
-/** The arithmetic, page by page along the cheapest way here. Shown rather than
- *  summarised, because a number somebody is asked to act on should be one they
- *  can check. */
-function sum(layout: AppLayout): HTMLElement {
-  const line = document.createElement("span");
-  line.className = "factlinks__line factlinks__sum";
-  const cost = effortByPage(layout);
-  const parts: string[] = [];
-  for (const one of cheapestWay(layout, page().id)) {
-    const own = decimals.format(pageEffort(layout, one));
-    parts.push(parts.length
-      ? `+ ${decimals.format(1)} + ${own} (${pageName(one)})`
-      : `${own} (${pageName(one)})`);
-  }
-  const total = cost.get(page().id);
-  line.textContent = total === undefined ? "" : parts.join(" ");
-  return line;
-}
-
 /**
  * The pages passed through on the cheapest way from the start page, ending on
  * this one.
@@ -329,7 +89,7 @@ function sum(layout: AppLayout): HTMLElement {
  * costs themselves: step back to whichever neighbour the total was reached
  * through.
  */
-function cheapestWay(layout: AppLayout, pageId: string): AppPage[] {
+export function cheapestWay(layout: AppLayout, pageId: string): AppPage[] {
   const cost = effortByPage(layout);
   const out: AppPage[] = [];
   let here = pageById(layout, pageId);
@@ -361,7 +121,7 @@ function cheapestWay(layout: AppLayout, pageId: string): AppPage[] {
  * inboundTo() answers in buttons, because that is what the delete question
  * counts. The line over the board answers in pages: two buttons on one page
  * leading here is one place to go back to, not two. */
-function inboundPages(layout: AppLayout, pageId: string): AppPage[] {
+export function inboundPages(layout: AppLayout, pageId: string): AppPage[] {
   const out: AppPage[] = [];
   const seen = new Set<string>();
   for (const one of layout.pages) {

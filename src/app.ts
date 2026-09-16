@@ -35,28 +35,29 @@
 // remove and the shape the layers test cannot see. It was a #releaseBtn that
 // found it, twice; that button has gone with the device path, and the rule it
 // taught has not.
+import { mount, unmount, type Component } from "svelte";
 import { reason } from "./core/errors.js";
 import { openNamed } from "./shell/shelf.js";
-import { byId, status} from "./shell/dom.js";
+import { editorHole } from "./shell/holes.js";
+import { status } from "./shell/dom.js";
 import { t, applyTexts } from "./core/texts.js";
 import { load, wireConflict } from "./core/save.js";
 import { editor, haveEditor, useEditors } from "./core/editor.js";
 import { diy } from "./editor-diy/editor.js";
-import * as diyBoard from "./editor-diy/templates/board.js";
+import DiyBoard from "./editor-diy/Board.svelte";
 import { app, wireEditor as wireApp } from "./editor-app/editor.js";
-import * as appBoard from "./editor-app/templates/board.js";
+import AppBoard from "./editor-app/Board.svelte";
 import { ensureCollection, nameIfUnnamed, paintCollections, wireCollections }
   from "./shell/collections.js";
 import { loadSources } from "./shell/picker.js";
-import { forgetAzureKey, openSettings, saveAzure, wireLanguage } from "./shell/voices.js";
-import { wireSymbolFolder, wireImport, wireData, wireSources } from "./shell/settings.js";
-import { wireLegal } from "./shell/legal.js";
+import { wireLanguage } from "./shell/voices.svelte.js";
+import { wireData, wireSymbolFolder } from "./shell/settings.svelte.js";
 import { subscribeMetacom } from "./data/symbols.js";
 import { exportEverything } from "./data/backup.js";
 import { ablage } from "./data/folder.js";
 import { onChanged } from "./data/changed.js";
 import { onBlocked } from "./data/store.js";
-import { offerRescue, sayCarried, wireRescue } from "./shell/rescue.js";
+import { offerRescue, sayCarried, wireRescue } from "./shell/rescue.svelte.js";
 import { Sicherung } from "@lautstark/sicherung";
 
 /* The standing backup. `exportEverything` is what it is handed and the only
@@ -89,15 +90,26 @@ const backup = new Sicherung({
 // on a board is one file.
 onChanged(() => backup.schedule());
 
-/** Empties the two holes the frame leaves, so that whichever editor is coming
- *  next is the only one in the page.
+/** Whichever editor's page is in the hole, so that it can be taken out again.
  *
- *  Both, and always both: the work head's slot is as much a place a stale
- *  #releaseBtn can survive in as #editor is, and it is the one that would be
- *  missed, because it holds one button and looks like furniture. */
-function clearEditor(): void {
-  byId("editor").replaceChildren();
-  byId("collectionAction").replaceChildren();
+ *  The hole was emptied with `replaceChildren()` and there were two of them -
+ *  the work head's slot is as much a place a stale #releaseBtn can survive in
+ *  as #editor is, and it was the one that would be missed, because it holds one
+ *  button and looks like furniture. Both editors put nothing in the slot as
+ *  things stand (conventions.md §3.3, and the note in each Board), and what
+ *  fills the hole is a component - so what is held is what was mounted, and
+ *  unmounting it is what takes its handlers with it. */
+let showing: Record<string, unknown> | null = null;
+
+/** Puts one editor's page in the hole, having taken the last one out.
+ *
+ *  Called on every switch *between* targets and never twice in a row for one -
+ *  core/editor.ts's showEditorFor() is what promises that, and it matters here
+ *  for the reason it always did: a remount would rebuild every element the
+ *  editor has a handler on. */
+function showBoard(board: Component<Record<string, never>>): void {
+  if (showing) { void unmount(showing); showing = null; }
+  showing = mount(board, { target: editorHole() });
 }
 
 export function start(): void {
@@ -111,10 +123,7 @@ export function start(): void {
   useEditors({
     diy: {
       editor: diy,
-      mount: () => {
-        clearEditor();
-        diyBoard.render(byId("editor"), byId("collectionAction"));
-      },
+      mount: () => { showBoard(DiyBoard); },
       // Nothing, and it used to be three. wireRelease() bound the transfer
       // button and subscribed to the build mark; wireBuildEntry() put a build
       // into the ⋯ beside the Sammlung's name. Both went with the device path
@@ -128,10 +137,7 @@ export function start(): void {
     },
     app: {
       editor: app,
-      mount: () => {
-        clearEditor();
-        appBoard.render(byId("editor"), byId("collectionAction"));
-      },
+      mount: () => { showBoard(AppBoard); },
       wire: wireApp,
     },
   });
@@ -157,26 +163,17 @@ export function start(): void {
   subscribeMetacom(() => { if (haveEditor()) editor().render(); });
   wireCollections();
   wireSymbolFolder();
-  wireSources();
-  wireImport();
   wireData(backup);
   wireLanguage();
-  wireLegal();
 
-  // One entrance, at the foot of the sidebar. There was a gear in a page-wide
-  // header as well; the header has gone, and design.md §3.4 settles the
-  // placement - two doors to one sheet is two things to keep in step for no
-  // gain.
-  byId<HTMLButtonElement>("settingsLink").onclick = openSettings;
-  // The cross in the corner is the only way out of either sheet, because there
-  // is nothing to confirm or to abandon: everything in both is already
-  // written. The Sammlung's has no entrance here - it opens from the ⋯ beside
-  // the name it belongs to, which shell/collections.ts wires.
-  byId<HTMLButtonElement>("voiceClose").onclick = () => byId<HTMLDialogElement>("voices").close();
-  byId<HTMLButtonElement>("collectionSheetClose").onclick =
-    () => byId<HTMLDialogElement>("collectionSheet").close();
-  byId<HTMLButtonElement>("azureSave").onclick = saveAzure;
-  byId<HTMLButtonElement>("azureForget").onclick = forgetAzureKey;
+  /* Eight lines of `byId(...).onclick = ...` stood here and are gone: the gear
+   * at the foot of the sidebar, the two sheets' corner crosses, the Azure
+   * panel's Save and its Remove, and - one call further up - the board import,
+   * the two symbol-source buttons and the three legal links. Every one of them
+   * is a handler on the component that draws the button now, which is the whole
+   * of what this conversion is. What is left in this function is the wiring
+   * that has no element behind it: the registry, the notifiers, the backup, and
+   * the boot chain at the foot. adr/0025. */
 
   /* The one failure the chain below cannot report on its own.
    *

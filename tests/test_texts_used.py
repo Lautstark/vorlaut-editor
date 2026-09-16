@@ -99,11 +99,19 @@ def sources() -> list[Path]:
     From `git ls-files` rather than a walk, for the reason the rest of this
     suite uses it: an untracked file is not part of the repository, and a file
     deleted but not yet committed still is.
+
+    `.svelte` is on the list since 2026-09-16 (adr/0025), and it is where most
+    of the lookups are now. The labels used to be filled in by one pass in
+    core/texts.ts that named a hundred elements by id; they are written where
+    they are drawn, which is inside a component. Without this extension the
+    check would have called four hundred live keys dead on the first run - and,
+    had anybody quietened it the other way, would have gone on calling the
+    genuinely dead ones live for ever.
     """
     listed = subprocess.run(["git", "ls-files"], cwd=ROOT, check=True,
                             capture_output=True, text=True).stdout.split("\n")
     return [ROOT / name for name in listed
-            if name.endswith((".ts", ".tsx", ".mjs", ".js", ".html"))
+            if name.endswith((".ts", ".tsx", ".mjs", ".js", ".html", ".svelte"))
             and (ROOT / name) != TABLE]
 
 

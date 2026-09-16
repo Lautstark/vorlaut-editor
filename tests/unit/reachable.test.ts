@@ -15,6 +15,14 @@ import { check } from "./harness.js";
  * a build that fails. This is what is left over once a bundler exists, and it
  * is smaller for it - no import map to follow, no vendored tree to skip.
  *
+ * **A component counts, and has to.** `.svelte` arrived on 2026-09-16
+ * (adr/0025), and most of what this page draws is components: a walk that
+ * stopped at `.ts` would have said nothing about a sheet body nobody mounts any
+ * more, which is exactly the dead code that looks like working code this file is
+ * about. They are reached the same way everything else is - something imports
+ * them - and the only difference is the extension, because a component is
+ * imported under its own name rather than as the `.js` a browser would fetch.
+ *
  * **One entry point again.** There were two while this repository served the
  * editor and the talker's loader page out of one bundle: they shared modules,
  * so they were walked together rather than one after the other, and walking
@@ -47,7 +55,8 @@ function modules(dir: string): string[] {
   for (const entry of readdirSync(resolve(ROOT, dir))) {
     const full = join(dir, entry);
     if (statSync(resolve(ROOT, full)).isDirectory()) out.push(...modules(full));
-    else if (entry.endsWith(".ts") && !entry.endsWith(".d.ts")) {
+    else if ((entry.endsWith(".ts") && !entry.endsWith(".d.ts"))
+             || entry.endsWith(".svelte")) {
       out.push(full.split(/[\\/]/).join("/"));
     }
   }

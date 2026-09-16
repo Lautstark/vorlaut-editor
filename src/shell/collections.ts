@@ -34,13 +34,14 @@
  *
  * What is here is the list, the name field, opening and deleting one, and the
  * wiring. The four things have their own modules beside this one where they
- * are more than a few lines: collectionNew.ts makes one, collectionExport.ts
- * writes one out, sidebar.ts is the column and the drawer, gridSizes.ts is
+ * are more than a few lines: collectionNew.svelte.ts makes one, collectionExport.ts
+ * writes one out, sidebar.svelte.ts is the column and the drawer, shell/pieces/Sizes.svelte is
  * the control both the new-Sammlung sheet and the tablet's grid panel draw,
  * and openCollection.ts is what all of them share.
  */
-import { byId, status } from "./dom.js";
-import { menuOn, type AddItem } from "@lautstark/design/menu";
+import { mount, unmount, type Component } from "svelte";
+import { status } from "./dom.js";
+import { type AddItem } from "@lautstark/design/menu";
 import { confirmDialog } from "./dialog.js";
 import { renameField, type RenameField } from "@lautstark/design/rename";
 import { drawCollections } from "@lautstark/design/collections";
@@ -50,20 +51,62 @@ import {
   renameCollection, useCollection,
 } from "../backend/index.js";
 import { editorFor, editorOf, FIRST_TARGET } from "../core/editor.js";
-import { openCollectionSettings } from "./voices.js";
+import { openCollectionSettings } from "./voices.svelte.js";
 import { state } from "../core/state.js";
 import { load, saveNow } from "../core/save.js";
 import { t } from "../core/texts.js";
 import { isApp } from "../core/types.js";
 import type { Layout } from "../core/types.js";
 import { chooseExport } from "./collectionExport.js";
-import { create } from "./collectionNew.js";
 import { defaultName, held, nameOf, usePaint } from "./openCollection.js";
-import { closeOnPick, wireSidebar } from "./sidebar.js";
+import { closeOnPick, restoreColumn } from "./sidebar.svelte.js";
 
-/** The bound name field, once wireCollections() has bound it. Held because
+/** The bound name field, once the work head has handed it over. Held because
  *  paintCollections() may only reach the input through it - see there. */
 let name: RenameField | null = null;
+/** The input itself, for the two things renameField() does not own: the
+ *  placeholder, which says whether there is a Sammlung at all, and whether the
+ *  field can be typed in. */
+let field: HTMLInputElement | null = null;
+
+/** The box the rows go in. Handed over by shell/Collections.svelte rather than
+ *  found by id: the element is that component's, and what is inside it is
+ *  @lautstark/design/collections' - which is why this module goes on writing
+ *  into it imperatively and the component writes it empty and never again. */
+let listNode: HTMLElement | null = null;
+
+export function useList(node: HTMLElement): void {
+  listNode = node;
+  drawList();
+}
+
+/* The name field, and the three things this module does to it.
+ *
+ * The debounce, the write on the way out, and the rule that a repaint never
+ * types over you are all @lautstark/design/rename's. What is left here is the
+ * half that is this product's: trimming, which Sammlung is being renamed, and
+ * what to say when the write fails. */
+/** Straight into the name, selected. The one thing a caller outside this file
+ *  does to the field, and it is here rather than reaching for the element:
+ *  making a Sammlung ends by putting the caret in the name it was given. */
+export function focusName(): void {
+  field?.focus();
+  field?.select();
+}
+
+export function useNameField(node: HTMLInputElement): void {
+  field = node;
+  name = renameField(node, async (typed) => {
+    const current = held.list.current;
+    if (!current) return;
+    try {
+      await renameCollection(current, typed.trim());
+      await paintCollections();
+    } catch (error) {
+      status(t("ui.save_failed", { error: reason(error) }));
+    }
+  });
+}
 
 /* --- Drawing ---------------------------------------------------------------- */
 
@@ -169,7 +212,6 @@ export async function paintCollections(): Promise<void> {
   drawList();
 
   const at = collections.findIndex((one) => one.id === current);
-  const field = byId<HTMLInputElement>("collectionName");
   // Through refresh() rather than by assigning, which is the whole reason that
   // function exists: it declines while the field is being typed in and while a
   // keystroke is still waiting out its debounce, so a repaint cannot put the
@@ -181,8 +223,10 @@ export async function paintCollections(): Promise<void> {
   // Optional only because the binding is module state: app.ts wires before it
   // paints and always has, so in practice there is always a field here.
   name?.refresh(at < 0 ? "" : collections[at]!.name);
-  field.placeholder = at < 0 ? t("ui.collection_name") : t("ui.collection_unnamed");
-  field.disabled = at < 0;
+  if (field) {
+    field.placeholder = at < 0 ? t("ui.collection_name") : t("ui.collection_unnamed");
+    field.disabled = at < 0;
+  }
 }
 
 // The modules that make, open and delete a Sammlung ask for this paint
@@ -235,10 +279,9 @@ export function paintOpenCollection(): void {
  * for the same reason: there is no second thing to add.
  */
 function drawList(): void {
+  if (!listNode) return;
   const { collections, current } = held.list;
-  const list = byId("collectionList");
-  list.setAttribute("aria-label", t("ui.collections"));
-  drawCollections(list, {
+  drawCollections(listNode, {
     rows: collections.map((one) => ({
       id: one.id, name: nameOf(one.name), count: counts.get(one.id),
       subtitle: subtitles.get(one.id),
@@ -246,15 +289,37 @@ function drawList(): void {
     open: current ? [current] : [],
     onPick: (id) => { closeOnPick(); void open(id); },
   });
+  placePages();
+}
 
-  if (!pages || !current) return;
-  const row = list.querySelector(".collections__item--active");
-  if (!row) return;
-  const into = document.createElement("div");
-  into.className = "pagelist";
-  into.id = "collectionPages";
-  row.after(into);
-  pages(into);
+/* The pages of the open Sammlung, put back under its row.
+ *
+ * **The box is made once and moved, never rebuilt.** drawCollections() throws
+ * every row away and draws them again, so the element this used to create on
+ * each paint was a different element each time - which was fine while its
+ * contents were drawn imperatively straight afterwards, and is not fine now
+ * that a component is mounted into it: a remount on every commit would take
+ * the keyboard out of the list somebody is arrowing through, on the very press
+ * that moved them. Moving a node keeps its children and keeps whatever is
+ * mounted in them, so `row.after()` is the whole of the work.
+ */
+function placePages(): void {
+  if (!listNode) return;
+  const row = listNode.querySelector(".collections__item--active");
+  if (!pageList || !held.list.current || !row) { host?.remove(); return; }
+  if (!host) {
+    /* An anchor rather than the list itself. `.pagelist` and the id used to be
+       on this element, and the editor filled it - which meant the shell owned
+       the box and the editor owned what was in it, for a list that is entirely
+       the editor's. A `display: contents` anchor is not in the layout at all,
+       so the component's own <div class="pagelist"> sits in the sidebar exactly
+       where this one did. Same arrangement as shell/pieces/Vanilla.svelte, and
+       for the same reason. */
+    host = document.createElement("div");
+    host.style.display = "contents";
+  }
+  row.after(host);
+  if (!shownPages) shownPages = mount(pageList, { target: host });
 }
 
 /** There is always one, and it has a name.
@@ -364,7 +429,7 @@ async function remove(): Promise<void> {
  *
  * This carried the tablet's grid card as well until the grid became a panel in
  * the Sammlung's own sheet - which is the same hand-over one floor along, and
- * voices.ts's collectionSheetPanel() is where it is now. What is left here is
+ * voices.svelte.ts's collectionSheetPanel() is where it is now. What is left here is
  * an act rather than a setting, which is what this menu is for.
  *
  * Registered by an editor's wire() and taken back by the teardown it answers
@@ -393,105 +458,87 @@ export function collectionMenuExtras(build: ((add: AddItem) => void) | null): vo
  * disappear when a different one is opened without anything having to remove
  * it.
  */
-let pages: ((into: HTMLElement) => void) | null = null;
+let pageList: Component<Record<string, never>> | null = null;
+/** The box, made once - see placePages() for why it is never remade. */
+let host: HTMLElement | null = null;
+/** What is mounted in it, so that it can be taken out again when an editor
+ *  leaves the page. */
+let shownPages: Record<string, unknown> | null = null;
 
-export function collectionPages(draw: ((into: HTMLElement) => void) | null): void {
-  pages = draw;
+export function collectionPages(draw: Component<Record<string, never>> | null): void {
+  if (shownPages) { void unmount(shownPages); shownPages = null; }
+  pageList = draw;
+  if (!draw) { host?.remove(); return; }
   if (held.list.current) drawList();
 }
 
-/**
- * Redraw only the pages, leaving the rows above and below them alone.
+/* paintPages() stood here and is gone, with nothing taking its place.
  *
- * Called on every render of the tablet editor - which page is open, what each
- * one is called and what each one costs all live here - so it may not go back
- * to the store or repaint the whole list. Where the container is not in the
- * page yet, the next drawList() puts it there.
- */
-export function paintPages(): void {
-  const into = document.getElementById("collectionPages");
-  if (!into || !pages) return;
-  into.replaceChildren();
-  pages(into);
+ * It redrew the page list alone, on every render of the tablet editor, because
+ * which page is open and what each one costs are drawn from the layout and the
+ * list had no other way to hear that the layout had moved. A component hears
+ * it: the list reads shell/live.svelte.ts's layout() like everything else the
+ * editors draw, and commit() already says so. One call site in
+ * editor-app/editor.ts went with it. */
+
+/* The four buttons this file used to bind by id - "+ Neue Sammlung", the two
+ * sidebar toggles and the ⋯ - are handlers on the components that draw them
+ * now. What is left for the page's wiring to do is the one answer that is
+ * stored rather than pressed. */
+export function wireCollections(): void {
+  restoreColumn();
 }
 
-export function wireCollections(): void {
-  byId<HTMLButtonElement>("collectionNew").onclick = () => { void create(); closeOnPick(); };
-  wireSidebar();
-
-  // The debounce, the write on the way out, and the rule that a repaint never
-  // types over you are all @lautstark/design/rename's now. What is left here is
-  // the half that is this product's: trimming, which Sammlung is being renamed,
-  // and what to say when the write fails.
-  name = renameField(byId<HTMLInputElement>("collectionName"), async (typed) => {
-    const current = held.list.current;
-    if (!current) return;
-    try {
-      await renameCollection(current, typed.trim());
-      await paintCollections();
-    } catch (error) {
-      status(t("ui.save_failed", { error: reason(error) }));
-    }
-  });
-
-  byId<HTMLButtonElement>("collectionMenu").onclick = (event) => {
-    event.stopPropagation();
-    menuOn(byId("collectionMenu"), (add) => {
-      /* One export, whatever kind of Sammlung this is.
-       *
-       * This was three entries until adr/0011's last open point was done -
-       * one per file - and they read as three acts when they are three shapes
-       * of one. What a person has is a Sammlung and something to put it on, so
-       * the menu says the act and chooseExport() leads with the one this
-       * Sammlung is for. The three writers behind it are untouched and stay
-       * untouched: exchange/SPEC.md §5.2 is a licence rather than a
-       * preference, and adr/0010 says what merging them would cost.
-       *
-       * **On a tablet Sammlung too, and that entry moved here to say so.** It
-       * used to come up a few lines down through extras?.(), added by
-       * editor-app under this very label, because the sheet behind this entry
-       * was a question a tablet Sammlung had no business being asked - it can
-       * only be written one way. That is still true and is now said in one
-       * place: exportsFor() holds which doors each target has, chooseExport()
-       * does not ask where there is nothing to ask, and a tablet Sammlung goes
-       * from this entry straight into its package the way it always did. Two
-       * doors to one act was two things to keep in step for no gain, which is
-       * the same argument that took the gear out of the page header.
-       *
-       * What a tablet Sammlung must still not be offered is unchanged, and
-       * exportsFor() is where it is argued: the talker's export refuses it and
-       * the document export writes an empty file, so neither is a card. */
-      add(t("ui.collection_export"), () => { chooseExport(); });
-      /* Whatever act the editor on screen has to add, which is none either way
-       * as things stand.
-       *
-       * A talker used to add the build written into a folder; that went with
-       * the build (adr/0011). A tablet used to add the package export; that is
-       * the entry above now, for the reason it gives. The hook stays because
-       * the shell outliving every editor is the thing it is for - the same
-       * bargain collectionPages() and collectionSheetPanel() make, and both of
-       * those still have a caller.
-       *
-       * The grid used to be here too and was the one entry in this menu that
-       * was a setting rather than an act. It is in the settings sheet now,
-       * behind the same ⋯, which is what the entry below opens. */
-      extras?.(add);
-      /* Then what this Sammlung is set to, rather than what can be done with
-       * it: the voice it speaks in, the grid a tablet's pages are on, and - on
-       * a talker - the language the device shows its own menu in. All of them
-       * are layout.json fields and all travel in an export. The first two were
-       * in the settings sheet at the foot of the sidebar until it turned out
-       * that a panel whose answer changes when you click a different row in
-       * the list is not a setting of the app; the grid came the other way,
-       * from an entry of its own directly above this one, because two doors to
-       * "what is this Sammlung set to" is one too many.
-       *
-       * Below the acts and above the delete. The delete stays last wherever it
-       * appears; everything else in this menu reads as "with this Sammlung, do
-       * X" and this one reads as "about this Sammlung", which is the weaker
-       * claim and so goes second. */
-      add(t("ui.collection_settings"), () => { void openCollectionSettings(); });
-      add(t("ui.collection_delete"), () => { void remove(); }, { danger: true });
-    });
-  };
+/** The menu beside the Sammlung's name. Handed to menuOn() by the component
+ *  that draws the ⋯, because the entries are the shell's and the button is the
+ *  work head's. */
+export function collectionMenu(add: AddItem): void {
+  /* One export, whatever kind of Sammlung this is.
+   *
+   * This was three entries until adr/0011's last open point was done - one per
+   * file - and they read as three acts when they are three shapes of one. What
+   * a person has is a Sammlung and something to put it on, so the menu says the
+   * act and chooseExport() leads with the one this Sammlung is for. The three
+   * writers behind it are untouched and stay untouched: exchange/SPEC.md §5.2
+   * is a licence rather than a preference, and adr/0010 says what merging them
+   * would cost.
+   *
+   * **On a tablet Sammlung too, and that entry moved here to say so.** It used
+   * to come up a few lines down through extras?.(), added by editor-app under
+   * this very label, because the sheet behind this entry was a question a
+   * tablet Sammlung had no business being asked - it can only be written one
+   * way. That is still true and is now said in one place: exportsFor() holds
+   * which doors each target has, chooseExport() does not ask where there is
+   * nothing to ask, and a tablet Sammlung goes from this entry straight into
+   * its package the way it always did.
+   *
+   * What a tablet Sammlung must still not be offered is unchanged, and
+   * exportsFor() is where it is argued: the talker's export refuses it and the
+   * document export writes an empty file, so neither is a card. */
+  add(t("ui.collection_export"), () => { chooseExport(); });
+  /* Whatever act the editor on screen has to add, which is none either way as
+   * things stand.
+   *
+   * A talker used to add the build written into a folder; that went with the
+   * build (adr/0011). A tablet used to add the package export; that is the
+   * entry above now, for the reason it gives. The hook stays because the shell
+   * outliving every editor is the thing it is for - the same bargain
+   * collectionPages() and collectionSheetPanel() make, and both of those still
+   * have a caller.
+   *
+   * The grid used to be here too and was the one entry in this menu that was a
+   * setting rather than an act. It is in the settings sheet now, behind the
+   * same ⋯, which is what the entry below opens. */
+  extras?.(add);
+  /* Then what this Sammlung is set to, rather than what can be done with it:
+   * the voice it speaks in, the grid a tablet's pages are on, and - on a
+   * talker - the language the device shows its own menu in. All of them are
+   * layout.json fields and all travel in an export.
+   *
+   * Below the acts and above the delete. The delete stays last wherever it
+   * appears; everything else in this menu reads as "with this Sammlung, do X"
+   * and this one reads as "about this Sammlung", which is the weaker claim and
+   * so goes second. */
+  add(t("ui.collection_settings"), () => { void openCollectionSettings(); });
+  add(t("ui.collection_delete"), () => { void remove(); }, { danger: true });
 }

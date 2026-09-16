@@ -148,7 +148,7 @@ export const folderOf = (path, root) => {
 };
 
 /**
- * Hits from one source, in the shape shell/sheet.ts renders: source, label,
+ * Hits from one source, in the shape shell/the picture column renders: source, label,
  * a URL for the preview, how well the hit answered — and whichever identifier
  * the pick step needs, `ref` for METACOM, `id` for ARASAAC.
  *

@@ -615,7 +615,7 @@ export interface Settings {
      writer of it wrote the literal `false` - it stopped being answerable when
      the search moved into the browser, where a folder is indexed by file name
      and there is no table to ship. The line that read it is documented at
-     metacomWord() in shell/settings.ts. */
+     metacomWord() in shell/settings.svelte.ts. */
   metacom: {
     path: string;
     ok: boolean;
@@ -662,7 +662,7 @@ export interface Settings {
    *
    *  Four numbers rather than a URL: a scheme, a port and a path are the
    *  product's to know, and the person copies a number off a screen. See
-   *  shell/tabletSend.ts, which is the only thing that reads or writes it. */
+   *  shell/tabletSend.svelte.ts, which is the only thing that reads or writes it. */
   tabletAddress?: string;
   local?: boolean;
 }
@@ -728,7 +728,7 @@ export interface OfferedVoice {
    *  @lautstark/stimmquelle/voice-picker's question now: it goes through
    *  labelOf(), which appends the code to the name and only where a twin
    *  actually forces it, so a list holding one Thorsten still says
-   *  "Thorsten". A code, never a word - see shell/voices.ts's pickable(). */
+   *  "Thorsten". A code, never a word - see shell/voices.svelte.ts's pickable(). */
   quality: string;
   /** Fetched before this voice first speaks. 0 for a cloud backend. */
   downloadBytes: number;
