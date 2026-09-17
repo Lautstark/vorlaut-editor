@@ -94,6 +94,35 @@ visible as a unit that way, which is worth more than a linear history.
 Delete the branch and its worktree afterwards, so `git worktree list` stays the
 dashboard rule 1 says it is.
 
+**And a worktree here costs two extra commands, because of `third_party/`.**
+Both were measured on 2026-09-17 rather than remembered, because both fail in a
+way that reads as something else.
+
+A new worktree does **not** carry the submodule — `git worktree add` makes the
+directory and leaves it empty. So `npm test` does not fail on your change, it
+throws `device/fixtures/ is not checked out` out of
+`tests/unit/device_facts.test.ts`, which is a file most tasks have no reason to
+open. One command, two seconds:
+
+```bash
+git submodule update --init
+```
+
+And once it *is* populated, `git worktree remove` refuses:
+`fatal: working trees containing submodules cannot be moved or removed`. It
+refuses from inside the worktree and from the main checkout alike, and it
+refuses after a plain `deinit` too. The pair that works:
+
+```bash
+git -C .claude/worktrees/<name> submodule deinit -f --all
+git worktree remove --force .claude/worktrees/<name>
+```
+
+`--force` is doing the work there and is safe *for this*: the submodule is
+pinned data (rule 5), so there is nothing in it to lose. It is not a licence to
+force away a dirty worktree of your own — check `git status` first, the way you
+would anywhere else.
+
 ## 5. What is not here, and must not arrive
 
 Three things this repository is deliberately not a party to. Each has a test,
