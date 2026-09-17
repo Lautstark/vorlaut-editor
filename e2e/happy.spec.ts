@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
-  KEY_CELL, PAGE_KEY, cells, choose, chooseNamed, expectSaid, key, keySheet, label,
+  KEY_CELL, PAGE_KEY, cells, choose, chooseNamed, credits, expectSaid, key, keySheet, label,
   nameSet, openBoard, pageMore, press, within, put, search, searchNote, setCard,
   word,
 } from "./diy.js";
@@ -773,7 +773,7 @@ test("a whole sentence finds the symbol its words point at", async ({ page }) =>
   // Before this, the raw string went to the collection and came back empty.
   await search(box, "Ich bin durstig.");
   await expect(searchNote(box)).toHaveCount(0);
-  await expect(box.locator(".pick__hit")).toHaveCount(1);
+  await expect(box.locator(".picker__item")).toHaveCount(1);
 
   // And it got there by asking for the word, not the sentence.
   expect(asked).toContain("durstig");
@@ -789,8 +789,8 @@ test("the sheet says what is owed for the pictures it shows", async ({ page }) =
   await openBoard(page);
   await key(page, 0).click();
   const box = keySheet(page);
-  await expect(box.locator(".pick__credits")).not.toBeEmpty();
-  await expect(box.locator(".pick__credits")).toContainText("ARASAAC");
+  await expect(credits(box)).not.toBeEmpty();
+  await expect(credits(box)).toContainText("ARASAAC");
 });
 
 test("a key can say its word, lead onward, or do both", async ({ page }) => {

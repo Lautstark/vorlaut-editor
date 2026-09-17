@@ -121,6 +121,20 @@ export interface Held {
   /** Anything the column has started and not finished, finished. Resolves
    *  immediately when there is nothing pending, which is almost always. */
   settle(): Promise<void>;
+  /** The way out that means nothing happened, offered to the column.
+   *
+   * The Escape this answers used to be a listener on the dialog, because the
+   * field it has to be taken back from was markup this file could see. It is
+   * inside `@lautstark/bildquelle/svelte/SymbolSearch` now, which takes an
+   * `onescape` prop and hands the decision to the caller - conventions.md §6.4,
+   * which is explicit that the fix is not Sheet's: wochenwerk nests a second
+   * search inside a card editor inside its appointment sheet, and a
+   * sheet-level rule there would discard an unsaved appointment and an unsaved
+   * card together. This sheet genuinely opens *in* a search and has nothing
+   * else to lose, so it wires it.
+   *
+   * A no-op where no column is drawn, exactly as `settle` is. */
+  dismiss(): void;
 }
 
 /** The destructive act, on the left of the foot.
@@ -212,7 +226,7 @@ export function openSheet<S>(spec: SheetSpec<S>): Promise<Left> {
     /* What the two foot buttons wait for. A sheet with no picture column has
      * nothing to settle and says so in one line, so neither button has to know
      * which kind of sheet it is on. */
-    const held: Held = { settle: () => Promise.resolve() };
+    const held: Held = { settle: () => Promise.resolve(), dismiss: () => finish(null) };
 
     const shared: Sheet<S> = {
       spec, held,
@@ -242,7 +256,8 @@ export function openSheet<S>(spec: SheetSpec<S>): Promise<Left> {
       onClose: () => finish(null),
     });
 
-    /* Escape out of the search field, which the browser would otherwise keep.
+    /* Escape out of the search field is `held.dismiss` above, and the listener
+     * that used to be here is gone.
      *
      * `<input type="search">` has a behaviour of its own: Escape in one clears
      * the word being searched for, and the key never reaches the dialog. That
@@ -252,22 +267,21 @@ export function openSheet<S>(spec: SheetSpec<S>): Promise<Left> {
      * that ignored the first Escape and shut on the second, which reads as a
      * dialog that has hung.
      *
-     * So the sheet takes it back: prevented, so the field is not cleared on
-     * the way past, and settled as null, because Escape is one of the ways out
-     * that mean nothing happened.
+     * What did it here was a `keydown` on the dialog testing `event.target`
+     * for an `<input type="search">`, which worked only while that field was
+     * markup this file could see. The field is inside a shared component now
+     * and the component takes an `onescape`; the column passes one, and it
+     * comes back here as `dismiss` - prevented on the way past, so the field
+     * is not cleared, and settled as null, because Escape is one of the ways
+     * out that mean nothing happened. §6.4 is explicit that this belongs to
+     * the caller rather than to Sheet, and names the product that would lose
+     * an unsaved appointment if it did not.
      *
      * Not a reason to give up the search type. The ✕ that type draws inside
      * the field is the one control that clears the word - see the note at the
      * "take the picture off" button, which is a labelled button precisely so
      * that the two ✕ do not stand a few pixels apart meaning different things.
      */
-    sheet.dialog.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      const on = event.target;
-      if (!(on instanceof HTMLInputElement) || on.type !== "search") return;
-      event.preventDefault();
-      finish(null);
-    });
 
     /* Nothing here takes the focus, and that is a change of hands rather than
      * a loss.

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { state } from "../../src/core/state.js";
 import * as symbols from "../../src/data/symbols.js";
-import { findSymbols } from "../../src/shell/picker.js";
-import { homeWord } from "../../src/shell/homekey.js";
+import { emptyLine, homeFor, searchProvider } from "../../src/shell/picker.js";
+import { asksForHome, homeWord } from "../../src/shell/homekey.js";
 import type { AppLayout } from "../../src/core/types.js";
 
 /* The one tile in the picker the collection did not answer with.
@@ -19,6 +19,24 @@ import type { AppLayout } from "../../src/core/types.js";
  * offered for these words, offered even when the collection has nothing, and
  * never offered for a word that merely starts the same way - is this file's.
  */
+
+/* What findSymbols() used to hand back, reassembled from the pieces that
+ * replaced it - and the split is the thing this file is now also asserting.
+ *
+ * Whether a *word* asks for a start key is asksForHome(), a table lookup the
+ * column runs for every answer; whether this collection can produce the
+ * picture is homeFor(), a resolve the column makes once per sheet and awaits
+ * wherever the tile is drawn. Both halves have to be true for a tile, which is
+ * exactly what `home` below is. */
+async function findSymbols(word: string) {
+  let failure: unknown | null = null;
+  const hits = await searchProvider((error) => { failure = error; }).search(word);
+  return {
+    hits,
+    empty: hits.length ? "" : emptyLine(word, failure),
+    home: asksForHome(word) ? await homeFor() : null,
+  };
+}
 
 /** A Sammlung with nothing in it, so offeredSource() falls to the machine. */
 const empty = (): AppLayout => ({

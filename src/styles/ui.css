@@ -1848,39 +1848,74 @@ dialog.sheet--page { max-width: 520px; }
   margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-dim);
 }
 
-/* minmax(0, 1fr) rather than 1fr: a grid track's automatic minimum is its
-   content's min-content width, and a pictogram's is its intrinsic pixel width
-   - so four of them inflated this grid past the column it was given and the
-   fourth hung under the fields beside it. */
-.pick__results {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
+/* The search's own wrapper, which is one item of the column's grid and used to
+   be four.
+   The field, the near line, the results box and the credit were four children
+   of .pick with its 10px between them; the component draws all four inside a
+   wrapper whose class is the caller's, so the column's gap now falls either
+   side of the block and this restates it inside. Same four gaps, same 10px,
+   one level down - and a near line that is `hidden` still collapses its gap,
+   because a grid drops a `display: none` item rather than reserving its row. */
+.pick__search { display: grid; gap: 10px; align-content: start; }
+
+/* The grid and its tiles are `@lautstark/bildquelle/svelte/SymbolSearch`'s
+   vocabulary now - .picker__grid and .picker__item, drawn by components.css -
+   and what follows is this product narrowing them rather than replacing them.
+   §6.4 anticipates exactly this and names wochenwerk's five: a product's tiles
+   are its own size and its own ground, and components.css records that as a
+   real difference rather than pretending it away. Every selector here is
+   scoped under .pick, so nothing shadows a shared name and shadows.js has
+   nothing to say about any of it.
+
+   The grid: four fixed columns rather than the shared auto-fill, because this
+   column is 272px wide and the box under it scrolls at 150px - which is what
+   makes the picker a small window onto many pictures instead of a list that
+   pushes the licence line off the sheet. minmax(0, 1fr) rather than 1fr: a
+   grid track's automatic minimum is its content's min-content width, and a
+   pictogram's is its intrinsic pixel width - so four of them inflated this
+   grid past the column it was given and the fourth hung under the fields
+   beside it. */
+.pick .picker__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
   max-height: 150px; overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
-/* [hidden] is the user agent's and loses to the display above, the same way it
-   loses to .reveal and .scrim further up this file. Without this the crop
-   hides the search field and leaves its results standing under the box. */
-.pick__results[hidden] { display: none; }
+/* [hidden] is the user agent's and loses to the display components.css gives
+   .picker__grid, the same way it loses to .reveal and .scrim further up this
+   file. Without this the crop hides the search field and leaves the results
+   standing under the box. The component writes the attribute from `busy`; what
+   it cannot do is know which of its consumers drew a display over it. */
+.pick .picker__grid[hidden] { display: none; }
 /* The two sentences a search can come back with - a word the collection does
    not have, and a browser that never managed to ask - in the box the hits
-   would have filled. say() writes a bare <p>, so this is what styles it. */
-.pick__results p {
+   would have filled, and "sucht …" in the same place. Bare <p> from the
+   component and from the trailing snippet alike, so this is what styles both. */
+.pick .picker__grid p {
   grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--text-faint);
 }
-.pick__hit {
-  padding: 0; cursor: pointer; aspect-ratio: 1;
+/* A tile here is a picture and only a picture, on white. That is the column's
+   one rendering rule and the reason for every line of this: AAC symbols are
+   drawn for white and need it in either scheme, which is the same sentence
+   .pick__preview above already carries. The shared tile is a padded flex
+   column on --surface-2 with a caption under it, which is right for a product
+   whose tiles are labelled; this one passes an empty caption snippet and draws
+   the square. */
+.pick .picker__item {
+  padding: 0; aspect-ratio: 1; gap: 0;
   border: 2px solid transparent; border-radius: var(--radius-sm); background: #fff;
 }
-.pick__hit img { width: 100%; height: 100%; object-fit: contain; }
-.pick__hit:hover { border-color: var(--line); }
-.pick__hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pick .picker__item img { width: 100%; height: 100%; object-fit: contain; }
+/* The hover is a border rather than a ground, because the ground is the
+   picture's and must not move under it. */
+.pick .picker__item:hover { border-color: var(--line); background: #fff; }
+.pick .picker__item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* The prescribed start-key picture, drawn the way the key is drawn.
    One grid cell like any other tile, but a tile with a word under it - so the
    cell is a little column and the row it is in grows by the height of that
    word. That is the point rather than a cost: it is the one thing in the box
    the collection did not answer with, and a tile that took exactly the room a
-   hit takes would be a hit. See the prescribed tile in shell/pieces/Pick.svelte.
+   hit takes would be a hit. See the lead snippet in shell/pieces/Pick.svelte.
 
    White is the grid's rendering rule and this is the exception to it. The
    exception is declared rather than smuggled in: the dark plate, the caption
@@ -1892,12 +1927,15 @@ dialog.sheet--page { max-width: 520px; }
 /* --home-plate is set on the element, from HOME_TONES in shell/homekey.ts,
    which is also where the filter's numbers come from. Not a theme token and
    not scheme-dependent: this is the tablet's tile, and what the tile looks
-   like does not change when the editor goes light. */
-.pick__hit--home { background: var(--home-plate); }
+   like does not change when the editor goes light.
+   Written as a compound with the shared class rather than as a bare modifier,
+   so it out-specifies .picker__item's own ground by specificity instead of by
+   being further down the bundle - §6.0's caveat, which is about exactly this. */
+.picker__item.pick__hit--home { background: var(--home-plate); }
 /* #homeTone is mounted with the frame - see shell/Shell.svelte, which says why
    a colour matrix cannot be a CSS filter shorthand and why invert(1) is not
    this map. */
-.pick__hit--home img { filter: url(#homeTone); }
+.picker__item.pick__hit--home img { filter: url(#homeTone); }
 /* Smaller than the sentences around the box, and dimmer: it names a tile that
    is already unmistakable, so it has to be readable without pulling the eye
    off the pictures. Centred under the square it belongs to. */
@@ -1930,13 +1968,22 @@ dialog.sheet--page { max-width: 520px; }
    author display, the same way it loses to .reveal and .scrim further up. */
 .pick__negate[hidden] { display: none; }
 
-/* What is owed for the collection the hits came from, under them. Hint-sized
-   and hint-coloured: it is a condition of a licence rather than something
-   somebody is reading, and it must not compete with the pictures it is about.
-   It is never empty for ARASAAC - see picker.ts's creditLine(). */
-.pick__credits {
-  margin: 0; font-size: 11px; line-height: 1.45; color: var(--text-faint);
-}
+/* What is owed for the collection the hits came from, directly under them. The
+   search component draws it from the provider's attribution - which is
+   creditLine(), so the sentence is still this product's - and dresses it
+   `small muted`, the shared words for text that is not the main text.
+
+   Both of those are wrong here and neither is wrong in general: 13.5px and
+   --text-dim are for a hint somebody is meant to read, and this is a condition
+   of a licence standing under a grid of pictures. It has to be legible and it
+   must not compete with them. That is exactly the difference §6.4 leaves to
+   the product, so this narrows rather than shadows - the shared rules go on
+   drawing everything else that wears those two names.
+
+   `> p.small` rather than `> p`, and that is not belt and braces: the `between`
+   slot puts .pick__near beside this one as a direct child of the same wrapper,
+   and a bare `> p` would out-specify its rule and quietly redraw it. */
+.pick__search > p.small { margin: 0; font-size: 11px; line-height: 1.45; color: var(--text-faint); }
 
 /* -------------------------------------------------------------- the fields */
 

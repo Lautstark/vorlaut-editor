@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { state } from "../../src/core/state.js";
 import * as symbols from "../../src/data/symbols.js";
-import { findSymbols } from "../../src/shell/picker.js";
+import { emptyLine, nearLine, searchProvider } from "../../src/shell/picker.js";
 import { t } from "../../src/core/texts.js";
 import type { Layout } from "../../src/core/types.js";
 
@@ -28,6 +28,25 @@ import type { Layout } from "../../src/core/types.js";
  * language's column, because which language a test runner opens in is the
  * host's locale.
  */
+
+/* What findSymbols() used to hand back, reassembled from the three pieces that
+ * replaced it.
+ *
+ * The search runs through `searchProvider`, which is the object
+ * `@lautstark/bildquelle/svelte/SymbolSearch` is handed, so what is under test
+ * is exactly what the component asks. The two sentences are then asked of the
+ * seam the way the snippets ask them: `nearLine` over the hits that came back,
+ * `emptyLine` over the reason there were none. Nothing about which line is
+ * drawn when has moved - only where it is put together. */
+async function findSymbols(word: string) {
+  let failure: unknown | null = null;
+  const hits = await searchProvider((error) => { failure = error; }).search(word);
+  return {
+    hits,
+    near: nearLine(word, hits),
+    empty: hits.length ? "" : emptyLine(word, failure),
+  };
+}
 
 const NEAR = (word: string) => t("ui.search_near", { word });
 
