@@ -31,3 +31,18 @@ export function showLegal(page: LegalPage): void {
 export function closeLegal(): void {
   showing = null;
 }
+
+/** The setter half, for `bind:page` on @lautstark/design/svelte/Legal.
+ *
+ * The component holds which page is showing as a two-way prop, because every
+ * way out - the ✕, Escape, a press outside - has to end with the dialog and the
+ * caller agreeing rather than one of them left behind. `bind:` cannot take a
+ * function pair's worth of question and answer out of a module, so this is the
+ * answer half and legalPage() above is the question half; the getter/setter
+ * form of `bind:` is what puts them back together at the call site.
+ *
+ * A key the component hands back is one it was given - `pages` is built from
+ * LEGAL_PAGES - so the cast is a cast and not a widening. */
+export function setLegalPage(page: string | null): void {
+  showing = (page as LegalPage | null) ?? null;
+}

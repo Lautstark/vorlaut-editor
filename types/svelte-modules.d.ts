@@ -23,3 +23,34 @@ declare module "*.svelte" {
   const component: Component<Record<string, never>>;
   export default component;
 }
+
+/* And the same for a component that arrives by a **bare specifier**, which the
+ * pattern above cannot match.
+ *
+ * `@lautstark/sicherung/svelte/RescueBody` has no `.svelte` written on it: the
+ * package's `exports` map is what turns it into one, under the `svelte`
+ * condition conventions.md §6.0 requires. `tsc` follows that map, finds a
+ * `.svelte` file at the end of it, and has never heard of one - so a
+ * `.svelte.ts` module importing a shared component fails to resolve it and
+ * takes the whole program down, exactly as before, and with a message about a
+ * package rather than about a file.
+ *
+ * **The shape is `any` here where it is `Record<string, never>` above, and that
+ * was measured rather than chosen.** The narrow shape is never actually
+ * compared against anything for the relative form - `openParts({ body: X })`
+ * has type-checked against it for as long as this file has existed - and it is
+ * compared for this one: `Type 'SheetContent<Rescuing>' is not assignable to
+ * type 'Record<string, never>'`. There is nothing to be gained by fighting
+ * that. The real check on these props is svelte-check, which compiles the
+ * component and knows exactly what it takes; these two suites only need the
+ * import to resolve, and neither of them mounts one.
+ *
+ * One pattern rather than `@lautstark/sicherung/svelte/*`, and not for
+ * tidiness: `./svelte/rescuing` sits under that same prefix and is a real
+ * `.svelte.ts` that `tsc` reads perfectly well, so a wildcard covering the
+ * directory would put this shape over the `Rescuing` class beside them. */
+declare module "@lautstark/sicherung/svelte/Rescue*" {
+  import type { Component } from "svelte";
+  const component: Component<any>;
+  export default component;
+}
