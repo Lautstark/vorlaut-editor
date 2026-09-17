@@ -8,22 +8,30 @@
    * says "Impressum" while the Impressum is showing; that is also what the
    * end-to-end check looks the dialog up by.
    *
-   * **Every word is in this file now, and that is the change.** It used to be
-   * an empty element with an id per paragraph, filled in by a pass in
+   * **Every word is in this file, and that is the change this file records.** It
+   * used to be an empty element with an id per paragraph, filled in by a pass in
    * core/texts.ts that named all forty-one of them - so the markup said where a
    * sentence went and another file said which sentence, and the only thing
-   * holding the two together was that somebody had written both. The prose
-   * still exists twice, in boot_data.ts, and that has not changed: what is
-   * written here is a key, never a string, and tests/test_language.py is what
-   * says no German reaches this file.
+   * holding the two together was that somebody had written both. The prose still
+   * exists twice, in boot_data.ts, and that has not changed: what is written
+   * here is a key, never a string, and tests/test_language.py is what says no
+   * German reaches this file.
+   *
+   * **It stays markup, and adopting the shared dialog is what could have taken
+   * that away.** @lautstark/design/svelte/Legal draws the frame, the three
+   * `<section>`s and the scroll reset; what goes inside each one arrives as a
+   * snippet, so the forty-one ids are still written where the sentences are.
+   * conventions.md §6.12 argues the same from the other end: every section is
+   * drawn and the two that are not showing are `hidden`, because this markup is
+   * *addressed* and mounting one page at a time would make whether a locator
+   * resolves depend on which page happened to be open.
    *
    * The two addresses that are not prose - the repository, the mail - go
    * through shell/links.ts's guards for the reason they went through texts.ts's:
    * an href is the one thing on this page that is not inert.
    *
-   * **The frame is @lautstark/design's** - the head with its ✕, the body, the
-   * backdrop press, the one `close` exit. conventions.md §6.1. Three things
-   * about this dialog are the reason three of that component's props exist:
+   * Three things about this dialog are the reason three props exist, and they
+   * survive the second adoption exactly as they survived the first:
    *
    *   - The **id stays an id.** `#legal`'s 520px is an ID selector and the
    *     comment above that rule in ui.css says so: an id beats any class, so it
@@ -31,52 +39,41 @@
    *     a class it would tie with `.sheet { width: … }` and the winner would be
    *     bundle order.
    *   - The **title is a thunk**, because it changes. One dialog with three
-   *     prose sections, and the accessible name has to be the one showing.
-   *   - The ✕ **keeps its id**, which e2e/legal.spec.ts presses.
+   *     prose sections, and the accessible name has to be the one showing. The
+   *     component builds that thunk out of `pages` and the page in force.
+   *   - **`page` is two-way**, because every way out - the ✕, Escape, a press
+   *     outside - has to end with the dialog and legal.svelte.ts agreeing.
    *
-   * What it gains is a name for that ✕: the button had neither `aria-label` nor
-   * `title` here, so it was announced as "✕" and nothing else. `closeLabel` is
-   * required and has no fallback, which is how that got fixed by adopting.
+   * **What it costs, and it is worth being plain about it: `#legalClose` is
+   * gone.** `Legal` takes no `closeId` where `Sheet` underneath it does, so the
+   * ✕ has no id to be pressed by, and e2e/legal.spec.ts presses it by its
+   * accessible name instead. That name is required and has no fallback, which is
+   * what gave this ✕ a name at all; the missing prop is a package gap and is
+   * reported rather than reached past.
    */
   import { t } from "./live.svelte.js";
   import { outward, mailward } from "./links.js";
-  import { closeLegal, LEGAL_PAGES, legalPage } from "./legal.svelte.js";
-  import Sheet from "@lautstark/design/svelte/Sheet";
+  import { closeLegal, LEGAL_PAGES, legalPage, setLegalPage } from "./legal.svelte.js";
+  import Legal from "@lautstark/design/svelte/Legal";
 
-  let body = $state<HTMLElement | undefined>(undefined);
-
-  const page = $derived(legalPage());
-
-  $effect(() => {
-    if (!page || !body) return;
-    // From the top every time. The sheet keeps its scroll position, and the
-    // privacy notice is long enough that reopening it half way down reads as a
-    // page that starts in the middle of a sentence.
-    body.scrollTop = 0;
-  });
+  /* The three, in the order they are drawn, with the key doubling as the
+     section id - which is what every locator in e2e/legal.spec.ts already
+     assumed and what LEGAL_PAGES was already keyed by. */
+  const pages = $derived(Object.entries(LEGAL_PAGES).map(([key, title]) => ({
+    key, id: key, title: t(title),
+  })));
 </script>
 
-<!-- aria-labelledby is gone and nothing is lost: the frame names the dialog
-     with `aria-label` from `title`, and the thunk is what keeps that answer
-     following the prose - so a reader that announces it still says „Impressum"
-     while the Impressum is showing, which is also what e2e/legal.spec.ts looks
-     the dialog up by. -->
-<Sheet
-  open={page !== null}
-  onclose={closeLegal}
+<Legal
+  bind:page={legalPage, setLegalPage}
+  {pages}
   id="legal"
-  closeId="legalClose"
   class="legal"
-  title={() => (page ? t(LEGAL_PAGES[page]) : "")}
   closeLabel={t("ui.close")}
-  bind:body
+  onclose={closeLegal}
 >
-  <!-- No `head` snippet, where the other two sheets have one. #legalHeading was
-       only ever the target of the aria-labelledby above it, so with the name
-       coming from `title` there is nothing left for the id to be for and the
-       frame's own <h2> is the whole heading. -->
-
-    <section id="aboutPage" hidden={page !== "aboutPage"}>
+  {#snippet children(key)}
+    {#if key === "aboutPage"}
       <p class="lead" id="aboutLead">{t("ui.about_lead")}</p>
       <h3 id="aboutLeavesHead">{t("ui.about_leaves_head")}</h3>
       <p id="aboutLeaves">{t("ui.about_leaves")}</p>
@@ -89,9 +86,7 @@
         <a id="aboutMitreden" href={outward(t("ui.about_mitreden_url"))} target="_blank" rel="noreferrer noopener">{t("ui.about_mitreden")}</a>
         <a id="aboutBildhaft" href={outward(t("ui.about_bildhaft_url"))} target="_blank" rel="noreferrer noopener">{t("ui.about_bildhaft")}</a>
       </p>
-    </section>
-
-    <section id="impressumPage" hidden={page !== "impressumPage"}>
+    {:else if key === "impressumPage"}
       <h3 id="impAngabenHead">{t("ui.imp_angaben_head")}</h3>
       <!-- Name, street, town and country as one value with newlines in it,
            and .address is what lets them stand as the four lines a postal
@@ -111,9 +106,7 @@
       <p id="impLinks">{t("ui.imp_links")}</p>
       <h3 id="impDisputeHead">{t("ui.imp_dispute_head")}</h3>
       <p id="impDispute">{t("ui.imp_dispute")}</p>
-    </section>
-
-    <section id="privacyPage" hidden={page !== "privacyPage"}>
+    {:else}
       <p class="lead" id="dsgLead">{t("ui.dsg_lead")}</p>
       <h3 id="dsgControllerHead">{t("ui.dsg_controller_head")}</h3>
       <p class="address" id="dsgController">{t("ui.dsg_controller")}</p>
@@ -142,5 +135,6 @@
       <h3 id="dsgRightsHead">{t("ui.dsg_rights_head")}</h3>
       <p id="dsgRights">{t("ui.dsg_rights")}</p>
       <p class="stand" id="dsgStand">{t("ui.dsg_stand")}</p>
-    </section>
-</Sheet>
+    {/if}
+  {/snippet}
+</Legal>

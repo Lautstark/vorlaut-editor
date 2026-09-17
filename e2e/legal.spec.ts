@@ -145,7 +145,16 @@ test("a page can be closed, and the next one opens in its place", async ({ page 
   await page.getByRole("button", { name: "Impressum", exact: true }).click();
   await expect(page.locator("#impressumPage")).toBeVisible();
 
-  await page.locator("#legalClose").click();
+  /* The ✕, found by the name it is announced with rather than by an id.
+   *
+   * It was `#legalClose`, which was this file's own handle on the corner of the
+   * dialog. @lautstark/design/svelte/Legal draws that corner now and takes no
+   * `closeId` where the `Sheet` underneath it does - so there is no id to press,
+   * and reaching past the component to write one on afterwards is what
+   * conventions.md §6.0 says not to do. The accessible name is the sturdier
+   * handle anyway: it is required, it has no fallback, and it is the whole
+   * reason this button is announced as anything other than "✕". */
+  await page.locator("#legal").getByRole("button", { name: either("ui.close") }).click();
   await expect(page.locator("#legal")).toBeHidden();
 
   // The failure this catches: opening a second page without hiding the first,
