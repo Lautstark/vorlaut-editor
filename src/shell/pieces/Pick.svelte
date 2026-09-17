@@ -9,12 +9,14 @@
    * drawPreview(), drawResults() and the pair of `hidden` sweeps that took the
    * search away while a crop was open.
    */
-  import { untrack } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import { reason } from "../../core/errors.js";
   import { status } from "../dom.js";
   import { t } from "../live.svelte.js";
-  import { cropSquare, pngName } from "../crop.js";
-  import type { Cropper } from "../crop.js";
+  import { IMAGE_SIZE } from "../../data/app_package.js";
+  import { cropName, loadSquare, typeOut } from "@lautstark/design/crop";
+  import type { CropOutput, Loaded } from "@lautstark/design/crop";
+  import Crop from "@lautstark/design/svelte/Crop";
   import { HOME_TONES } from "../homekey.js";
   import { creditLine, findSymbols, searchPlaceholder, takeHome, takeSymbol, uploadOwn }
     from "../picker.js";
@@ -23,7 +25,6 @@
   import type { Held, PickColumn } from "../sheet.svelte.js";
   import Negate from "./Negate.svelte";
   import Picture from "./Picture.svelte";
-  import Vanilla from "@lautstark/design/svelte/Vanilla";
 
   let { spec, held }: { spec: PickColumn; held: Held } = $props();
 
@@ -92,8 +93,51 @@
    * already says what it does, and a control repeating that a few inches higher
    * up is a question about which one is the real one rather than a choice.
    * Fertig keeps the square - see settle() - and the ✕ and Escape drop it,
-   * which is what they mean everywhere else here. */
-  let cropping = $state.raw<Cropper | null>(null);
+   * which is what they mean everywhere else here.
+   *
+   * The square, the slider and the two ways of moving them are
+   * @lautstark/design/svelte/Crop now, over @lautstark/design/crop -
+   * conventions.md §6.6. What was shell/crop.ts here and a component in
+   * bildhaft was the same file twice down to an error string, and the one
+   * thing this side had that the other did not - `touch-action: none` on the
+   * box - came across with it. What came back the other way is
+   * `stopPropagation` after the arrow keys: this column's own keydown handling
+   * sits on the results box and the sheet's on the dialog, and a nudge meant
+   * for the picture had no business reaching either. */
+  let cropping = $state.raw<Loaded | null>(null);
+  /* The handle, because a component returns nothing where the factory returned
+     an object. §6.6's answer: cut(), close() and focus() are instance exports
+     and arrive through bind:this, the way TitleField.flush() already does. */
+  let cropper: ReturnType<typeof Crop> | undefined = $state.raw();
+
+  /* What this product writes a square as, said rather than inherited.
+   *
+   * The default policy is bildhaft's, which is the one that was reasoned
+   * about; these are the three fields this product answers differently, and
+   * each of them is now a decision rather than a side effect.
+   *
+   * `png`, because a symbol may be line art on nothing and a ground colour
+   * chosen here would be wrong against half the keys - the same reason
+   * data/app_assets.ts keeps the alpha.
+   *
+   * `IMAGE_SIZE`, and the comment it replaces claimed more than it could.
+   * 512 is data/app_package.ts's constant for the package a tablet opens; the
+   * exchange spec calls it a *recommendation* the format tolerates violating,
+   * it is not one of the seven pinned device facts and no fixture holds it.
+   * A cap never enlarges either - what is written is the smaller of the square
+   * and the cap - which is the half "capped at 512" always lost.
+   *
+   * `srgb`, which this page never chose: it called getContext("2d") with no
+   * options and took the default. It is written down here because the shared
+   * default is Display P3, against a measurement in bildhaft, and inheriting
+   * *that* silently would be the same mistake in the other direction. What a
+   * key on a talker shows is line art bound for a 128px tile, so the wider
+   * gamut buys it nothing. */
+  const SQUARE = {
+    type: "png",
+    cap: IMAGE_SIZE,
+    colorSpace: "srgb",
+  } satisfies Partial<CropOutput>;
   /* The square, waiting to be kept - see settle(). Held apart from the button
    * that usually runs it because the button is not the only press that means
    * yes. Not a rune: nothing draws it. */
@@ -381,10 +425,10 @@
     /* No crop offered is not a failure and does not get a sentence: the picture
        was already square, or the browser could not read a size off it, and in
        both cases the file goes exactly as it did before this step existed.
-       cropSquare()'s own head says which is which. */
-    void cropSquare(picture).then(
-      (cutter) => {
-        if (cutter) beginCrop(cutter, picture.name);
+       loadSquare()'s own head says which is which. */
+    void loadSquare(picture, picture.name).then(
+      (loaded) => {
+        if (loaded) void beginCrop(loaded);
         else void keep(picture, picture.name);
       },
       () => void keep(picture, picture.name));
@@ -392,7 +436,10 @@
 
   function endCrop(): void {
     keeping = null;
-    cropping?.close();
+    // Through the component while it is still mounted, because that is the
+    // handle §6.6 hands back; the Loaded's own close() is the same call one
+    // step further down and is what onDestroy below has left to reach for.
+    cropper?.close();
     cropping = null;
     // Deliberately not moving focus. The two presses below do it for
     // themselves, because the third caller - settle(), from a foot button - is
@@ -400,18 +447,32 @@
     // that is going away is how it ends up nowhere.
   }
 
-  function beginCrop(cutter: Cropper, name: string): void {
-    cropping = cutter;
-    keeping = () => cutter.cut()
-      .then((square) => uploadOwn(square, pngName(name)))
+  async function beginCrop(loaded: Loaded): Promise<void> {
+    cropping = loaded;
+    const name = cropName(loaded.name, typeOut(SQUARE.type, loaded.type));
+    keeping = () => cropper!.cut()
+      .then((square) => uploadOwn(square, name))
       .then(
         (made) => { endCrop(); took(made, ""); status(t("ui.upload_done")); },
         (error: unknown) => {
           endCrop();
           status(t("ui.upload_failed", { error: reason(error) }));
         });
-    cutter.surface.focus();
+    /* One tick, because the box is a component now rather than an element the
+       factory had already built: the handle does not exist until the block
+       above has been drawn. */
+    await tick();
+    cropper?.focus();
   }
+
+  /* The way out that never called close(). Every other one does - keeping()
+     closes on both of its branches - but the corner ✕, Escape and a press
+     outside take the whole sheet away with a square still on screen, and the
+     object URL the picture was loaded from outlived the page that was showing
+     it. It was invisible because nothing downstream reads it: the store already
+     has the bytes it needs by then. §6.6 says every way out has to call it;
+     this is the way out that did not. */
+  onDestroy(() => cropping?.close());
 
   /* Taking the picture off, which until the button existed could only be done
      by putting a different one on. Nothing downstream has to learn anything:
@@ -474,18 +535,22 @@
 </script>
 
 <div class="pick">
-  {#if cropped}
+  {#if cropping}
     <!-- The crop takes the preview's place rather than standing beside it: it
-         is the same square, being moved about. -->
-    <div class="pick__preview pick__preview--crop"><Vanilla node={cropping?.surface} /></div>
-    <!-- Directly under the box and above everything else, because the
-         alternative is inserting elements into a live column at the moment
-         somebody is looking at it. What fills it comes from shell/crop.ts; what
-         it says is this column's, the way every other sentence here is.
-         The sentence is the box's description as well as the column's copy:
-         somebody who cannot see it has just been handed a control whose name
-         says what it is and not what to do with it. -->
-    <div class="pick__crop"><Vanilla node={cropping?.zoom} /><p class="pick__crophint" id="pickCropHint">{t("ui.crop_hint")}</p></div>
+         is the same square, being moved about.
+         Three things in one group rather than a box up here and a slider two
+         elements down, because the component draws the box and the slider as
+         siblings and this is the layout change §6.6 says to budget for. The
+         box is `.crop` itself now - the shape, the clipping and the ground it
+         wore as `.pick__preview--crop` moved onto it, which is where the
+         component leaves them on purpose. What it says is still this column's,
+         the way every other sentence here is.
+         The sentence is meant as the box's description as well as the column's
+         copy: somebody who cannot see it has just been handed a control whose
+         name says what it is and not what to do with it. It has never been
+         wired to one - the id below is referenced by nothing - and the
+         component takes no describedby to wire it to. -->
+    <div class="pick__crop"><Crop bind:this={cropper} loaded={cropping} label={t("ui.crop_frame")} zoomLabel={t("ui.crop_zoom")} output={SQUARE} rowClass="pick__zoom" /><p class="pick__crophint" id="pickCropHint">{t("ui.crop_hint")}</p></div>
   {:else if !symbol}
     <div class="pick__preview pick__preview--none" role="img" aria-label={t("ui.symbol_none")}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8.5" cy="9.5" r="1.6" /><path d="M21 16l-5-5-5 5-3-3-5 5" /></svg></div>
   {:else}
