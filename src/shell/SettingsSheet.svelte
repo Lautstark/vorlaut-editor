@@ -52,7 +52,7 @@
     settingsOpen, somethingMissing, startFetch, voicesHereState,
   } from "./voices.svelte.js";
   import { attributionFor } from "../data/symbols.js";
-  import Vanilla from "./pieces/Vanilla.svelte";
+  import Vanilla from "@lautstark/design/svelte/Vanilla";
 
   let dialog: HTMLDialogElement;
   let dataFile: HTMLInputElement;

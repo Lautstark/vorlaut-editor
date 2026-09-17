@@ -313,8 +313,8 @@ function placePages(): void {
        the box and the editor owned what was in it, for a list that is entirely
        the editor's. A `display: contents` anchor is not in the layout at all,
        so the component's own <div class="pagelist"> sits in the sidebar exactly
-       where this one did. Same arrangement as shell/pieces/Vanilla.svelte, and
-       for the same reason. */
+       where this one did. Same arrangement as @lautstark/design/svelte/Vanilla,
+       and for the same reason. */
     host = document.createElement("div");
     host.style.display = "contents";
   }

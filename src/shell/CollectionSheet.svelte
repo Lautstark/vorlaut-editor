@@ -51,7 +51,7 @@
     voiceListNode, voiceState, haveVoices,
   } from "./voices.svelte.js";
   import { metacomOffered } from "./settings.svelte.js";
-  import Vanilla from "./pieces/Vanilla.svelte";
+  import Vanilla from "@lautstark/design/svelte/Vanilla";
 
   let dialog: HTMLDialogElement;
   let langPick: HTMLButtonElement;
