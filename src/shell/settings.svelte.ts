@@ -22,7 +22,7 @@ import { status } from "./dom.js";
 import { t } from "./live.svelte.js";
 import { confirmDialog, openDialog } from "./dialog.js";
 import { reason } from "../core/errors.js";
-import type { Settings, WantedSettings } from "../core/types.js";
+import type { AzureAsk, AzureState, Settings, WantedSettings } from "../core/types.js";
 import { readSettings, writeSettings, azureState, listCollections }
   from "../backend/index.js";
 import { applyTheme, readTheme, saveTheme, type Theme }
@@ -47,28 +47,30 @@ import { downloadJson } from "@lautstark/werkzeuge/download";
    writeSettings(). */
 let settings = $state.raw<Settings>({
   azureKey: { set: false, hint: "" }, azureRegion: "",
-  metacom: { path: "", ok: false, count: 0, fixed: false },
-  local: true });
+  metacom: { path: "", ok: false, count: 0, fixed: false } });
 
 /** What this installation is set to, as the sheet reads it. */
 export const installed = (): Settings => settings;
 
-/* --- what the three fields hold -------------------------------------------
+/* --- what the one field left here holds ------------------------------------
  *
- * The sheet's two Azure fields and its METACOM path used to be read back off
- * the elements - `byId("azureRegion").value.trim()` inside the write - which
- * is the one place this file genuinely needed the DOM rather than merely using
- * it as a store. They are `bind:value` in the component and runes here, and
- * saveSettings() reads them at the moment the write happens exactly as it read
- * the elements at that moment. */
-let region = $state("");
-let key = $state("");
+ * The sheet's fields used to be read back off the elements -
+ * `byId("azureRegion").value.trim()` inside the write - which is the one place
+ * this file genuinely needed the DOM rather than merely using it as a store.
+ * The METACOM path is `bind:value` in the component and a rune here, and
+ * saveSettings() reads it at the moment the write happens exactly as it read
+ * the element at that moment.
+ *
+ * The two Azure fields are @lautstark/stimmquelle/svelte/AzurePanel's now and
+ * are deliberately not mirrored here. The key in particular must not be: the
+ * whole design is that the stored key sits in the *placeholder* and the value
+ * stays empty, so an untouched field means "leave the key alone" and there is
+ * nothing on the page to submit, copy or mistake for the key itself. A rune
+ * holding what somebody typed would be a second copy of the secret with a
+ * longer life than the field. What the panel hands back, once, is the pairing
+ * it was asked to keep - see keepAzure(). */
 let path = $state("");
 
-export const azureRegionField = (): string => region;
-export const setAzureRegion = (value: string): void => { region = value; };
-export const azureKeyField = (): string => key;
-export const setAzureKey = (value: string): void => { key = value; };
 export const metacomPathField = (): string => path;
 export const setMetacomPath = (value: string): void => { path = value; };
 
@@ -90,7 +92,10 @@ export function keyPlaceholder(): string {
 
 /** The Azure panel's state line. Two answers in one place: "stored" describes
  *  this database, and the probe's answer describes whether Azure answers. The
- *  second replaces the first when it arrives - see probeAzure(). */
+ *  second replaces the first when it arrives - see probeAzure(). The panel
+ *  draws the same sentence in its own live region; this is the half of it that
+ *  can be read with the panel folded, which every heading in this column is
+ *  for. */
 let azureLine = $state("");
 export const azureState$ = (): string => azureLine;
 
@@ -327,7 +332,7 @@ export function paintStates(): void {
   // probe's answer, which is the only line that describes whether the key
   // works. That answer is the whole reason azureState() exists.
   azureLine = settings.azureKey.set ? t("ui.azure_key_stored") : t("ui.azure_key_none");
-  probeAzure();
+  probeStored();
   /* The three shared panels used to be repainted from here, because each was a
      node this file was holding and none of them carries a data-i18n. They are
      components now and `lang` is a prop, so a language switch redraws them with
@@ -431,36 +436,58 @@ export function metacomWord(): string {
   return t("ui.metacom_ok", { count: where.count });
 }
 
-/** Replaces "stored" with whether the key actually works, asynchronously.
+/** Whether Azure answers, asked about a pairing and said in this page's words.
  *
- * "stored" is a statement about this database; the person who typed a key
- * wants to know whether Azure answers. A wrong region used to cost the Azure
- * rows in silence - the fetch fails before any status exists, listVoices()
- * keeps the piper voices alive by swallowing it, and nothing anywhere said
- * why the list looked exactly as if no key had been typed. */
-function probeAzure(): void {
-  if (!settings.azureKey.set || !settings.azureRegion) return;
+ * **The seam stays wordless and this is where the words are.** azureState()
+ * hands back a code; boot_data.ts holds the four sentences in both languages;
+ * this is the one place the two meet. §6.9 calls that the better half of the
+ * arrangement, and it is why the panel takes a probe rather than owning one -
+ * a panel that brought its own would have to bring German with it.
+ *
+ * It answers the panel *and* writes the answer into the Azure panel's own
+ * folded heading, which is this sheet's rule rather than the component's:
+ * every panel in this column says what it is set to without being opened, and
+ * for this one that answer is two-layered - "hinterlegt" describes this
+ * database and the probe's answer describes whether Azure answers, the second
+ * replacing the first when it arrives. The component draws the same sentence
+ * in its live region, where somebody who has opened the panel is looking. */
+async function probeAzure(ask: AzureAsk): Promise<AzureState> {
   azureLine = t("ui.azure_checking");
-  void azureState().then((state) => {
-    if (!state.configured) return;
-    azureLine = state.ok
-      ? t("ui.azure_ok", { count: state.count })
-      : t(state.code === "unreachable" ? "ui.azure_unreachable"
-        : state.code === "refused" ? "ui.azure_refused" : "ui.azure_probe_failed");
-  });
+  const state = await azureState(ask);
+  azureLine = state.ok
+    ? t("ui.azure_ok", { count: state.count })
+    : t(state.code === "unreachable" ? "ui.azure_unreachable"
+      : state.code === "refused" ? "ui.azure_refused" : "ui.azure_probe_failed");
+  return state;
 }
 
-/** What a read or a write leaves on screen: the three fields put back to what
- *  is stored, and the sentences that describe it.
+/** Asked by the panel, on arrival and again before it writes a save. */
+export const askAzure = (ask: AzureAsk): Promise<AzureState> => probeAzure(ask);
+
+/** The same question about whatever is stored, for the heading alone.
  *
- * The key is never sent back to the page, so the field starts empty and means
- * "leave it alone" until somebody types in it. */
+ * The panel asks its own only when the stored key or region moves, which is
+ * the right rule for a field somebody is typing into and the wrong one for a
+ * heading that is repainted on every open and every language switch. Azure's
+ * catalogue is memoised per key and region, so this costs a round trip once
+ * and is a read afterwards. */
+function probeStored(): void {
+  if (!settings.azureKey.set || !settings.azureRegion) return;
+  void probeAzure({ region: settings.azureRegion });
+}
+
+/** What a read or a write leaves on screen: the field put back to what is
+ *  stored, and the sentence that describes the key.
+ *
+ * The key is never sent back to the page, so the panel's field starts empty
+ * and means "leave it alone" until somebody types in it. Nothing probes from
+ * here any more: the panel asks on arrival and whenever the stored key or
+ * region moves, which is exactly when this line would have wanted a second
+ * answer, and one asker is what keeps "stored" from landing on top of it. */
 function renderSettings(): void {
-  region = settings.azureRegion || "";
   path = settings.metacom.path || "";
-  key = "";
   azureLine = settings.azureKey.set ? t("ui.azure_key_stored") : t("ui.azure_key_none");
-  probeAzure();
+  probeStored();
   // A folder that was set and cannot be read is the one state worth unfolding
   // for: somebody meant to configure this and it is not working.
   if (settings.metacom.path && !settings.metacom.ok) unfoldSymbols();
@@ -738,47 +765,57 @@ export async function loadSettings(): Promise<void> {
   });
 }
 
-/** Writes what the sheet's fields hold.
+/** Writes what the sheet's one remaining field holds, and whatever was asked.
  *
- * `extra` is for the settings that are not fields - the rendering preference
- * is a menu that acts on change, not something read back off the form when
- * some other panel is saved. It merges in last so a caller saying nothing
- * about a setting leaves it alone. */
+ * `extra` is for the settings that are not that field - the rendering
+ * preference is a menu that acts on change, the Azure pairing is a panel that
+ * hands back what it was told to keep. It merges in last so a caller saying
+ * nothing about a setting leaves it alone.
+ *
+ * **The region is no longer written on every save**, and that is the panel
+ * moving out rather than a rule changing. It used to ride along out of a rune
+ * mirroring the field, so every save of anything re-wrote it; there is no such
+ * rune now, and `azureRegion` absent is already "leave the stored one alone"
+ * in writeSettings(). Only keepAzure() passes one. */
 export async function saveSettings(
   extra: Partial<WantedSettings> = {},
 ): Promise<{ azureChanged: boolean }> {
   return inTurn(async () => {
-    // The fields are read inside the turn rather than as this is called, so
-    // that what is written is what they hold when the write actually happens.
-    const wanted: WantedSettings = {
-      azureRegion: region.trim(),
-      metacom: path.trim(),
-      ...extra,
-    };
-    // Only when something was typed: an untouched field must not wipe the key.
-    const typed = key.trim();
-    if (typed) wanted.azureKey = typed;
-    const azureChanged = !!typed || wanted.azureRegion !== (settings.azureRegion || "");
+    // The field is read inside the turn rather than as this is called, so that
+    // what is written is what it holds when the write actually happens.
+    const wanted: WantedSettings = { metacom: path.trim(), ...extra };
+    const azureChanged = wanted.azureKey !== undefined
+      || (wanted.azureRegion !== undefined
+          && wanted.azureRegion !== (settings.azureRegion || ""));
     settings = await writeSettings(wanted);
     renderSettings();
     return { azureChanged };
   });
 }
 
+/** Keeps the pairing the Azure panel was told to keep.
+ *
+ * `key` absent means "the stored one stands", which is what an untouched field
+ * means on a page whose key lives in a placeholder - and this page can never
+ * mean anything else by it, because the secret is not readable from here. So
+ * the absence goes straight through to writeSettings(), where absent leaves
+ * the stored key alone and `null` is the one explicit way to clear it. That
+ * three-state seam is this repository's own and is what `forgetKey()` below
+ * is the third state of. */
+export const keepAzure = (next: AzureAsk): Promise<{ azureChanged: boolean }> =>
+  saveSettings({
+    azureRegion: next.region,
+    ...(next.key ? { azureKey: next.key } : {}),
+  });
+
 /** Drops the stored key, as its own act.
  *
- * The empty field already means "leave the key alone" - the guard above - so
+ * The empty field already means "leave the key alone" - the rule above - so
  * the field cannot double as the way to remove one. Until this existed it did
  * not merely fail to: there was no way to remove a key at all, because
- * writeSettings only ever set it. The region and the METACOM path ride along
- * exactly as a save would take them; the null is the whole difference. */
+ * writeSettings only ever set it. The METACOM path rides along exactly as a
+ * save would take it; the null is the whole difference. The region is left
+ * alone rather than re-written, for the reason saveSettings() gives. */
 export async function forgetKey(): Promise<void> {
-  return inTurn(async () => {
-    settings = await writeSettings({
-      azureRegion: region.trim(),
-      metacom: path.trim(),
-      azureKey: null,
-    });
-    renderSettings();
-  });
+  await saveSettings({ azureKey: null });
 }

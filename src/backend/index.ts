@@ -63,10 +63,12 @@ export {
   voiceFetchState,
   startVoiceFetch,
 
-  // Whether the stored Azure key actually works, as a code the page can put
-  // words to. In the contract because its absence was a hole the sheet fell
-  // through: a wrong region cost the Azure rows silently, and "stored" was
-  // the only thing on screen - true about the database, useless about the key.
+  // Whether an Azure key actually works, as a code the page can put words to.
+  // In the contract because its absence was a hole the sheet fell through: a
+  // wrong region cost the Azure rows silently, and "stored" was the only thing
+  // on screen - true about the database, useless about the key. It takes a
+  // pairing so the panel can ask before it writes, and answers about the
+  // stored one when it is handed none.
   azureState,
 
   // A sentence as sound, for listening to before it is kept.

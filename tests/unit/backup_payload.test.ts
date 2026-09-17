@@ -60,7 +60,6 @@ async function seed(): Promise<void> {
     activeProvider: "metacom",
     metacomRendering: "PNG_ohne_Rahmen",
     tabletAddress: TABLET,
-    local: true,
   } as unknown as Settings);
 }
 

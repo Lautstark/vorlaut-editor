@@ -23,7 +23,7 @@
 // two directories away. What is left is the state and the errands; the sheets
 // are shell/SettingsSheet.svelte and shell/CollectionSheet.svelte, and each
 // panel's words are read where the panel is drawn. adr/0025.
-import type { OfferedVoice, VoiceList } from "../core/types.js";
+import type { AzureAsk, OfferedVoice, VoiceList } from "../core/types.js";
 import { status } from "./dom.js";
 import { languagePicker, type LanguagePicker } from "@lautstark/design/language";
 import type { Pickable } from "@lautstark/stimmquelle/voice-picker";
@@ -44,7 +44,7 @@ import { speak } from "./speech.js";
  * settings.svelte.ts gives at its own import: what this module answers with is
  * drawn, and a state line has to move when the page changes language. */
 import { layout as live, relanguaged, t, touched, words } from "./live.svelte.js";
-import { forgetKey, loadSettings, paintStates, saveSettings } from "./settings.svelte.js";
+import { forgetKey, keepAzure, loadSettings, paintStates } from "./settings.svelte.js";
 import type { Component } from "svelte";
 
 /** Every panel in the settings sheet, in the order SettingsSheet.svelte writes
@@ -348,10 +348,10 @@ export async function chooseVoice(id: string): Promise<void> {
  * button: the whole point of the errand is to change where voices come from,
  * so the refreshed list and the panel's own state line are the answer, and
  * they are on the screen the question was asked from. */
-export async function saveAzure(): Promise<void> {
+export async function saveAzure(next: AzureAsk): Promise<void> {
   let azureChanged = false;
   try {
-    ({ azureChanged } = await saveSettings());
+    ({ azureChanged } = await keepAzure(next));
   } catch (error) {
     status(t("ui.save_failed", { error: reason(error) }));
     return;                       // stay open, the message is in the header
@@ -360,9 +360,15 @@ export async function saveAzure(): Promise<void> {
   // when the sheet opened - and one that has just been corrected can mean
   // rows that were missing come back.
   if (azureChanged) await loadVoices();
-  // No paintStates() here: saveSettings() has already run its own repaint,
-  // which sets the Azure line and starts the probe that replaces it. Painting
-  // again would put "stored" back on top of the probe's answer.
+  // No paintStates() here: the write has already run its own repaint, which
+  // sets the Azure line and starts the probe that replaces it. Painting again
+  // would put "stored" back on top of the probe's answer.
+  //
+  // Said here as well as through the panel's `announce`, and the two are the
+  // same sentence on purpose: the panel only announces a save Azure actually
+  // answered for, and a save that moves the region alone - which this page
+  // permits, because the key it cannot read is not being touched - would
+  // otherwise land with nothing said about it at all.
   status(t("ui.settings_saved"));
 }
 

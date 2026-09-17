@@ -44,12 +44,12 @@
   import { t } from "./live.svelte.js";
   import { outward } from "./links.js";
   import {
-    adoptDataFolder, afterMetacom, azureKeyField, azureRegionField, azureState$,
+    adoptDataFolder, afterMetacom, askAzure, azureState$,
     boardState, chooseRendering, chooseTheme, dataFolderChanged, dataState,
     dataStore, exportData, importData, installed, keyPlaceholder,
     metacomOffered, metacomPathField, metacomWord, keepShown, noteMetacomPress,
     pickBoardFile, preferredRendering, renderingLabel, renderings, sayData,
-    sayMetacom, setAzureKey, setAzureRegion, setMetacomPath, standingBackup,
+    sayMetacom, setMetacomPath, standingBackup,
     symbolsSummary, takeMetacomHeadline, themeLabel, themeNow, useSource,
     useUnfoldSymbols, wipeAll, activeSource,
   } from "./settings.svelte.js";
@@ -59,6 +59,7 @@
     settingsOpen, somethingMissing, startFetch, voicesHereState,
   } from "./voices.svelte.js";
   import { attributionFor, metacomProvider } from "../data/symbols.js";
+  import { status } from "./dom.js";
   import { LANG } from "../core/boot.js";
   import { words } from "./live.svelte.js";
   import type { MetacomAction } from "@lautstark/bildquelle/metacom-panel";
@@ -68,6 +69,9 @@
   import AblagePanel from "@lautstark/sicherung/svelte/AblagePanel";
   import BackupPanel from "@lautstark/sicherung/svelte/BackupPanel";
   import MetacomPanel from "@lautstark/bildquelle/svelte/MetacomPanel";
+  import AzurePanel from "@lautstark/stimmquelle/svelte/AzurePanel";
+  import type { AzureAccess, AzureAnswer, AzureWords }
+    from "@lautstark/stimmquelle/svelte/AzurePanel";
 
   let dataFile: HTMLInputElement;
   let renderingPick: HTMLButtonElement;
@@ -97,6 +101,60 @@
    * a decision. bildhaft and wochenwerk both offer it. */
   const METACOM_ACTIONS: readonly MetacomAction[] =
     ["choose", "zip", "reread", "forget"];
+
+  /* Every sentence the Azure panel can say, all of them this page's.
+   *
+   * conventions.md §6.0: a shared component carries no German, and §6.9 puts
+   * the plural formatter on this side for the same reason - the count is a
+   * number the panel has and only the product can put into its own language's
+   * plural. `$derived`, so the language row three panels above this one
+   * reaches it: the object is new and the panel redraws. That is §6.8's "lang
+   * is a prop" in the shape this panel takes it, where there is no `lang` prop
+   * at all because the language arrives with the words.
+   *
+   * `saving` is `ui.azure_checking` rather than a word of its own, and it is
+   * the same sentence because it is the same act: the button is dark for
+   * exactly as long as Azure is being asked. `saved` ignores its count - what
+   * this page says out loud after a write has always been that it was written,
+   * and the count is on the probe line beside it.
+   *
+   * `failed` ignores Azure's own message, which is the one place this page
+   * deliberately keeps less than the panel offers. The seam is wordless by
+   * design - azureState() answers with a code - so there is no message here to
+   * pass on, and inventing one would be this page claiming to quote Azure.
+   *
+   * No `refusedOnSave`: one sentence for a refused key, which is what this
+   * product has always said. No `regionHint`: there is no line under the
+   * region field here to fill. */
+  const azureWords = $derived<AzureWords>({
+    key: t("ui.azure_key"),
+    region: t("ui.azure_region"),
+    save: t("ui.azure_save"),
+    saving: t("ui.azure_checking"),
+    forget: t("ui.azure_forget"),
+    asking: t("ui.azure_checking"),
+    typeFirst: t("ui.azure_key_placeholder"),
+    answers: (count) => t("ui.azure_ok", { count }),
+    saved: () => t("ui.settings_saved"),
+    unreachable: t("ui.azure_unreachable"),
+    refused: t("ui.azure_refused"),
+    failed: () => t("ui.azure_probe_failed"),
+  });
+
+  /* The probe, adapted at the seam and nowhere else.
+   *
+   * `AzureState` is this repository's shape - four fields, one of them a code
+   * for the text table to branch on - and `AzureAnswer` is the panel's. The
+   * mapping is the whole adapter: `words` is the empty string because the seam
+   * has none to hand over, which is exactly what makes the words above this
+   * page's. A pairing nothing is configured for cannot arise - the panel asks
+   * only when it has a key or has just been given one - and `failed` is the
+   * honest answer if it ever did. */
+  const probeForPanel = async (access: AzureAccess): Promise<AzureAnswer> => {
+    const state = await askAzure(access);
+    if (state.ok) return { ok: true, count: state.count };
+    return { ok: false, code: state.code || "failed", words: "" };
+  };
 
   /* Which of the nine panels are open, by the name the list gives them. Held so
      that opening the sheet can fold them back - see openSettings() - which is
@@ -231,30 +289,64 @@
   <Panel bind:open={shown.azurePanel} id="azurePanel"
          stateId="azureState" section={t("ui.azure")}
          state={azureState$()} class="setting">
-    <p class="lead" id="azureIntro">{t("ui.azure_intro")}</p>
-    <p class="lead"><a id="azureLink" href={outward(t("ui.azure_link_url"))} target="_blank" rel="noopener noreferrer">{t("ui.azure_link")}</a></p>
-    <label id="azureKeyLabel" for="azureKey">{t("ui.azure_key")}</label>
-    <input type="password" id="azureKey" class="field" autocomplete="off"
-      placeholder={keyPlaceholder()} disabled={!installed().local}
-      value={azureKeyField()} oninput={(e) => setAzureKey(e.currentTarget.value)} />
-    <label id="azureRegionLabel" for="azureRegion">{t("ui.azure_region")}</label>
-    <input type="text" id="azureRegion" class="field" autocomplete="off"
-      value={azureRegionField()} oninput={(e) => setAzureRegion(e.currentTarget.value)} />
-    <!-- Only the one thing the field cannot show by itself. That a key is
-         stored, and which one, is in the placeholder above and in the
-         heading. -->
-    <p class="note" id="azureKeyState">{installed().local ? "" : t("ui.azure_local_only")}</p>
-    <div class="row">
-      <!-- The one Save left on this sheet, and it is here rather than on the
-           dialog because a key is the one thing that must not be written as
-           it is typed. -->
-      <button id="azureSave" class="btn primary" type="button" onclick={() => void saveAzure()}>{t("ui.azure_save")}</button>
-      <!-- Removing the key is its own button: the empty field already means
-           "leave the key alone", so it cannot also mean "drop it". Only when
-           there is a key to remove, and only where the key can be touched at
-           all - away from the machine the whole panel is read-only. -->
-      <button id="azureForget" class="btn" type="button" hidden={!installed().azureKey.set || !installed().local} onclick={() => void forgetAzureKey()}>{t("ui.azure_forget")}</button>
-    </div>
+    <!-- @lautstark/stimmquelle/svelte/AzurePanel - conventions.md §6.9, three
+         consumers and this is one of them. What went is the key field, the
+         region field, the placeholder, the probe, the save and the twenty-six
+         region names that all three products carried character for character.
+
+         **The placeholder holds the key, and that is unchanged in every
+         detail.** The stored key sits in `placeholder` and never in a value; a
+         value can be revealed or resubmitted and a placeholder cannot; the
+         field starts empty on every draw; an untouched field means "leave the
+         key alone"; and removing one is its own button, because clearing the
+         field cannot mean it. `stored` is deliberately not passed - the panel
+         offers it for products that can read their own secret back, and this
+         one cannot: `readSettings()` never hands the key to the page, so an
+         untouched field here sends no key at all and `writeSettings()` reads
+         that absence as "leave it alone". Absent, set, or `null` to clear: the
+         three-state seam is this repository's and it is untouched.
+
+         **The probe is injected and the words are ours.** `azureState()`
+         answers with a code and no prose, boot_data.ts holds the four
+         sentences in both languages, and askAzure() is where they meet. §6.9
+         calls that the better half: a panel that owned a probe would have to
+         own German too.
+
+         The two paragraphs stay here as `children` for §6.0's reason - what a
+         key costs and where it goes is three different paragraphs in three
+         products, and `outward()` is this page's own link rule.
+
+         No `regionHint`, so no paragraph and no `hintId`: the panel draws that
+         line only where a product has one to draw, and this one never had a
+         sentence under the region field. The prop is there for the day it
+         does.
+
+         The ids are props, which is what §6.9 turned the bare class hooks
+         into. `#azureKey`, `#azureRegion`, `#azureSave` and `#azureForget`
+         were already ids here and are unchanged, so the six spec files that
+         name them still land. `#azureProbe` is new, and it is the one thing
+         this panel did not have: a live region for the probe's answer, where
+         somebody who has opened the panel is looking. The folded heading above
+         still carries it too - see azureState$(). -->
+    <AzurePanel
+      id="azureBox"
+      fieldId="azureKey"
+      regionId="azureRegion"
+      saveId="azureSave"
+      forgetId="azureForget"
+      probeId="azureProbe"
+      hasKey={installed().azureKey.set}
+      placeholder={keyPlaceholder()}
+      region={installed().azureRegion}
+      probe={probeForPanel}
+      save={(next) => saveAzure(next)}
+      forget={forgetAzureKey}
+      words={azureWords}
+      announce={status}
+    >
+      <p class="lead" id="azureIntro">{t("ui.azure_intro")}</p>
+      <p class="lead"><a id="azureLink" href={outward(t("ui.azure_link_url"))} target="_blank" rel="noopener noreferrer">{t("ui.azure_link")}</a></p>
+    </AzurePanel>
   </Panel>
 
   <!-- The two symbol sources, each stating what it is. They are not exclusive:
