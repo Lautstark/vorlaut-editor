@@ -288,8 +288,8 @@ function drawList(): void {
     })),
     open: current ? [current] : [],
     onPick: (id) => { closeOnPick(); void open(id); },
+    after: (row) => (row.id === current ? pagesUnder() : null),
   });
-  placePages();
 }
 
 /* The pages of the open Sammlung, put back under its row.
@@ -300,13 +300,23 @@ function drawList(): void {
  * contents were drawn imperatively straight afterwards, and is not fine now
  * that a component is mounted into it: a remount on every commit would take
  * the keyboard out of the list somebody is arrowing through, on the very press
- * that moved them. Moving a node keeps its children and keeps whatever is
- * mounted in them, so `row.after()` is the whole of the work.
+ * that moved them.
+ *
+ * That sentence is why the seam the package grew for this takes a **Node** and
+ * not a snippet - conventions.md §6.3. `.after()` on a node that is already in
+ * a document moves it, children and whatever is mounted in them intact; a
+ * snippet renders fresh content per row per paint, which is exactly the
+ * remount forbidden above. So this hands the same element back every time and
+ * the helper re-parents it.
+ *
+ * What went with the seam is the search for the open row afterwards, and the
+ * `host.remove()` beside it: a row that is not the open one is answered with
+ * nothing, and the redraw has already detached the box along with every other
+ * child of the list. It comes back, mounted and intact, the next time a row
+ * asks for it.
  */
-function placePages(): void {
-  if (!listNode) return;
-  const row = listNode.querySelector(".collections__item--active");
-  if (!pageList || !held.list.current || !row) { host?.remove(); return; }
+function pagesUnder(): HTMLElement | null {
+  if (!pageList) return null;
   if (!host) {
     /* An anchor rather than the list itself. `.pagelist` and the id used to be
        on this element, and the editor filled it - which meant the shell owned
@@ -318,8 +328,8 @@ function placePages(): void {
     host = document.createElement("div");
     host.style.display = "contents";
   }
-  row.after(host);
   if (!shownPages) shownPages = mount(pageList, { target: host });
+  return host;
 }
 
 /** There is always one, and it has a name.
