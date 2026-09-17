@@ -145,7 +145,7 @@ test("a search that could not be run says so, rather than finding nothing", asyn
     if (/\/assets\/.*\.js$/.test(request.url())) chunks.add(request.url());
   });
   await searchFor(box, "trinken");
-  await expect(box.locator(".pick__hit")).toHaveCount(1);
+  await expect(box.locator(".picker__item")).toHaveCount(1);
   expect(chunks.size).toBeGreaterThan(0);
 
   // Again from cold, with exactly those chunks refused.
@@ -174,7 +174,7 @@ test("a full answer that holds nothing of the word says so, and keeps it", async
   await searchFor(box, "nicht");
 
   await expect(near(box)).toHaveText(filled("ui.search_near", "nicht"));
-  await expect(box.locator(".pick__hit")).toHaveCount(1);
+  await expect(box.locator(".picker__item")).toHaveCount(1);
   // Not one of the two sentences that replace the results: nothing here is
   // empty and nothing failed.
   await expect(note(box)).toHaveCount(0);
@@ -182,6 +182,6 @@ test("a full answer that holds nothing of the word says so, and keeps it", async
   // And the word the collection does hold gets no line at all - a line over
   // every answer is a line nobody reads.
   await searchFor(box, "trinken");
-  await expect(box.locator(".pick__hit")).toHaveCount(1);
+  await expect(box.locator(".picker__item")).toHaveCount(1);
   await expect(near(box)).toBeHidden();
 });

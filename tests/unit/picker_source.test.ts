@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { state } from "../../src/core/state.js";
 import * as symbols from "../../src/data/symbols.js";
-import { creditLine, findSymbols, offeredSource, searchPlaceholder }
+import { creditLine, emptyLine, nearLine, offeredSource, searchPlaceholder, searchProvider }
   from "../../src/shell/picker.js";
 import { t } from "../../src/core/texts.js";
 import type { AppLayout, Layout } from "../../src/core/types.js";
@@ -25,6 +25,17 @@ import type { AppLayout, Layout } from "../../src/core/types.js";
  * of one language's column: which language a test runner opens in is the
  * host's locale, and asserting against English would make this fail on a
  * German machine and pass on the CI runner. */
+
+/* What findSymbols() used to hand back, reassembled from the three pieces that
+ * replaced it. The search runs through `searchProvider`, which is the object
+ * `@lautstark/bildquelle/svelte/SymbolSearch` is handed, so what is under test
+ * is exactly what the component asks; `emptyLine` is then asked of the reason
+ * there were no hits, the way the snippet after the tiles asks it. */
+async function findSymbols(word: string) {
+  let failure: unknown | null = null;
+  const hits = await searchProvider((error) => { failure = error; }).search(word);
+  return { hits, near: nearLine(word, hits), empty: hits.length ? "" : emptyLine(word, failure) };
+}
 
 const talker = (...refs: string[]): Layout => ({
   sleep_timeout_seconds: 600,

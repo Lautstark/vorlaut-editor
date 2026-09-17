@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { KEY_CELL, cells, key, keySheet, label, openBoard, pick, press, query }
+import { KEY_CELL, cells, credits, key, keySheet, label, openBoard, pick, press, query }
   from "./diy.js";
 
 /* Cutting somebody's own picture down to a square before it is kept.
@@ -113,7 +113,7 @@ test("a wide picture takes the column over while its square is chosen",
 
   await expect(crop(box)).toBeVisible();
   await expect(query(box)).toBeHidden();
-  await expect(pick(box).locator(".pick__credits")).toBeHidden();
+  await expect(credits(box)).toBeHidden();
   await expect(pick(box).locator(".pick__acts")).toBeHidden();
 });
 

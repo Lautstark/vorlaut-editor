@@ -8,19 +8,43 @@
    * went is the building, and with it the three hand-written redraws -
    * drawPreview(), drawResults() and the pair of `hidden` sweeps that took the
    * search away while a crop was open.
+   *
+   * ## And the search itself is a component now
+   *
+   * `@lautstark/bildquelle/svelte/SymbolSearch` draws the field, the grid, the
+   * credit line and everything that happened between them: the three-character
+   * minimum with Enter overriding it, the 300ms debounce, the stale-answer
+   * guard, the roving-tabindex arrows read off `offsetTop`, and Enter claimed
+   * with `preventDefault` *and* `stopPropagation`. All of that was written here
+   * first and none of it was this product's - conventions.md §6.4, which is
+   * where each of those decisions is argued once instead of three times.
+   *
+   * What is left here is what is genuinely this column's, and §6.4's seam is
+   * shaped for exactly it: the prescribed start-key tile and the way back into
+   * a folder are not caller content standing above and below the results, they
+   * come out of the *search answer* and render inside the box. So they arrive
+   * through snippets that are handed that answer. The home tile carries
+   * `picker__item` and is therefore index 0 of the ring the arrows walk, which
+   * is what it has always been and what a `before`/`after` seam would have
+   * quietly taken away.
    */
   import { onDestroy, tick, untrack } from "svelte";
   import { reason } from "../../core/errors.js";
   import { status } from "../dom.js";
   import { t } from "../live.svelte.js";
   import { IMAGE_SIZE } from "../../data/app_package.js";
+  import { SEARCH_LIMIT } from "../../data/symbols.js";
   import { cropName, loadSquare, typeOut } from "@lautstark/design/crop";
   import type { CropOutput, Loaded } from "@lautstark/design/crop";
   import Crop from "@lautstark/design/svelte/Crop";
-  import { HOME_TONES } from "../homekey.js";
-  import { creditLine, findSymbols, searchPlaceholder, takeHome, takeSymbol, uploadOwn }
-    from "../picker.js";
-  import type { HomeSuggestion, SymbolAct, SymbolHit } from "../picker.js";
+  import SymbolSearch from "@lautstark/bildquelle/svelte/SymbolSearch";
+  import type { Candidate } from "@lautstark/bildquelle";
+  import { asksForHome, HOME_TONES } from "../homekey.js";
+  import {
+    captionFor, emptyLine, homeFor, nearLine, offeredSource, searchPlaceholder,
+    searchProvider, takeHome, takeSymbol, uploadOwn, wayBackIn,
+  } from "../picker.js";
+  import type { HomeSuggestion } from "../picker.js";
   import { focusOnOpen } from "../parts.js";
   import type { Held, PickColumn } from "../sheet.svelte.js";
   import Negate from "./Negate.svelte";
@@ -42,51 +66,63 @@
   // svelte-ignore state_referenced_locally
   let negated = $state(Boolean(spec.negated));
 
-  /* What the results box is showing, as the three things that can be in it at
-   * once: the prescribed start-key picture, the hits, and the sentence that
-   * stands in for hits there are none of.
+  /* --- the search ----------------------------------------------------------
    *
-   * Held rather than drawn as each arrives, because two of the three outlive a
-   * press: taking a picture redraws the box to move the frame onto what was
-   * taken, and a box redrawn from the hits alone would lose the tile above them
-   * and the sentence below. `searching` is still what writes "sucht …", because
-   * that one really does replace everything. */
-  let hits = $state.raw<SymbolHit[]>([]);
-  let home = $state.raw<HomeSuggestion | null>(null);
-  let nothing = $state("");
-  /* What can be done about `nothing`, where the seam offered something. Held
-   * beside it rather than inside the sentence, because a sentence is drawn and
-   * a button is pressed. */
-  let act = $state.raw<SymbolAct | null>(null);
-  /* The third answer, which is neither a hit nor a silence: hits that are the
-   * nearest the collection holds rather than the word. They stay; this says so. */
-  let near = $state("");
-  let searching = $state(false);
+   * Which collection is searched comes from the one place that knows - a
+   * second copy of that answer is how a field comes to name a collection it is
+   * not searching. Read as the sheet is built rather than once at boot, because
+   * a METACOM folder arrives and leaves without a reload.
+   *
+   * The provider handed over is a shim rather than bildquelle's own object, and
+   * searchProvider()'s head says why: the German pipeline, a collection that
+   * cannot be reached answering nothing at all, and the "must not throw" rule
+   * that shell/data/symbols.ts deliberately breaks one layer down. */
+  let failure = $state.raw<unknown | null>(null);
+  let finder: ReturnType<typeof SymbolSearch> | undefined = $state.raw();
+  const provider = searchProvider((error) => { failure = error; });
 
-  /* Which collection is being searched, from the one place that knows - a
-     second copy of that answer is how a field comes to name a collection it is
-     not searching. Read as the sheet is built rather than once at boot, because
-     a METACOM folder arrives and leaves without a reload. */
-  const placeholder = searchPlaceholder();
-  /* What is owed for the collection these pictures come from.
-     ARASAAC is CC BY-NC-SA and the wording is a condition of the licence, so it
-     belongs wherever its pictures are shown - which, since a sheet carries its
-     own search, is here. The sentence is picker.ts's, built there and read
-     here. */
-  const credits = creditLine();
+  /* Only two, because there is only so much fixed furniture in a field and a
+     grid of pictures. §6.0: a shared component carries no German. */
+  const words = $derived({
+    field: t("ui.symbol_search"),
+    placeholder: searchPlaceholder(),
+    searching: t("ui.searching"),
+  });
 
+  /* What the sheet opens the search on, and the one thing that replaces it.
+   *
+   * A reconnect is the only event that can make a collection answer differently
+   * to the same word, and there is no way to ask the component to run its
+   * search again - nor should there be a second one, since what changed is the
+   * collection rather than the query. So the search is built again around the
+   * word that is in the field, which is what the block below keys on. The word
+   * comes off the answer the snippet was handed, because the field's value is
+   * the component's. */
   // svelte-ignore state_referenced_locally
-  let word = $state(spec.seed.trim());
-  let queryNode: HTMLInputElement;
-  let results: HTMLElement;
+  let seed = $state.raw(spec.seed.trim());
+  let reopened = $state(0);
+
+  /* The prescribed house, asked for once and only where a word asks for it.
+   *
+   * Two halves, and they are separated because one of them is expensive.
+   * Whether the *word* asks for a start key is asksForHome(), which is a table
+   * lookup and is asked for every answer. Whether this collection can produce
+   * the picture is a resolve - a folder read under METACOM, a download under
+   * ARASAAC - and is the same answer for the whole life of this sheet, so the
+   * promise is made once and awaited wherever it is drawn. Nothing is asked of
+   * either collection until a search actually lands on a word for "home". */
+  let house: Promise<HomeSuggestion | null> | undefined;
+  const houseSymbol = (): Promise<HomeSuggestion | null> => (house ??= homeFor());
+
   let file: HTMLInputElement;
 
   /* Going in and coming out of the crop.
    *
    * The search, its two sentences and the results go away for the duration
    * rather than dimming: a live grid of pictures under an open crop invites a
-   * press that throws the crop away without saying so, and hiding them is one
-   * property against a disabled look this stylesheet has nowhere else.
+   * press that throws the crop away without saying so. That is `busy` on the
+   * component, and it has to be a prop rather than a wrapper: a block around
+   * the component cannot hide the field and the grid *inside* it.
    *
    * The crop adds no buttons of its own, and it had two once. Both went the
    * same way and for the same reason: this sheet already has a foot, the foot
@@ -96,14 +132,7 @@
    * which is what they mean everywhere else here.
    *
    * The square, the slider and the two ways of moving them are
-   * @lautstark/design/svelte/Crop now, over @lautstark/design/crop -
-   * conventions.md §6.6. What was shell/crop.ts here and a component in
-   * bildhaft was the same file twice down to an error string, and the one
-   * thing this side had that the other did not - `touch-action: none` on the
-   * box - came across with it. What came back the other way is
-   * `stopPropagation` after the arrow keys: this column's own keydown handling
-   * sits on the results box and the sheet's on the dialog, and a nudge meant
-   * for the picture had no business reaching either. */
+   * @lautstark/design/svelte/Crop, over @lautstark/design/crop - §6.6. */
   let cropping = $state.raw<Loaded | null>(null);
   /* The handle, because a component returns nothing where the factory returned
      an object. §6.6's answer: cut(), close() and focus() are instance exports
@@ -181,221 +210,36 @@
     spec.onPick(chosen, caption, typed);
   }
 
-  /* --- searching ---------------------------------------------------------- */
-
-  // So a slow answer cannot overtake a newer one. The sheet's own, because the
-  // sheet is its own search - there is no dialog behind it to hold one.
-  let token = 0;
-  /* The word the tiles on screen are the answer to, which is not the same as
-     the word in the field: somebody who has typed three more letters and not
-     yet been answered is looking at the old ones. onPick is handed this rather
-     than the field's value so that the name a pick fills in is the word that
-     found the picture being picked. */
-  let searched = "";
-
-  function search(): void {
-    const asked = word.trim();
-    if (!asked) return;
-    const mine = ++token;
-    /* "sucht …" replaces the box, so it is only written into an empty one.
-     *
-     * That was unconditional while Enter was the only way to run a search: a
-     * press meant a wait, and the box had nothing in it worth keeping. Typing
-     * runs one every few letters, and a box that blanked itself on each of them
-     * would flicker under the hand that is typing - and would take away the
-     * hits from two letters ago, which are the best answer anybody has until
-     * the next ones arrive. So results stand until they are replaced. */
-    searching = !home && !hits.length && !nothing;
-    near = "";
-    void findSymbols(asked).then((answer) => {
-      if (mine !== token) return;
-      searched = asked;
-      searching = false;
-      hits = answer.hits;
-      home = answer.home;
-      // Both silences - a word the collection does not have, and a browser that
-      // never managed to ask - come back as a sentence from the seam, and are
-      // written into the box under whatever else is in it.
-      nothing = answer.empty;
-      act = answer.act ?? null;
-      near = answer.near;
-    });
-  }
-
-  /* --- Searching as it is typed --------------------------------------------
-   *
-   * Enter was the only way to run a search, and there is no button beside the
-   * field, so the field asked to be typed into and then said nothing about what
-   * to do next. Everything else in this product that searches - the voice list,
-   * the collection filter - answers as you type, and this is the one place that
-   * made somebody ask for the answer.
-   *
-   * Three letters, because of what is on the other end. ARASAAC is a network
-   * call and METACOM is an index over somebody's folder; one or two letters
-   * match a large part of either and answer with the first four of a thousand
-   * pictures, which is a slower way of showing nothing. Three is also where
-   * German stops being prefixes - "es", "im", "am" are whole words and none of
-   * them is a picture anybody wants.
-   *
-   * Enter still works and is not the same act: it runs the word as it stands,
-   * now, at any length. That is what somebody typing "Ei" needs, and it is the
-   * way to ask again after a search that failed on a dropped network.
-   *
-   * The stale-answer guard above is what makes this safe rather than anything
-   * here: a fast typist has several searches in flight and they may land in any
-   * order, and only the newest one is allowed to draw. */
-  const ENOUGH = 3;
-  /* Long enough that a word typed at speed is one search rather than six, short
-     enough that stopping to look at the screen is answered before anybody
-     wonders whether it will be. */
-  const SETTLES = 300;
-  let typing: ReturnType<typeof setTimeout> | undefined;
-
-  function typedInto(): void {
-    clearTimeout(typing);
-    if (word.trim().length < ENOUGH) return;
-    typing = setTimeout(search, SETTLES);
-  }
-
-  function pressedInQuery(event: KeyboardEvent): void {
-    /* Down into the pictures, which is the whole point of having typed. The
-       grid keeps its own arrows from here on, and ArrowUp out of the top row
-       comes back to this field. */
-    if (event.key === "ArrowDown") {
-      const all = tiles();
-      if (!all.length) return;
-      event.preventDefault();
-      focusTile(all, 0);
-      return;
-    }
-    if (event.key !== "Enter") return;
-    // The sheet is not a form, but Enter in a search field inside a dialog is
-    // otherwise the browser's own way to close it.
-    event.preventDefault();
-    // Now, rather than in 300ms and again after that.
-    clearTimeout(typing);
-    search();
-  }
-
-  /* --- Walking the tiles ---------------------------------------------------
-   *
-   * The results are the one thing in this sheet that is looked at rather than
-   * read, and Tab pressed twenty times to reach the twenty-first picture is not
-   * looking. So the box is one stop in the tab order and the arrows move inside
-   * it, which is what a grid of controls is for.
-   *
-   * Delegated to the box rather than bound to each tile: the tiles are thrown
-   * away and rebuilt by every search and by every pick, and a handler per tile
-   * would be rebuilt with them. */
-
-  /** The tiles, in the order they are drawn in. */
-  const tiles = (): HTMLElement[] =>
-    [...results.querySelectorAll<HTMLElement>("button.pick__hit")];
-
-  /** Focus one, and make it the box's one tab stop. Roving rather than a fixed
-   *  stop at the first tile, so that Tab out and back in comes back to the
-   *  picture somebody was looking at. */
-  function focusTile(all: HTMLElement[], at: number): void {
-    all.forEach((one, index) => { one.tabIndex = index === at ? 0 : -1; });
-    all[at]?.focus();
-  }
-
-  /**
-   * Where an arrow lands, as an index into the tiles.
-   *
-   * Stopping at the edge rather than wrapping - the same choice the board's
-   * Alt+Arrow and the sheet's own "next" already make, and for the same reason:
-   * walking off the end back to the beginning is a surprise.
-   *
-   * Up and down are read off the layout rather than counted in fours. ui.css
-   * lays the box out in four columns, but the prescribed start-key tile is a
-   * little column with a word under it and stands taller than the hits beside
-   * it, so a row is not reliably four tiles at the same height. Grouping by
-   * offsetTop makes that tile a member of its row instead of an exception to an
-   * arithmetic, and it will go on being right if the column count ever becomes
-   * a media query.
-   */
-  function stepTo(all: HTMLElement[], from: number, key: string): number {
-    if (key === "ArrowLeft") return Math.max(0, from - 1);
-    if (key === "ArrowRight") return Math.min(all.length - 1, from + 1);
-    const here = all[from]!;
-    const rows = [...new Set(all.map((one) => one.offsetTop))].sort((a, b) => a - b);
-    const want = rows[rows.indexOf(here.offsetTop) + (key === "ArrowDown" ? 1 : -1)];
-    if (want === undefined) return from;
-    // The nearest tile on that row by where it starts, so a run of presses
-    // holds a column rather than drifting to the left edge.
-    let best = from;
-    let nearest = Infinity;
-    all.forEach((one, at) => {
-      if (one.offsetTop !== want) return;
-      const gap = Math.abs(one.offsetLeft - here.offsetLeft);
-      if (gap < nearest) { nearest = gap; best = at; }
-    });
-    return best;
-  }
-
-  function walkTiles(event: KeyboardEvent): void {
-    const arrow = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key);
-    if (!arrow) return;
-    const all = tiles();
-    const from = all.indexOf(document.activeElement as HTMLElement);
-    // Something else in the box has focus - the button offered beside a
-    // sentence about an empty answer - and the arrows are not this box's.
-    if (from < 0) return;
-    // Claimed whether or not there is anywhere to go: the box scrolls at 150px,
-    // and an arrow that moved nothing would scroll the pictures away from under
-    // the one that is focused.
-    event.preventDefault();
-    const to = stepTo(all, from, event.key);
-    /* Off the top row is back to the field above, which is where somebody who
-       has changed their mind about the word is going. Off the other three edges
-       is nowhere: left and right have the rest of the grid behind them and down
-       has the credits, which is not a place to arrow into. */
-    if (to === from && event.key === "ArrowUp") queryNode.focus();
-    else focusTile(all, to);
-  }
-
-  /* One tab stop for the whole box, and the keyboard put back where it was.
-   *
-   * drawResults() did this by hand on every redraw, remembering the index
-   * before it emptied the box and clamping it afterwards, because taking a
-   * picture rebuilt every tile and the element focus was on went with them. The
-   * keyed each block below is what makes the remembering unnecessary: a tile
-   * that is still in the answer is still the same element, so focus stays where
-   * it was without anybody moving it. What is left is the tab index, which
-   * belongs to the box rather than to any one tile. */
-  $effect(() => {
-    hits; home; nothing;
-    const all = tiles();
-    if (!all.some((one) => one.tabIndex === 0)) {
-      all.forEach((one, at) => { one.tabIndex = at === 0 ? 0 : -1; });
-    }
-  });
-
   /* The sheet opens in the search field, and where the thing being edited
      already has a word, it opens on the answer to it.
-     Its own focus rather than the sheet's, because the field is this
+     Its own focus rather than the sheet's, because the field is the search
      component's - see the note at the foot of openSheet(). Untracked, and that
-     is not tidiness: `word` is a rune and reading it here would make this an
-     effect that re-runs on every keystroke, which is a search fired per letter
-     and the caret sent back to the start of the field while somebody is typing
-     into it. What is wanted is once, at mount.
+     is not tidiness: reading a rune here would make this an effect that re-runs
+     while somebody is typing.
      The focus goes through focusOnOpen(): the frame shows the sheet from an
      effect of its own and a child's effects run before it, so a focus() here
      would land inside a dialog that is still display: none - see the note on it
-     in shell/parts.ts. The search does not wait, because it has nothing to do
-     with what is on screen. */
+     in shell/parts.ts.
+     What is *not* here any more is running the seeded search. The component
+     does that as it is created rather than from an effect, and its own head
+     says why that difference is not cosmetic: an effect reads the field's
+     current value rather than the seed, and anything typed between the mount
+     and the first flush is searched a second time - measured, two characters
+     into a fresh field. */
   $effect(() => {
-    untrack(() => {
-      focusOnOpen(() => queryNode.focus());
-      if (word) search();
-    });
+    untrack(() => focusOnOpen(() => finder?.focus()));
   });
 
   /* --- the pictures -------------------------------------------------------- */
 
-  function takeHit(hit: SymbolHit): void {
-    status(t(hit.source === "metacom" ? "ui.taking_symbol" : "ui.loading_symbol"));
+  /* Handed the word that *found* the picture rather than the field's value, and
+     that is the component's doing rather than a mirror kept here: somebody who
+     has typed three more letters and not yet been answered is looking at the
+     old tiles. The bug it fixes is recorded in §6.4 and was this product's: a
+     search whose word is not the label of the picture it lands on used to name
+     the key after the collection's word rather than after the carer's. */
+  function takeHit(hit: Candidate, searched: string): void {
+    status(t(offeredSource() === "metacom" ? "ui.taking_symbol" : "ui.loading_symbol"));
     void takeSymbol(hit).then(
       (taken) => { took(taken.symbol, taken.label, searched); status(""); },
       (error: unknown) => status(t("ui.symbol_failed", { error: reason(error) })));
@@ -486,10 +330,11 @@
      take off, and a control that is permanently there and permanently dead
      reads as broken. Hiding it does cost the press its own focus, though - the
      button vanishes under it - so the press hands focus to the search field,
-     which is where somebody who has just cleared a picture is going next. */
+     which is where somebody who has just cleared a picture is going next. The
+     field is the component's now, so this asks the component for it. */
   function takeOff(): void {
     took("", "");
-    queryNode.focus();
+    finder?.focus();
     status(t("ui.symbol_off_done"));
   }
 
@@ -522,12 +367,15 @@
   /** The way out of an empty answer, where the seam knows one. The sentence
    *  says what is wrong; without this it also had to say where to go and fix
    *  it, which for the one case that has an answer meant closing this sheet,
-   *  finding a panel two screens away and coming back. */
-  function doAct(): void {
-    void act?.run().then((changed) => {
-      // Only when something really changed: a refused prompt leaves the sheet
-      // exactly as it was, which is what a refusal should cost.
-      if (changed) search();
+   *  finding a panel two screens away and coming back.
+   *
+   *  Only where something really changed: a refused prompt leaves the sheet
+   *  exactly as it was, which is what a refusal should cost. */
+  function doAct(run: () => Promise<boolean>, query: string): void {
+    void run().then((changed) => {
+      if (!changed) return;
+      seed = query;
+      reopened += 1;
     });
   }
 
@@ -561,43 +409,70 @@
     {/key}
   {/if}
 
-  <input bind:this={queryNode} bind:value={word} type="search" class="field" autocomplete="off"
-    placeholder={placeholder} aria-label={t("ui.symbol_search")} hidden={cropped}
-    oninput={typedInto} onkeydown={pressedInQuery} />
+  <!-- Rebuilt, and only ever by a reconnect - see doAct(). -->
+  {#key reopened}
+    <SymbolSearch bind:this={finder} class="pick__search" {provider} {words} {seed}
+      busy={cropped} minimum={3} limit={SEARCH_LIMIT} describe={captionFor}
+      onpick={takeHit} onescape={() => held.dismiss()}>
+      <!-- What kind of answer the hits are, above the hits themselves.
+           Outside the box rather than a line inside it: the box scrolls at
+           150px and a sentence written into it scrolls away from the pictures
+           it is about, which is the same silence as not writing it. Above,
+           because it is read before the tiles are looked at rather than after.
+           Neither of those is sayable without the `between` slot, which is why
+           this repository is on bildquelle v2.4.0.
+           role="status" and built empty, so that the sentence is announced when
+           it arrives. Hidden rather than left empty: an empty <p> above the
+           grid is a gap that reads as a layout fault. -->
+      {#snippet between(answer)}{@const near = nearLine(answer.searched, answer.candidates)}<p class="pick__near" role="status" hidden={cropped || !near}>{near}</p>{/snippet}
 
-  <!-- What kind of answer the hits are, above the hits themselves.
-       Its own element rather than a line inside the grid: the grid scrolls at
-       150px and a sentence written into it scrolls away from the pictures it is
-       about, which is the same silence as not writing it. Above, because it is
-       read before the tiles are looked at rather than after.
-       role="status" and built empty, so that the sentence is announced when it
-       arrives. Hidden rather than left empty: an empty <p> above the grid is a
-       gap that reads as a layout fault. -->
-  <p class="pick__near" role="status" hidden={cropped || !near}>{near}</p>
+      <!-- The one tile the collection did not answer with: the picture a start
+           key is prescribed, drawn the way that key is drawn rather than the
+           way a thumbnail is. It is inside the box and first, which is what
+           `lead` is for: it carries the same class as a hit, so it is index 0
+           of the ring the arrows walk, and a seam that put it outside the box
+           would have shipped those arrows and removed the tile they start on.
+           Marked and captioned rather than quietly put in the grid as a fifth
+           hit. The grid has one rendering rule - a picture on white, as the
+           collection draws it - and a single tile that broke it would read as
+           the picker having two, with nothing on screen saying which is which.
+           So the light-on-dark is declared: the tile is set apart, it says what
+           it is for, and the same house is still in the grid beside it as an
+           ordinary hit.
+           The key's own colour, from the module that owns what a key looks like
+           rather than written a second time in ui.css. It is not a token and
+           must not become one: this is the tablet's tile, the same in both
+           schemes.
+           Offered whatever the collection answered, including an empty answer -
+           a collection with no word for "home" still has the house that was
+           chosen out of it, and that is exactly the search where somebody most
+           needs to be shown it. -->
+      {#snippet lead(answer)}{#if asksForHome(answer.searched)}{#await houseSymbol() then home}{#if home}<div class="pick__home"><button type="button" class="picker__item pick__hit--home" style="--home-plate:{HOME_TONES.plate}" aria-label={home.caption} title={home.caption} onclick={takeHouse}><img src={home.url} loading="lazy" alt="" /></button><!-- A restatement of the tile's own name, for whoever can see it.
+           Announcing it twice would be a reader hearing "start key, start key". --><span class="pick__homecap" aria-hidden="true">{home.caption}</span></div>{/if}{/await}{/if}{/snippet}
 
-  <div bind:this={results} class="pick__results" hidden={cropped} onkeydown={walkTiles} role="presentation">{#if searching}<p>{t("ui.searching")}</p>{:else}{#if home}<!-- The one tile the collection did not answer with: the picture a start key
-       is prescribed, drawn the way that key is drawn rather than the way a
-       thumbnail is.
-       Marked and captioned rather than quietly put in the grid as a fifth hit.
-       The grid has one rendering rule - a picture on white, as the collection
-       draws it - and a single tile that broke it would read as the picker
-       having two, with nothing on screen saying which is which. So the
-       light-on-dark is declared: the tile is set apart, it says what it is for,
-       and the same house is still in the grid beside it as an ordinary hit.
-       The key's own colour, from the module that owns what a key looks like
-       rather than written a second time in ui.css. It is not a token and must
-       not become one: this is the tablet's tile, the same in both schemes. --><div class="pick__home"><button type="button" class="pick__hit pick__hit--home" style="--home-plate:{HOME_TONES.plate}" aria-label={home.caption} title={home.caption} onclick={takeHouse}><img src={home.url} loading="lazy" alt="" /></button><!-- A restatement of the tile's own name, for whoever can see it.
-       Announcing it twice would be a reader hearing "start key, start key". --><span class="pick__homecap" aria-hidden="true">{home.caption}</span></div>{/if}{#each hits as hit (hit.url)}<!-- The hint tells twins apart - four METACOM tiles captioned "ja" differ
-       only by picture - and is display only, never the reference. --><button type="button" class="pick__hit" aria-label={hit.label + ("hint" in hit && hit.hint ? ` - ${hit.hint}` : "")} onclick={() => takeHit(hit)}><img src={hit.url} loading="lazy" alt="" /></button>{/each}{#if nothing}<!-- Under whatever is above it rather than instead of it. The box used to
-       be replaced, which was right while hits were the only thing in it - a
-       search that found nothing had nothing to stand beside the sentence. It
-       has now: the prescribed tile is offered whatever the collection answered,
-       and it is the empty answers where that offer is worth the most. --><p>{nothing}</p>{#if act}<button type="button" class="btn" onclick={doAct}>{act.label}</button>{/if}{/if}{/if}</div>
+      <!-- Under whatever is above it rather than instead of it. The box used to
+           be replaced, which was right while hits were the only thing in it - a
+           search that found nothing had nothing to stand beside the sentence.
+           It has now: the prescribed tile is offered whatever the collection
+           answered, and it is the empty answers where that offer is worth the
+           most.
+           Both silences - a word the collection does not have, and a browser
+           that never managed to ask - are one sentence from the seam, which is
+           also the only thing that still knows which of them it was. -->
+      {#snippet trailing(answer)}{#if answer.empty}{@const act = wayBackIn()}<p>{emptyLine(answer.searched, failure)}</p>{#if act}<button type="button" class="btn" onclick={() => doAct(act.run, answer.query)}>{act.label}</button>{/if}{/if}{/snippet}
+
+      <!-- Nothing. A tile here is a picture and only a picture, the way the
+           collection draws it; the label is its accessible name and its title
+           and is captionFor()'s, which is where the twins are told apart.
+           §6.4 records that as a convergence rather than a difference -
+           bildhaft disambiguates in visible text and this page in aria-label,
+           and both products do disambiguate. -->
+      {#snippet caption()}{/snippet}
+    </SymbolSearch>
+  {/key}
 
   <div class="pick__acts" hidden={cropped}><button type="button" class="btn quiet" onclick={() => file.click()}>{t("ui.symbol_own")}</button><button type="button" class="btn quiet" hidden={!symbol} onclick={takeOff}>{t("ui.symbol_off")}</button></div>
   <input bind:this={file} type="file" accept="image/*" hidden onchange={chose} />
 
   {#if spec.onNegate}<label class="pick__negate" for="pickNegate" hidden={cropped || !symbol}><input type="checkbox" id="pickNegate" checked={negated} onchange={(e) => crossOut(e.currentTarget.checked)} />{t("ui.symbol_negate")}</label>{/if}
-
-  <p class="pick__credits" hidden={cropped}>{credits}</p>
 </div>

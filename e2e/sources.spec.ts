@@ -2,7 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
-import { cells, hits, key, keySheet, press, query, search, searchNote } from "./diy.js";
+import { cells, credits, hits, key, keySheet, press, query, search, searchNote }
+  from "./diy.js";
 import { exportForTalker, openCollectionSettings } from "./sheets.js";
 
 /* Which collection the sheet offers, across a reload.
@@ -75,7 +76,7 @@ async function expectSource(page: Page, expected: string | RegExp): Promise<void
 /** The same for the line under the pictures saying what is owed for them. */
 async function expectCredits(page: Page, expected: RegExp): Promise<void> {
   const box = await openSheet(page);
-  await expect(box.locator(".pick__credits")).toContainText(expected);
+  await expect(credits(box)).toContainText(expected);
   await shut(page);
 }
 

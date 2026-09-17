@@ -26,10 +26,12 @@ import { drawnFrom } from "../data/app_package.js";
 import { state } from "../core/state.js";
 import { t } from "../core/texts.js";
 import {
-  asksForHome, homeSymbolUrl, homeWord, takeHomeSymbol,
+  homeSymbolUrl, homeWord, takeHomeSymbol,
 } from "./homekey.js";
 import { needsAttention } from "@lautstark/bildquelle";
-import type { ProviderId, ProviderStatus } from "@lautstark/bildquelle";
+import type {
+  Candidate, ProviderId, ProviderStatus, SymbolProvider,
+} from "@lautstark/bildquelle";
 
 /* --- The seam ------------------------------------------------------------
  *
@@ -39,8 +41,18 @@ import type { ProviderId, ProviderStatus } from "@lautstark/bildquelle";
  * as the seam alone. What a caller must not do is carry a second copy of the
  * reasoning below; only the markup is the caller's. */
 
-/** One hit, as the two sources between them describe it. */
-export type SymbolHit = Awaited<ReturnType<typeof symbols.searchIn>>[number];
+/* A hit is bildquelle's own `Candidate` now, and there is no vorlaut shape in
+ * front of it.
+ *
+ * `SymbolHit` was `Awaited<ReturnType<typeof symbols.searchIn>>[number]` - the
+ * decorated shape, carrying a resolved picture URL, a folder hint for repeated
+ * labels and whichever identifier the pick step needed, `ref` for METACOM and
+ * `id` for ARASAAC. The grid is `@lautstark/bildquelle/svelte/SymbolSearch`
+ * now: it asks the provider for each picture itself, counts the repeats as it
+ * draws, and hands a `Candidate` straight back to `onpick`. So the three
+ * things decorate() carried are each derived where they are used -
+ * captionFor() below for the hint, takeSymbol() for the reference - and the
+ * shape in between is the package's. */
 
 /**
  * Which collection the picker offers - the open Sammlung's, and only failing
@@ -146,7 +158,7 @@ export const canReconnect = (status: ProviderStatus): boolean =>
  * The same words the Sammlung's own panel uses, out of the same key. A second
  * wording for one act is how two places come to describe the same button
  * differently. */
-function wayBackIn(): SymbolAct | null {
+export function wayBackIn(): SymbolAct | null {
   if (!canReconnect(symbols.metacomStatus())) return null;
   return {
     label: t("ui.symbol_source_reconnect"),
@@ -186,29 +198,21 @@ export interface SymbolAct {
   run(): Promise<boolean>;
 }
 
-export interface SymbolAnswer {
-  hits: SymbolHit[];
-  /** "" when there are hits. */
-  empty: string;
-  /** What to do about `empty`, where there is something. Absent nearly always:
-   *  a word the collection does not have is not a thing anybody can act on
-   *  from here. */
-  act?: SymbolAct | null;
-  /** The line above hits that answer something other than what was typed.
-   *  "" when one of them really is the word. Never set together with `empty`:
-   *  it is about hits, and there are none to be about. */
-  near: string;
-  /** The picture a start key is prescribed, when the word typed is a word for
-   *  one - see shell/homekey.ts. null otherwise, which is nearly always.
-   *
-   *  Beside the hits and not among them, because it is not one: it is the one
-   *  picture in the collection this product has an opinion about, and it is
-   *  the same picture whatever the search found. That is also why it survives
-   *  an `empty` answer - a collection with no word for "home" still has the
-   *  house that was chosen out of it, and that is exactly the search where
-   *  somebody most needs to be shown it. */
-  home: HomeSuggestion | null;
-}
+/* `SymbolAnswer` is gone, and what replaced it is four questions asked
+ * separately.
+ *
+ * It was one object - hits, the sentence for an empty answer, what could be
+ * done about it, the line above near misses, and the prescribed house - and it
+ * was that shape because one function ran the search and one component drew
+ * everything that came back. The component runs the search now. So the hits
+ * and whether there are none are the component's, and each of the other three
+ * is asked at the point it is drawn: `emptyLine`, `wayBackIn` and `nearLine`
+ * from the snippet after the tiles, `homeFor` from the one before them.
+ *
+ * What is not lost is the reasoning, which was never in the shape: telling a
+ * word the collection does not have apart from a browser that never managed to
+ * ask, keeping near misses and saying what they are, and offering the house
+ * whatever the collection answered. */
 
 /** The prescribed start-key picture, ready to draw and ready to take.
  *
@@ -291,9 +295,15 @@ const WHOLE_WORD = 60;
  */
 const AAC_PREFERENCE = 20;
 
-/** The ladder grade a hit carries, once its source's own ranking is off it. */
-const gradeOf = (hit: SymbolHit): number =>
-  hit.source === "arasaac" ? hit.score - AAC_PREFERENCE : hit.score;
+/** The ladder grade a hit carries, once its source's own ranking is off it.
+ *
+ *  Which source that is comes from offeredSource() rather than off the hit: a
+ *  `Candidate` is the package's shape and carries no source, because it only
+ *  ever comes back from one provider and the caller is the one that chose it.
+ *  The decorated shape used to write it onto every hit, which was a per-hit
+ *  copy of an answer that is the same for all of them. */
+const gradeOf = (hit: Candidate, source: ProviderId): number =>
+  source === "arasaac" ? hit.score - AAC_PREFERENCE : hit.score;
 
 /** Whether any of these pictures is a picture of the word that was typed.
  *
@@ -305,60 +315,140 @@ const gradeOf = (hit: SymbolHit): number =>
  * bildquelle actually looked the collection up with, which after lemmatising
  * "Hunde" or splitting "Handtuch" is not always the word typed - and a
  * collection that holds the lemma does hold the picture. */
-const matchesWord = (hits: SymbolHit[]): boolean =>
-  hits.some((hit) => gradeOf(hit) >= WHOLE_WORD);
-
-/** Searches the collection this Sammlung is drawn in. Never throws: a failure
- *  is a sentence in `empty`, because every caller has a place to put one and
- *  none of them has anything else to do about it. */
-export async function findSymbols(word: string): Promise<SymbolAnswer> {
-  const term = word.trim();
-  if (!term) return { hits: [], empty: "", near: "", home: null };
+const matchesWord = (hits: readonly Candidate[]): boolean => {
   const source = offeredSource();
-  // Asked before the collection is searched and answered whatever the search
-  // then does, because it is not an answer *from* the collection: it is the one
-  // picture in it this product picked. A word the collection cannot answer at
-  // all is the search where showing it matters most.
-  const home = await homeFor(source, term);
-  // Answering from the other collection is what has to not happen: a hit taken
-  // from ARASAAC here is a key this Sammlung can no longer export. So there
-  // are no hits, and the sentence is the one click that fixes it.
-  if (outOfReach(source)) {
-    return { hits: [], empty: folderWanted(), near: "", home, act: wayBackIn() };
-  }
-  try {
-    const hits = await symbols.searchIn(source, term);
-    // Kept whatever they turn out to be. Somebody searching "nicht" may well
-    // want nichtbinaer, and the nearest thing the collection holds is the best
-    // answer there is to give - it is being taken for something else that was
-    // the fault. So the near misses stay and a line above them says what they
-    // are.
-    if (hits.length) {
-      return { hits, empty: "", home,
-               near: matchesWord(hits) ? "" : t("ui.search_near", { word: term }) };
-    }
-    const how = symbols.statusOf(source);
-    return { hits, near: "", home, empty: how.kind === "ready"
-      ? t("ui.nothing_found", { word: term })
-      : t("ui.search_no_answer", { word: term }) };
-  } catch (error) {
-    return { hits: [], near: "", home,
-             empty: t("ui.search_failed", { error: reason(error) }) };
-  }
+  return hits.some((hit) => gradeOf(hit, source) >= WHOLE_WORD);
+};
+
+/**
+ * The source the picker searches, as the component holding the field wants it.
+ *
+ * `SymbolSearch` is handed a `SymbolProvider` and asks it three things: the
+ * hits for a word, a picture URL per hit, and what is owed for the collection.
+ * Two of those are the real provider's and pass straight through. The one that
+ * is not is the search, and everything findSymbols() used to decide sits in
+ * here:
+ *
+ * - **The pipeline.** symbols.searchIn() lemmatises, tokenises and splits
+ *   compounds before it asks the collection - that is what finds a picture for
+ *   "Hunde" and for "Handtuch" - where a provider's own search() takes the word
+ *   as typed. The component has to go through this one or the page loses German.
+ * - **A collection that cannot be reached answers nothing.** Answering from the
+ *   other one is what must not happen: a hit taken from ARASAAC into a METACOM
+ *   Sammlung is a key it can no longer export. So the search is not run at all,
+ *   and emptyLine() below is the one click that fixes it.
+ * - **It must not throw.** That is the interface's rule, and searchIn()
+ *   deliberately does - there is no second collection behind it, so swallowing
+ *   left the page saying "nichts gefunden" whether the collection held nothing
+ *   or the browser never managed to ask. So the reason is kept rather than
+ *   dropped: onFailure is how it reaches the sentence, because all the
+ *   component can see is that the answer was empty.
+ *
+ * The caller owns the object for the life of one sheet, which is also how long
+ * the answers below stay true: the offered source is read as the sheet is
+ * built, and a sheet is never handed a second one.
+ */
+export function searchProvider(onFailure: (error: unknown | null) => void): SymbolProvider {
+  const source = offeredSource();
+  const under = symbols.providerFor(source);
+  let latest = 0;
+  return {
+    id: under.id,
+    name: under.name,
+    /* What is owed for the collection being searched, computed from the source
+       and not from the results - so a search that found nothing still says
+       where the pictograms come from. The package's own notice is in it
+       verbatim; what creditLine() puts in front of that is this product's
+       sentence about the same source, which adds to the licence line and never
+       stands in for it. */
+    get attribution() { return creditLine(); },
+    status: () => under.status(),
+    isReady: () => under.isReady(),
+    getImageUrl: (id) => under.getImageUrl(id),
+    labelFor: (id) => under.labelFor(id),
+    async search(word: string): Promise<Candidate[]> {
+      /* The component holds a stale-answer guard and drops hits that are not
+         the current ones; the reason travels beside the hits rather than with
+         them, so it needs the same guard or a slow failure lands on top of a
+         fast empty answer and calls it a broken search. Same mechanism, one
+         layer down. */
+      const mine = ++latest;
+      const said = (error: unknown | null) => { if (mine === latest) onFailure(error); };
+      if (outOfReach(source)) { said(null); return []; }
+      try {
+        const hits = await symbols.searchIn(source, word);
+        said(null);
+        return hits;
+      } catch (error) {
+        said(error);
+        return [];
+      }
+    },
+  };
 }
 
-/** The prescribed house for this collection, when the word asks for it and the
- *  collection can be reached.
+/**
+ * What an empty answer was, as a sentence.
+ *
+ * The same four cases findSymbols() picked between, asked at the point the
+ * sentence is drawn. `failure` is what searchProvider()'s onFailure handed
+ * back: the error where the search threw, null where it did not.
+ */
+export function emptyLine(word: string, failure: unknown | null): string {
+  if (failure !== null) return t("ui.search_failed", { error: reason(failure) });
+  const source = offeredSource();
+  if (outOfReach(source)) return folderWanted();
+  return symbols.statusOf(source).kind === "ready"
+    ? t("ui.nothing_found", { word })
+    : t("ui.search_no_answer", { word });
+}
+
+/**
+ * The line above hits that answer something other than what was typed, or ""
+ * where one of them really is the word.
+ *
+ * The near misses are kept whatever they turn out to be. Somebody searching
+ * "nicht" may well want nichtbinaer, and the nearest thing the collection holds
+ * is the best answer there is to give - it is being taken for something else
+ * that was the fault. So they stay, and this says what they are.
+ */
+export const nearLine = (word: string, hits: readonly Candidate[]): string =>
+  !word || !hits.length || matchesWord(hits) ? "" : t("ui.search_near", { word });
+
+/**
+ * The tile's name, and the one thing the twins need.
+ *
+ * METACOM ships parallel rendering folders holding identical file names, so a
+ * search can answer four tiles that all say "ja" and differ only in picture.
+ * That the labels collide is the component's to notice and it does - `among` is
+ * its answer, counted over what is on screen exactly as decorate() used to
+ * count it. What the disambiguator *is* stays this product's: the folder the
+ * picture sits in, said the way a person would.
+ *
+ * It goes to aria-label and title, which is where it has always gone here -
+ * bildhaft disambiguates in visible text and this page does not, and §6.4
+ * records the two as a convergence rather than a difference. Display only
+ * either way: the caption must not leak into the reference, and
+ * `candidate.label` stays clean because applySymbol may write it onto the key.
+ */
+export function captionFor(candidate: Candidate, among: boolean): string {
+  if (!among || offeredSource() !== "metacom") return candidate.label;
+  const folder = symbols.folderOf(candidate.id, symbols.metacomRoot());
+  return folder ? `${candidate.label} - ${folder}` : candidate.label;
+}
+
+/** The prescribed house for this collection, where the collection can be
+ *  reached at all. Whether the *word* asks for one is asksForHome(), which is
+ *  synchronous and is asked first, so this is not run for every search.
  *
  * Silent about everything that goes wrong. There is no sentence to write: the
  * search itself already says whatever there is to say about an unreachable
  * METACOM folder or a browser with no network, and a second line about a tile
  * nobody asked for would be the picker explaining a feature instead of
  * answering a search. So an unresolvable picture simply is not offered. */
-async function homeFor(source: ProviderId, term: string): Promise<HomeSuggestion | null> {
-  if (!asksForHome(term)) return null;
+export async function homeFor(): Promise<HomeSuggestion | null> {
   try {
-    const url = await homeSymbolUrl(source);
+    const url = await homeSymbolUrl(offeredSource());
     return url ? { url, caption: homeWord() } : null;
   } catch {
     return null;
@@ -375,12 +465,21 @@ export const takeHome = (): Promise<{ symbol: string; label: string }> =>
 /** A hit, resolved to what a layout stores: a reference and the collection's
  *  own word for it. Throws, because a caller that asked for this one symbol
  *  has somewhere to say so. */
-export async function takeSymbol(item: SymbolHit): Promise<{ symbol: string; label: string }> {
-  if (item.source === "metacom") {
+export async function takeSymbol(item: Candidate): Promise<{ symbol: string; label: string }> {
+  const source = offeredSource();
+  if (source === "metacom") {
     // Nothing to fetch and nothing to copy: the layout holds the reference
     // and the picture stays in the licensed folder, which is the whole of
     // the METACOM rule. The browser resolved it, so the server is not asked.
-    return { symbol: item.ref, label: (item.label || "").trim() };
+    //
+    // Worked out here rather than carried on the hit. decorate() computed it
+    // for all twenty-four tiles as the grid was drawn and one of them at most
+    // is ever pressed; the id it is computed from is bildquelle's path inside
+    // the chosen folder, which is what the component hands back.
+    return {
+      symbol: symbols.pickReference(item.id, symbols.metacomRoot()),
+      label: (item.label || "").trim(),
+    };
   }
   // ARASAAC still goes through the server, and this is the one place the page
   // has not left it. The reference an ARASAAC pick *should* become is its id -
@@ -390,7 +489,7 @@ export async function takeSymbol(item: SymbolHit): Promise<{ symbol: string; lab
   // moves into the browser, and then this branch goes - and with it the last
   // symbol call behind the seam.
   const result = await pickSymbol({
-    source: item.source,
+    source,
     id: item.id,
     label: item.label || "",
   });

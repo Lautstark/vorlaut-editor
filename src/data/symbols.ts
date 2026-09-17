@@ -25,13 +25,16 @@ import {
   metacom,
   setSymbolLanguage,
   symbolLanguage,
+  type Candidate,
   type LanguageCode,
   type ProviderId,
 } from "@lautstark/bildquelle";
 import { LANG } from "../core/boot.js";
 
-/** How many hits per source reach the dialog. Matches SEARCH_LIMIT in app.py. */
-const SEARCH_LIMIT = 24;
+/** How many hits per source reach the dialog. Matches SEARCH_LIMIT in app.py.
+ *  Exported because the picker's grid is a shared component now and takes it
+ *  as a `limit` prop, where it used to be applied inside decorate(). */
+export const SEARCH_LIMIT = 24;
 
 /** The prefix layout.json uses for a symbol out of the licensed collection. */
 const METACOM_PREFIX = "metacom:";
@@ -304,18 +307,37 @@ function loadPipeline(lang: LanguageCode): Promise<Pipeline> {
  * one *is* the answer: there is no second collection behind it, so swallowing
  * left the page saying "nothing found for X" whether the collection held
  * nothing or the browser had never managed to ask. Those are different
- * sentences, and picker.ts's findSymbols() picks between them. */
-export async function searchIn(source: ProviderId, word: string) {
+ * sentences, and picker.ts's searchProvider() picks between them.
+ *
+ * Undecorated, since the grid became a shared component. decorate() resolved a
+ * picture URL per hit, sliced to SEARCH_LIMIT and worked out the folder hint
+ * for repeated labels; the component asks the provider for each URL itself,
+ * takes the limit as a prop and counts the repeats as it draws. So what this
+ * hands back is bildquelle's own Candidate - which is also what the component
+ * hands back to onpick, so the identifier the pick step needs is derived at
+ * that step rather than carried through the drawing. search() above still
+ * decorates, because its callers - tools/symbolcheck.html and the reference
+ * tests - want the resolved shape and have no component to ask. */
+export async function searchIn(source: ProviderId, word: string): Promise<Candidate[]> {
   const term = (word || "").trim();
   if (!term) return [];
   const { suggest, tokenize } = await loadPipeline(symbolsSpeak());
   const single = tokenize(term).length <= 1;
-  const hits = await suggest(term, {
+  return await suggest(term, {
     provider: getProvider(source),
     stopwords: single ? [] : undefined,
   });
-  return await decorate(hits, source);
 }
+
+/** The provider object for a named source.
+ *
+ *  Beside metacomProvider above and for the same reason: the picker's search is
+ *  a shared component now and is handed a `SymbolProvider`, so passing it five
+ *  wrappers would be this file restating an interface the package already has.
+ *  What the picker hands over is not this object but a shim in front of it -
+ *  see searchProvider() in shell/picker.ts, which keeps the German pipeline and
+ *  the "never throws" rule that searchIn() deliberately breaks. */
+export const providerFor = (source: ProviderId) => getProvider(source);
 
 /* How the active collection is doing, for telling an empty answer apart from
  * one that was never given. A provider's search() must not throw - that is

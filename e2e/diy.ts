@@ -186,13 +186,25 @@ export async function nameSet(page: Page, name: string): Promise<void> {
  *  of itself. */
 export const pick = (box: Locator) => box.locator(".pick");
 export const query = (box: Locator) => box.locator(".pick input[type=search]");
-export const hits = (box: Locator) => box.locator(".pick__hit");
-/** What a search says when it has nothing to show: say() writes a bare <p>. */
-export const searchNote = (box: Locator) => box.locator(".pick__results p");
+/** The tiles. `.picker__item` is the search component's own class, drawn by
+ *  components.css and narrowed under `.pick` in ui.css - and it is also what
+ *  makes the prescribed start-key tile a member of the ring the arrows walk,
+ *  so this counts it too, exactly as `.pick__hit` did before it. */
+export const hits = (box: Locator) => box.locator(".picker__item");
+/** What a search says when it has nothing to show. A bare <p> inside the
+ *  results box, from the component while it is searching and from this
+ *  column's trailing snippet once it has answered. */
+export const searchNote = (box: Locator) => box.locator(".picker__grid p");
 
 /** What the search says about hits it is still showing - the line above the
- *  grid, which is outside the grid because the grid scrolls. */
+ *  grid, which is outside the grid because the grid scrolls. It reaches that
+ *  place through the component's `between` slot. */
 export const searchNear = (box: Locator) => box.locator(".pick__near");
+
+/** What is owed for the collection the hits came from. The search component
+ *  draws it from the provider's attribution, which is picker.ts's
+ *  creditLine(); it is the one paragraph outside the results box. */
+export const credits = (box: Locator) => box.locator(".pick__search > p.small");
 
 /** Types a word into the sheet's search and runs it. Enter, because that is
  *  what the field answers to - there is no search button beside it. */
