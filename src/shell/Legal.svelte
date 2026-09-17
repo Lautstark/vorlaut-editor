@@ -44,12 +44,17 @@
    *   - **`page` is two-way**, because every way out - the ✕, Escape, a press
    *     outside - has to end with the dialog and legal.svelte.ts agreeing.
    *
-   * **What it costs, and it is worth being plain about it: `#legalClose` is
-   * gone.** `Legal` takes no `closeId` where `Sheet` underneath it does, so the
-   * ✕ has no id to be pressed by, and e2e/legal.spec.ts presses it by its
-   * accessible name instead. That name is required and has no fallback, which is
-   * what gave this ✕ a name at all; the missing prop is a package gap and is
-   * reported rather than reached past.
+   * The ✕ **keeps its id**, which e2e/legal.spec.ts presses. It did not, for a
+   * few hours: `Legal` had no `closeId` where the `Sheet` underneath it does,
+   * and the choice was between pressing the ✕ by its accessible name and
+   * writing an id onto the frame after the fact, which §6.0 says not to do. It
+   * was reported rather than worked around, and design v1.37.0 forwards both
+   * `closeId` and `bodyId` to the sheet - so the id is a prop here, which is
+   * where it should have been.
+   *
+   * What the ✕ gained by being the frame's is a name: the button had neither
+   * `aria-label` nor `title` when this dialog drew its own, so it was announced
+   * as "✕" and nothing else. `closeLabel` is required and has no fallback.
    */
   import { t } from "./live.svelte.js";
   import { outward, mailward } from "./links.js";
@@ -68,6 +73,7 @@
   bind:page={legalPage, setLegalPage}
   {pages}
   id="legal"
+  closeId="legalClose"
   class="legal"
   closeLabel={t("ui.close")}
   onclose={closeLegal}
