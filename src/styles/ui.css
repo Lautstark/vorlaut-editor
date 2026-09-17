@@ -638,8 +638,27 @@ dialog.sheet > .head, dialog.sheet > .foot { flex: none; }
 /* One labelled setting inside the sheet: a label, a control, a note. It was
    called .field until the components layer arrived, where .field is the
    control itself - two different things under one name in one stylesheet is
-   how a rule stops meaning anything. */
-.setting { padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 6px; }
+   how a rule stops meaning anything.
+
+   **It is the panel body's second class now, beside `.body`.** Every one of the
+   thirteen `<div class="setting">` in the two sheets was a panel's body, and
+   the panel is @lautstark/design/svelte/Panel's - which draws `.body` and
+   appends whatever class the caller hands it. So this name survives, and it
+   has to: the arrangement below is the only vertical separation most of those
+   bodies have, because the rules under it deliberately zero every margin.
+   Without it the Azure panel's two label/input pairs collapse flush and the
+   symbols panel's two consecutive notes read as one paragraph. A gap cannot go
+   into components.css either - mitreden chose child margins and says so, and
+   bildhaft has no panel rule at all. conventions.md §6.2.
+
+   **The padding is gone from here and that is a real change, not a tidy-up.**
+   `components.css` has drawn `.panel > .body { padding: 10px 16px 22px }`
+   since the panel went in, and it out-specifies this rule at (0,2,0) against
+   (0,1,0) - so the bottom padding these bodies carried went 4px to 22px the
+   moment they became `.body`. Writing it here again would be a declaration
+   that loses, which is worse than no declaration: it would read as the answer.
+   It is budgeted in §6.2 and is in four baselines. */
+.setting { display: flex; flex-direction: column; gap: 6px; }
 /* The press that applies the whole panel, drawn as the panel's foot.
  *
  * It sat directly under the last control above it - the first column's second
@@ -709,7 +728,15 @@ dl.transfer dd { margin: 0; font-size: 14px; }
    way for the same reason: on a sheet that still has the shared 22px this
    would be 38px down either side. */
 #voices > .head, #legal > .head { padding: 16px 16px 4px; margin: 0; }
-.sheet > .head strong { flex: 1 1 auto; font-weight: 600; }
+/* `.sheet > .head strong { flex: 1 1 auto; font-weight: 600 }` stood here and
+   is gone with the element it was for. All three of this page's hand-written
+   sheets headed themselves with a <strong> and restored the two properties an
+   <h2> would have given them for nothing; the frame draws the <h2>, and
+   components.css says what a sheet's heading looks like -
+   `.sheet > .head :is(h2, h3, h4)`, at 17px and 650. That is a genuinely
+   bigger heading than a <strong> at 600 and inherited size, and it is the one
+   pixel change in this file's three sheets that is not about a panel.
+   conventions.md §6.1. */
 /* The whole voice list stood here - `.voiceList`, `.voices`, `.voicefilters`,
  * `.voiceRow`, `.voice` and its three parts - and it is components.css's now,
  * because @lautstark/stimmquelle/voice-picker draws the block in all three

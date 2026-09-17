@@ -19,6 +19,7 @@
    * card holds one editor along.
    */
   import { t } from "../shell/live.svelte.js";
+  import { focusOnOpen } from "../shell/parts.js";
   import FormRow from "../shell/pieces/FormRow.svelte";
   import type { PageSheet } from "./pageSheet.svelte.js";
 
@@ -27,8 +28,10 @@
 
   /* The one field, so the sheet opens in it. Every sheet with a picture column
      opens in the search instead, and this one has none - see the note at the
-     foot of openSheet(). */
-  $effect(() => { field.focus(); });
+     foot of openSheet().
+     Through focusOnOpen(), because the frame shows the sheet from an effect of
+     its own and this one runs first - shell/parts.ts says why. */
+  $effect(() => { focusOnOpen(() => field.focus()); });
 </script>
 
 <FormRow label={t("ui.set_name")} note={t("ui.set_name_note")} forId="diySetName">

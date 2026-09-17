@@ -28,18 +28,23 @@
  * below would have to say the word "set", "page", "key" or "button". Nothing
  * does.
  *
- * ## The frame is still the package's, and there is no Svelte frame component
+ * ## The frame is the package's, and it is a Svelte component now
  *
- * This is the one sheet in the product where one would have been arguable -
- * two columns, a foot with three seats, a width modifier - and it is not what
- * happened. `openParts()` mounts a body component and a foot component into
- * `@lautstark/design/dialog`'s own `.body` and `.foot`, with nothing in
- * between, because components.css styles those children directly. A frame
- * component would mean this product drawing `.sheet > .head` itself, which is
- * the one thing the shared layer exists to stop four products doing four ways -
- * and the two columns are a class on the dialog (`.sheet--button`), which is a
- * modifier on the shared component rather than a replacement for it. adr/0025
- * records the decision; the twenty visual baselines are what proved it.
+ * This is the one sheet in the product where a frame component of *this
+ * repository's own* would have been arguable - two columns, a foot with three
+ * seats, a width modifier - and adr/0025 turned it down, because a frame
+ * component here would mean this product drawing `.sheet > .head` itself, which
+ * is the one thing the shared layer exists to stop four products doing four
+ * ways. That argument has been answered rather than overturned: the frame
+ * component exists, and it is `@lautstark/design/svelte/Sheet`, so `.head` is
+ * still written in exactly one place for all four.
+ *
+ * What did not change is the seam. `openParts()` puts a body component and a
+ * foot component into the frame's own `.body` and `.foot` with nothing in
+ * between, because components.css styles those children directly, and the two
+ * columns are still a class on the dialog (`.sheet--button`) - a modifier on
+ * the shared component rather than a replacement for it. The twenty visual
+ * baselines are what proved the first half and hold the second.
  *
  * ## The promise settles from the presses, with a guard
  *
@@ -65,7 +70,7 @@
  * press outside still cost nothing.
  */
 import type { Component } from "svelte";
-import { openParts } from "./parts.js";
+import { openParts, type SheetContent } from "./parts.js";
 import SheetBody from "./pieces/SheetBody.svelte";
 import SheetFoot from "./pieces/SheetFoot.svelte";
 
@@ -219,16 +224,23 @@ export function openSheet<S>(spec: SheetSpec<S>): Promise<Left> {
     const sheet = openParts<Sheet<S>>({
       title: spec.title,
       state: shared,
-      body: SheetBody as Component<{ s: Sheet<S>; handle: unknown }>,
-      foot: SheetFoot as Component<{ s: Sheet<S>; handle: unknown }>,
+      /* A width override on the shared component, not a redefinition of it: two
+       * columns need more than the 600px a sheet of prose wants. Everything else
+       * - the head, body and foot anatomy, the border, the shadow - stays
+       * components.css's.
+       *
+       * A prop, where it was two `classList.add` calls on the handle. It lands
+       * on the <dialog> itself at construction, which is what these two need:
+       * `.sheet--button > .body`, `.sheet--page > .body`,
+       * `.sheet--button > .body > .notice` and `.sheet--button > .foot` are
+       * direct-child selectors, and the class arriving a tick after the sheet
+       * was shown is a frame of the two-column body drawn as one column.
+       * conventions.md §6.1. */
+      class: spec.pick ? "sheet--button" : "sheet--button sheet--page",
+      body: SheetBody as Component<SheetContent<Sheet<S>>>,
+      foot: SheetFoot as Component<SheetContent<Sheet<S>>>,
       onClose: () => finish(null),
     });
-    /* A width override on the shared component, not a redefinition of it: two
-     * columns need more than the 600px a sheet of prose wants. Everything else
-     * - the head, body and foot anatomy, the border, the shadow - stays
-     * components.css's. */
-    sheet.dialog.classList.add("sheet--button");
-    if (!spec.pick) sheet.dialog.classList.add("sheet--page");
 
     /* Escape out of the search field, which the browser would otherwise keep.
      *

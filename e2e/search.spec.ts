@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
-import { key, keySheet, openBoard, search, searchNear, searchNote } from "./diy.js";
+import { key, keySheet, openBoard, query, search, searchNear, searchNote } from "./diy.js";
 
 /* What the search says when it does not work.
  *
@@ -82,6 +82,19 @@ async function openPicker(page: Page): Promise<Locator> {
  *  sheet is not a form and Enter in a search field inside a dialog is
  *  otherwise the browser's own way to close it. */
 const searchFor = (box: Locator, word: string) => search(box, word);
+
+/* Where the keyboard is when the sheet arrives, which nothing here held.
+ *
+ * The word is typed once, into the search: it finds the picture, and picking
+ * one writes the same word into the empty name behind it. So the sheet opens in
+ * the field rather than on the corner ✕ that showModal() would otherwise leave
+ * focus on - and every case below reached the field with fill(), which clicks
+ * into it and so could never have noticed it was not already there. */
+test("a sheet with a picture column opens in its search", async ({ page }) => {
+  await arasaacAnswers(page);
+  const box = await openPicker(page);
+  await expect(query(box)).toBeFocused();
+});
 
 test("a collection that cannot be reached does not read as an empty one", async ({ page }) => {
   // Not a refusal and not an empty answer: no answer at all, which is what a

@@ -19,6 +19,7 @@
    */
   import { untrack } from "svelte";
   import { t } from "../live.svelte.js";
+  import { focusOnOpen } from "../parts.js";
   import { OCTETS, octet, split } from "../address.js";
 
   let { known, value = $bindable() }: { known: string; value: string } = $props();
@@ -51,12 +52,14 @@
   /* Into the boxes, past the corner ✕ that showModal() would otherwise leave
      focus on. The last box on a return visit and the first on a first one,
      which is the same rule the two of them are drawn by: what is being asked
-     for is the part that changes. */
+     for is the part that changes.
+     Through focusOnOpen() rather than straight away, because the frame shows
+     the sheet from an effect of its own and a child's effects run first - see
+     the note on it in shell/parts.ts. */
   $effect(() => {
     untrack(() => {
       const box = boxes[known ? OCTETS - 1 : 0];
-      box?.focus();
-      box?.select();
+      focusOnOpen(() => { box?.focus(); box?.select(); });
     });
   });
 
