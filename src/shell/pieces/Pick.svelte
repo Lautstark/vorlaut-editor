@@ -19,6 +19,7 @@
   import { creditLine, findSymbols, searchPlaceholder, takeHome, takeSymbol, uploadOwn }
     from "../picker.js";
   import type { HomeSuggestion, SymbolAct, SymbolHit } from "../picker.js";
+  import { focusOnOpen } from "../parts.js";
   import type { Held, PickColumn } from "../sheet.svelte.js";
   import Negate from "./Negate.svelte";
   import Picture from "./Picture.svelte";
@@ -334,10 +335,15 @@
      is not tidiness: `word` is a rune and reading it here would make this an
      effect that re-runs on every keystroke, which is a search fired per letter
      and the caret sent back to the start of the field while somebody is typing
-     into it. What is wanted is once, at mount. */
+     into it. What is wanted is once, at mount.
+     The focus goes through focusOnOpen(): the frame shows the sheet from an
+     effect of its own and a child's effects run before it, so a focus() here
+     would land inside a dialog that is still display: none - see the note on it
+     in shell/parts.ts. The search does not wait, because it has nothing to do
+     with what is on screen. */
   $effect(() => {
     untrack(() => {
-      queryNode.focus();
+      focusOnOpen(() => queryNode.focus());
       if (word) search();
     });
   });

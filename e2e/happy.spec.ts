@@ -97,6 +97,12 @@ test("a page can be named, filled and kept", async ({ page }) => {
   await expect(card.locator(".swatch")).toHaveCount(0);
   await expect(card.locator(".pick")).toHaveCount(0);
   await expect(card.locator("#diySetDoes")).toHaveCount(0);
+  /* And the one field is where the keyboard already is, past the corner ✕ that
+   * showModal() would leave it on. Asserted here because it had no assertion
+   * anywhere: the card takes its own focus as it mounts, and the frame showing
+   * the sheet from an effect of its own is exactly the kind of change that
+   * silently undoes that. */
+  await expect(card.locator("#diySetName")).toBeFocused();
   await press(card, "ui.done");
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
 

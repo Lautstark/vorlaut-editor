@@ -583,8 +583,13 @@ export async function openSettings(): Promise<void> {
  * so a panel keeps one name across the markup, the tests and this file.
  */
 export interface SheetPanel {
-  /** Base for this panel's four ids: `<name>Panel`, `<name>Section`,
-   *  `<name>State`, `<name>Body`. */
+  /** Base for this panel's two ids: `<name>Panel` and `<name>State`.
+   *
+   *  It was four. `<name>Section` and `<name>Body` were on elements this
+   *  component drew and the folded panel is @lautstark/design/svelte/Panel's
+   *  now, which offers an id for the `<details>` and one for the state span and
+   *  none for the heading or the body - see conventions.md §6.2's markup. The
+   *  two that went were read by one e2e locator each and by nothing in src/. */
   name: string;
   /** What the panel is called, and what it is set to - the two halves of a
    *  folded heading. Read off the layout on every draw. */

@@ -76,5 +76,5 @@ test("the settings heading is the one label the language control never takes", a
   // the buttons, which is where the accessible name of a segmented set belongs.
   await expect(page.locator("#langPick")).toHaveAttribute("aria-label", "Sprache / Language");
   // Whereas the panel around it is translated like everything else.
-  await expect(page.locator("#languageSection")).toHaveText(either("ui.language"));
+  await expect(page.locator("#languagePanel > summary > .section")).toHaveText(either("ui.language"));
 });

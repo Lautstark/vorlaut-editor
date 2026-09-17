@@ -216,16 +216,16 @@ test("a new Sammlung takes the symbol source this browser is set to",
      * of the page would pass whether or not anything drew it. */
     await openCollectionSettings(page);
     await expect(page.locator("#symbolPanel")).toBeVisible();
-    await expect(page.locator("#symbolSection"))
+    await expect(page.locator("#symbolPanel > summary > .section"))
       .toHaveText(label("ui.symbol_source_section"));
     /* ARASAAC, because that is what a browser with no METACOM folder is set
      * to, and a test machine has none. */
     await expect(page.locator("#symbolState")).toHaveText(label("ui.arasaac"));
-    await expect(page.locator("#symbolBody button.choice").first())
+    await expect(page.locator("#symbolPanel > .body button.choice").first())
       .toHaveAttribute("aria-pressed", "true");
     // METACOM is offered and refused rather than hidden: it is still one of the
     // two answers, and the sentence under it says what is missing.
-    const metacom = page.locator("#symbolBody button.choice").nth(1);
+    const metacom = page.locator("#symbolPanel > .body button.choice").nth(1);
     await expect(metacom).toBeDisabled();
     /* Unanchored: label() builds `^(...)$`, which never matches inside a
      * button that also carries its heading. */

@@ -867,10 +867,12 @@ test("Bedienung and the grid are two panels, not one", async ({ page }) => {
   const access = page.locator("#collectionAccessPanel");
   await expect(grid).toHaveCount(1);
   await expect(access).toHaveCount(1);
-  await expect(page.locator("#collectionEditorSection"))
-    .toHaveText(label("ui.app_grid"));
-  await expect(page.locator("#collectionAccessSection"))
-    .toHaveText(label("ui.app_press"));
+  /* The headings by where they sit rather than by an id. The folded panel is
+     @lautstark/design/svelte/Panel's, and it offers an id for the <details>
+     and one for the state span and none for the heading - so `<name>Section`
+     is not a name this markup has any more. conventions.md §6.2. */
+  await expect(grid.locator("> summary > .section")).toHaveText(label("ui.app_grid"));
+  await expect(access.locator("> summary > .section")).toHaveText(label("ui.app_press"));
 
   // One accordion: opening the second folds the first, which is what says they
   // are siblings in the sheet rather than one panel inside another.

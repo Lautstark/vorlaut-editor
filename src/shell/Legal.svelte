@@ -20,32 +20,61 @@
    * The two addresses that are not prose - the repository, the mail - go
    * through shell/links.ts's guards for the reason they went through texts.ts's:
    * an href is the one thing on this page that is not inert.
+   *
+   * **The frame is @lautstark/design's** - the head with its ✕, the body, the
+   * backdrop press, the one `close` exit. conventions.md §6.1. Three things
+   * about this dialog are the reason three of that component's props exist:
+   *
+   *   - The **id stays an id.** `#legal`'s 520px is an ID selector and the
+   *     comment above that rule in ui.css says so: an id beats any class, so it
+   *     quietly outranked whatever components.css drew for a sheet. Demoted to
+   *     a class it would tie with `.sheet { width: … }` and the winner would be
+   *     bundle order.
+   *   - The **title is a thunk**, because it changes. One dialog with three
+   *     prose sections, and the accessible name has to be the one showing.
+   *   - The ✕ **keeps its id**, which e2e/legal.spec.ts presses.
+   *
+   * What it gains is a name for that ✕: the button had neither `aria-label` nor
+   * `title` here, so it was announced as "✕" and nothing else. `closeLabel` is
+   * required and has no fallback, which is how that got fixed by adopting.
    */
   import { t } from "./live.svelte.js";
   import { outward, mailward } from "./links.js";
   import { closeLegal, LEGAL_PAGES, legalPage } from "./legal.svelte.js";
+  import Sheet from "@lautstark/design/svelte/Sheet";
 
-  let dialog: HTMLDialogElement;
-  let body: HTMLElement;
+  let body = $state<HTMLElement | undefined>(undefined);
 
   const page = $derived(legalPage());
 
   $effect(() => {
-    if (!page) { if (dialog.open) dialog.close(); return; }
+    if (!page || !body) return;
     // From the top every time. The sheet keeps its scroll position, and the
     // privacy notice is long enough that reopening it half way down reads as a
     // page that starts in the middle of a sentence.
     body.scrollTop = 0;
-    if (!dialog.open) dialog.showModal();
   });
 </script>
 
-<dialog bind:this={dialog} id="legal" class="sheet legal" aria-labelledby="legalHeading" onclose={closeLegal}>
-  <div class="head">
-    <strong id="legalHeading">{page ? t(LEGAL_PAGES[page]) : ""}</strong>
-    <button id="legalClose" class="btn quiet icon" type="button" onclick={closeLegal}>✕</button>
-  </div>
-  <div bind:this={body} class="body">
+<!-- aria-labelledby is gone and nothing is lost: the frame names the dialog
+     with `aria-label` from `title`, and the thunk is what keeps that answer
+     following the prose - so a reader that announces it still says „Impressum"
+     while the Impressum is showing, which is also what e2e/legal.spec.ts looks
+     the dialog up by. -->
+<Sheet
+  open={page !== null}
+  onclose={closeLegal}
+  id="legal"
+  closeId="legalClose"
+  class="legal"
+  title={() => (page ? t(LEGAL_PAGES[page]) : "")}
+  closeLabel={t("ui.close")}
+  bind:body
+>
+  <!-- No `head` snippet, where the other two sheets have one. #legalHeading was
+       only ever the target of the aria-labelledby above it, so with the name
+       coming from `title` there is nothing left for the id to be for and the
+       frame's own <h2> is the whole heading. -->
 
     <section id="aboutPage" hidden={page !== "aboutPage"}>
       <p class="lead" id="aboutLead">{t("ui.about_lead")}</p>
@@ -114,6 +143,4 @@
       <p id="dsgRights">{t("ui.dsg_rights")}</p>
       <p class="stand" id="dsgStand">{t("ui.dsg_stand")}</p>
     </section>
-
-  </div>
-</dialog>
+</Sheet>

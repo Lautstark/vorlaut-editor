@@ -260,7 +260,7 @@ test("the Sammlung's sheet asks each target what only it can answer",
     // in its heading what it is set to.
     await expect(page.locator("#collectionEditorPanel")).toBeVisible();
     await expect(page.locator("#collectionEditorPanel")).toHaveAttribute("open", "");
-    await expect(page.locator("#collectionEditorSection")).toHaveText(label("ui.app_grid"));
+    await expect(page.locator("#collectionEditorPanel > summary > .section")).toHaveText(label("ui.app_grid"));
     await expect(page.locator("#collectionEditorState")).toHaveText(/^3 . 5$/);
     // And the voice is still asked, which is what makes it a sheet rather than
     // an empty one.

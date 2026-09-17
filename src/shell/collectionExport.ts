@@ -143,13 +143,18 @@ export function chooseExport(): void {
     // with a question about what the file was for, and is not asking it now.
     title: t("ui.collection_export"),
     state: choice,
+    /* The gap between the cards, which components.css does not reach: its sheet
+     * body spaces `p + p`, and these are buttons. ui.css carries the rest.
+     *
+     * A prop rather than a `classList.add` on the handle: `.sheet--choices >
+     * .body` and `.sheet--choices .panel > .body` are written against the
+     * dialog itself, and the class is on it from construction now.
+     * conventions.md §6.1. */
+    class: "sheet--choices",
     body: ExportChoiceBody,
     // No footer. There is nothing to confirm - the cards are the presses - and
     // an Abbrechen beside a corner ✕ would be two buttons for one act.
   });
-  // The gap between the cards, which components.css does not reach: its sheet
-  // body spaces `p + p`, and these are buttons. ui.css carries the rest.
-  sheet.dialog.classList.add("sheet--choices");
 }
 
 /** The Sammlung as the talker's own .obz: the sources, the negation flags and
