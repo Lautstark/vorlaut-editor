@@ -16,7 +16,8 @@
 // it is at the foot of this file now.
 
 import { isDiy } from "../core/types.js";
-import type { Layout, OfferedVoice, Settings, VoiceList, WantedSettings, AzureState } from "../core/types.js";
+import type { AzureAsk, AzureState, Layout, OfferedVoice, Settings, VoiceList,
+  WantedSettings } from "../core/types.js";
 import * as obf from "../data/obf.js";
 import { isBackup, readOneCollection } from "../data/backup.js";
 import type { Backup, StoredSymbol } from "../data/backup.js";
@@ -565,8 +566,8 @@ async function azureCatalogue(key: string, region: string) {
   return cloud;
 }
 
-/** Whether Azure answers for the stored key and region, in a shape the page
- * can put into words.
+/** Whether Azure answers for a key and a region, in a shape the page can put
+ * into words.
  *
  * This exists because its absence was the bad experience: a wrong region is a
  * hostname that does not resolve, the fetch threw, listVoices() swallowed it
@@ -575,16 +576,26 @@ async function azureCatalogue(key: string, region: string) {
  * describes this database. This describes whether the key works, which is
  * the only question the person typing it has.
  *
+ * **`ask` is what lets the question be asked before the answer is stored.**
+ * Without it this could only ever report on what had already been written, so
+ * a mistyped region was a sentence one save too late - it was saved, and then
+ * described. A pairing handed in is asked about as it stands; `key` absent
+ * means the stored one, which is what an untouched field means on a page whose
+ * key lives in a placeholder and is never read back into it. Nothing is
+ * written here either way: this only asks.
+ *
  * The code is for the text table to translate, not prose to print: the seam
  * stays wordless and the page owns the words, which is the rule bildquelle's
  * ProviderStatus set and the Release button learned the hard way. */
-export async function azureState(): Promise<AzureState> {
+export async function azureState(ask?: AzureAsk): Promise<AzureState> {
   const held = await store.readSettings(NO_SETTINGS);
-  if (!held.azureSecret || !held.azureRegion) {
+  const secret = ask?.key || held.azureSecret;
+  const region = ask?.region || held.azureRegion;
+  if (!secret || !region) {
     return { configured: false, ok: false, count: 0, code: "" };
   }
   try {
-    const cloud = await azureCatalogue(held.azureSecret, held.azureRegion);
+    const cloud = await azureCatalogue(secret, region);
     return { configured: true, ok: true, count: cloud.length, code: "" };
   } catch (error) {
     // A region that is not one is a hostname that never resolves - the fetch
@@ -606,7 +617,6 @@ const NO_SETTINGS: Settings = {
   // ARASAAC until somebody says otherwise: it needs no licence and no folder,
   // so it is the only source a first visit can actually search.
   activeProvider: "arasaac",
-  local: true,
 };
 
 export async function readSettings(): Promise<Settings> {

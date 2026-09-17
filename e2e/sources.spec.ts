@@ -164,15 +164,22 @@ async function supplyFiles(page: Page) {
       carrier.items.add(file);
     }
     /* The panel's own directory input, addressed by what it is rather than by
-       an id: the block is @lautstark/bildquelle/metacom-panel's markup now and
-       gives its controls no ids. `[webkitdirectory]` is what separates it from
-       the ZIP input beside it, which is the same element with an accept list.
-       The visual spec reaches into @lautstark/sicherung's two boxes the same
-       way, and for the same reason. */
+       an id: the block is @lautstark/bildquelle's markup now and gives its
+       controls no ids. `[webkitdirectory]` is what separates it from the ZIP
+       input beside it, which is the same element with an accept list. The
+       visual spec reaches into @lautstark/sicherung's two boxes the same way,
+       and for the same reason. */
     const input = document.querySelector(
       "#metacomBox input[type=file][webkitdirectory]") as HTMLInputElement;
     input.files = carrier.files;
-    input.dispatchEvent(new Event("change"));
+    /* `bubbles`, and it is not decoration. A real `change` bubbles - the
+       specification says so - and the plain `new Event("change")` here did not,
+       which only ever worked because the vanilla panel had put its listener
+       directly on this input. Svelte delegates `change` to one listener at the
+       root, so an event that does not bubble reaches nothing at all: the files
+       landed, the panel never heard, and the failure read as a folder that had
+       not been indexed. The faithful event is the one a browser sends. */
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   }, { root: ROOT, files: FILES });
   // Connected, said by the control that can only do anything when there is
   // something to forget. Not "use this": whether that one is offered depends on

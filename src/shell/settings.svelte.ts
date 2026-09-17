@@ -22,30 +22,22 @@ import { status } from "./dom.js";
 import { t } from "./live.svelte.js";
 import { confirmDialog, openDialog } from "./dialog.js";
 import { reason } from "../core/errors.js";
-import type { Settings, WantedSettings } from "../core/types.js";
+import type { AzureAsk, AzureState, Settings, WantedSettings } from "../core/types.js";
 import { readSettings, writeSettings, azureState, listCollections }
   from "../backend/index.js";
 import { applyTheme, readTheme, saveTheme, type Theme }
   from "@lautstark/design/theme";
-
-import { LANG } from "../core/boot.js";
 import { load } from "../core/save.js";
 import { paintCollections } from "./collections.js";
 import * as symbols from "../data/symbols.js";
 import { exportEverything, importBackup, isBackup, TOO_NEW } from "../data/backup.js";
 import { boardTotals, wipeEverything } from "../data/store.js";
 import { adopt, adopted, refusal } from "./adopt.js";
-import { backupPanel, type BackupPanel } from "@lautstark/sicherung/backup-panel";
-import { wherePanel } from "@lautstark/sicherung/ablage-panel";
-import { metacomPanel, type MetacomPanel } from "@lautstark/bildquelle/metacom-panel";
 import { ablage, folderName, isStore, wipeReaches } from "../data/folder.js";
 import { adoptFolder } from "../data/store.js";
+import type { Ablage } from "@lautstark/sicherung/ablage";
 import type { Sicherung } from "@lautstark/sicherung";
 import { downloadJson } from "@lautstark/werkzeuge/download";
-
-/* Held so a language switch can repaint it: the panel paints its own words and
-   carries no data-i18n, so nothing that redraws the components can reach it. */
-let keeping: BackupPanel | null = null;
 
 /* $state.raw, and every record out of the backend below is the same. These
    come back from readSettings() and writeSettings() whole and are replaced
@@ -55,28 +47,30 @@ let keeping: BackupPanel | null = null;
    writeSettings(). */
 let settings = $state.raw<Settings>({
   azureKey: { set: false, hint: "" }, azureRegion: "",
-  metacom: { path: "", ok: false, count: 0, fixed: false },
-  local: true });
+  metacom: { path: "", ok: false, count: 0, fixed: false } });
 
 /** What this installation is set to, as the sheet reads it. */
 export const installed = (): Settings => settings;
 
-/* --- what the three fields hold -------------------------------------------
+/* --- what the one field left here holds ------------------------------------
  *
- * The sheet's two Azure fields and its METACOM path used to be read back off
- * the elements - `byId("azureRegion").value.trim()` inside the write - which
- * is the one place this file genuinely needed the DOM rather than merely using
- * it as a store. They are `bind:value` in the component and runes here, and
- * saveSettings() reads them at the moment the write happens exactly as it read
- * the elements at that moment. */
-let region = $state("");
-let key = $state("");
+ * The sheet's fields used to be read back off the elements -
+ * `byId("azureRegion").value.trim()` inside the write - which is the one place
+ * this file genuinely needed the DOM rather than merely using it as a store.
+ * The METACOM path is `bind:value` in the component and a rune here, and
+ * saveSettings() reads it at the moment the write happens exactly as it read
+ * the element at that moment.
+ *
+ * The two Azure fields are @lautstark/stimmquelle/svelte/AzurePanel's now and
+ * are deliberately not mirrored here. The key in particular must not be: the
+ * whole design is that the stored key sits in the *placeholder* and the value
+ * stays empty, so an untouched field means "leave the key alone" and there is
+ * nothing on the page to submit, copy or mistake for the key itself. A rune
+ * holding what somebody typed would be a second copy of the secret with a
+ * longer life than the field. What the panel hands back, once, is the pairing
+ * it was asked to keep - see keepAzure(). */
 let path = $state("");
 
-export const azureRegionField = (): string => region;
-export const setAzureRegion = (value: string): void => { region = value; };
-export const azureKeyField = (): string => key;
-export const setAzureKey = (value: string): void => { key = value; };
 export const metacomPathField = (): string => path;
 export const setMetacomPath = (value: string): void => { path = value; };
 
@@ -98,7 +92,10 @@ export function keyPlaceholder(): string {
 
 /** The Azure panel's state line. Two answers in one place: "stored" describes
  *  this database, and the probe's answer describes whether Azure answers. The
- *  second replaces the first when it arrives - see probeAzure(). */
+ *  second replaces the first when it arrives - see probeAzure(). The panel
+ *  draws the same sentence in its own live region; this is the half of it that
+ *  can be read with the panel folded, which every heading in this column is
+ *  for. */
 let azureLine = $state("");
 export const azureState$ = (): string => azureLine;
 
@@ -131,20 +128,41 @@ export const themeNow = (): Theme => theme;
 let folderMoved = $state(0);
 export const folderState = (): number => folderMoved;
 
-/* The three shared panels, as the nodes they are. Vanilla by design - the
- * family's panels are built once and put in place by
- * @lautstark/design/svelte/Vanilla, a `display: contents` host - so what is
- * reactive is which node, never what is inside one. */
-let storeNode = $state.raw<HTMLElement | null>(null);
-let keepNode = $state.raw<HTMLElement | null>(null);
-let metacomNode = $state.raw<HTMLElement | null>(null);
-export const ablagePanel = (): HTMLElement | null => storeNode;
-export const keepPanel = (): HTMLElement | null => keepNode;
-export const symbolPanelNode = (): HTMLElement | null => metacomNode;
+/* The three shared panels are components now - @lautstark/sicherung's
+ * `AblagePanel` and `BackupPanel` and @lautstark/bildquelle's `MetacomPanel`,
+ * drawn by SettingsSheet.svelte. What is left in this file is what a product
+ * owes them: the objects they are about, the words this page says about what
+ * they did, and the two answers that decide whether one is offered at all.
+ *
+ * The `Vanilla` hosts and the three `HTMLElement` runes that fed them are
+ * gone with the builders. A node held in a rune was the whole of what a
+ * vanilla panel's reactivity could be; a component subscribes itself, and its
+ * `$effect` returns the teardown these three never got. conventions.md §6.8. */
+
+/** The store this browser files its work in, as the panel's own subject. */
+export const dataStore = (): Ablage => ablage;
+
+/** What the store panel does once a folder is settled on. */
+export const adoptDataFolder = adoptFolder;
+
+/** Everything on screen is about to be wrong. The store panel says so and
+ *  this is the whole of what this page can do about it. */
+export const dataFolderChanged = (): void => { location.reload(); };
+
+/** The standing backup, handed in by app.ts and held so the panel can be
+ *  about it. Null until wireData() runs, which is before any sheet opens -
+ *  `$state.raw` because it is replaced whole and never mutated. */
+let standing = $state.raw<Sicherung | null>(null);
+export const standingBackup = (): Sicherung | null => standing;
+
 /** Only where there is no store folder: with one, the copies already go beside
  *  the work, and a second picker would be the same offer under a name that
- *  reads almost the same. */
-let keepOffered = $state(true);
+ *  reads almost the same. And only where the browser has a picker at all -
+ *  the component draws nothing in an unsupported browser, so without this the
+ *  box would be an empty div spending `.folderbox`'s margin. Asked once, the
+ *  way `!!backupPanel(...)` answered it once: an unsupported browser has no
+ *  other status to be in. */
+let keepOffered = $state(false);
 export const keepShown = (): boolean => keepOffered;
 
 /* The rendering chooser. METACOM ships the same symbols several times over -
@@ -314,21 +332,20 @@ export function paintStates(): void {
   // probe's answer, which is the only line that describes whether the key
   // works. That answer is the whole reason azureState() exists.
   azureLine = settings.azureKey.set ? t("ui.azure_key_stored") : t("ui.azure_key_none");
-  probeAzure();
-  /* The two panels drawn by the module that owns their folder rather than from
-     here. Neither carries a data-i18n, so nothing that redraws the components
-     can reach either, and each paints its own words in whichever language it is
-     asked for on the way past. There used to be one of these; §4.9's two folder
-     questions are both packaged now. */
-  keeping?.refresh();
-  folder?.refresh();
-  /* There was a second one, and the hook it registered through has gone with
-   * it. onPaintPanels() let a panel wired outside this file ask to be redrawn
-   * on a language switch, and existed because the Device panel belonged to
-   * editor-diy while the shell may not import that. The Device panel is gone -
-   * the transfer dialog grants a port where it needs one - so the list had no
-   * registrant left, and a registry nothing registers with is an extension
-   * point that reads as working code. */
+  probeStored();
+  /* The three shared panels used to be repainted from here, because each was a
+     node this file was holding and none of them carries a data-i18n. They are
+     components now and `lang` is a prop, so a language switch redraws them with
+     everything else on the sheet: the two `refresh()` calls that stood here are
+     §6.8's whole point and are gone rather than moved.
+
+     There was a third one before them, and the hook it registered through has
+     gone with it. onPaintPanels() let a panel wired outside this file ask to be
+     redrawn on a language switch, and existed because the Device panel belonged
+     to editor-diy while the shell may not import that. The Device panel is gone
+     - the transfer dialog grants a port where it needs one - so the list had no
+     registrant left, and a registry nothing registers with is an extension
+     point that reads as working code. */
 }
 
 /* --------------------------------------- the folder this browser can read ---
@@ -345,21 +362,26 @@ export function paintStates(): void {
  * lies; see docs/symbol-search.md.
  */
 
-/** The shared block, held so a language switch can repaint it. */
-let folder: MetacomPanel | null = null;
-
 /* Whether the press now running was a re-confirm rather than a pick.
  *
- * The module merges "choose a folder" and "confirm access" into one button -
+ * The panel merges "choose a folder" and "confirm access" into one button -
  * one press, three labels - and tells `after()` only that a `choose` happened.
  * This repository has to keep the two apart, because adoptMetacom() must not
  * fire on a re-confirm: the same folder coming back is a restore, not a new
  * answer to which source somebody wants searched.
  *
- * Sampled in the capture phase, before the module's own click handler runs,
+ * Sampled in the capture phase, before the panel's own click handler runs,
  * because that handler is what changes the status this asks about - by the time
- * after() is called the answer has already moved. */
+ * after() is called the answer has already moved. The listener was on the
+ * block the builder handed back and is `onclickcapture` on the box around the
+ * component now; what it samples, and when, is unchanged. */
 let reconfirming = false;
+
+/** A press is about to reach the symbol folder's panel. */
+export function noteMetacomPress(): void {
+  const how = symbols.metacomStatus();
+  reconfirming = how.kind === "needs-setup" && how.code === "permission-needed";
+}
 
 /** Whether after() has already put a sentence in the status line for this press.
  *
@@ -414,41 +436,62 @@ export function metacomWord(): string {
   return t("ui.metacom_ok", { count: where.count });
 }
 
-/** Replaces "stored" with whether the key actually works, asynchronously.
+/** Whether Azure answers, asked about a pairing and said in this page's words.
  *
- * "stored" is a statement about this database; the person who typed a key
- * wants to know whether Azure answers. A wrong region used to cost the Azure
- * rows in silence - the fetch fails before any status exists, listVoices()
- * keeps the piper voices alive by swallowing it, and nothing anywhere said
- * why the list looked exactly as if no key had been typed. */
-function probeAzure(): void {
-  if (!settings.azureKey.set || !settings.azureRegion) return;
+ * **The seam stays wordless and this is where the words are.** azureState()
+ * hands back a code; boot_data.ts holds the four sentences in both languages;
+ * this is the one place the two meet. §6.9 calls that the better half of the
+ * arrangement, and it is why the panel takes a probe rather than owning one -
+ * a panel that brought its own would have to bring German with it.
+ *
+ * It answers the panel *and* writes the answer into the Azure panel's own
+ * folded heading, which is this sheet's rule rather than the component's:
+ * every panel in this column says what it is set to without being opened, and
+ * for this one that answer is two-layered - "hinterlegt" describes this
+ * database and the probe's answer describes whether Azure answers, the second
+ * replacing the first when it arrives. The component draws the same sentence
+ * in its live region, where somebody who has opened the panel is looking. */
+async function probeAzure(ask: AzureAsk): Promise<AzureState> {
   azureLine = t("ui.azure_checking");
-  void azureState().then((state) => {
-    if (!state.configured) return;
-    azureLine = state.ok
-      ? t("ui.azure_ok", { count: state.count })
-      : t(state.code === "unreachable" ? "ui.azure_unreachable"
-        : state.code === "refused" ? "ui.azure_refused" : "ui.azure_probe_failed");
-  });
+  const state = await azureState(ask);
+  azureLine = state.ok
+    ? t("ui.azure_ok", { count: state.count })
+    : t(state.code === "unreachable" ? "ui.azure_unreachable"
+      : state.code === "refused" ? "ui.azure_refused" : "ui.azure_probe_failed");
+  return state;
 }
 
-/** What a read or a write leaves on screen: the three fields put back to what
- *  is stored, and the sentences that describe it.
+/** Asked by the panel, on arrival and again before it writes a save. */
+export const askAzure = (ask: AzureAsk): Promise<AzureState> => probeAzure(ask);
+
+/** The same question about whatever is stored, for the heading alone.
  *
- * The key is never sent back to the page, so the field starts empty and means
- * "leave it alone" until somebody types in it. */
+ * The panel asks its own only when the stored key or region moves, which is
+ * the right rule for a field somebody is typing into and the wrong one for a
+ * heading that is repainted on every open and every language switch. Azure's
+ * catalogue is memoised per key and region, so this costs a round trip once
+ * and is a read afterwards. */
+function probeStored(): void {
+  if (!settings.azureKey.set || !settings.azureRegion) return;
+  void probeAzure({ region: settings.azureRegion });
+}
+
+/** What a read or a write leaves on screen: the field put back to what is
+ *  stored, and the sentence that describes the key.
+ *
+ * The key is never sent back to the page, so the panel's field starts empty
+ * and means "leave it alone" until somebody types in it. Nothing probes from
+ * here any more: the panel asks on arrival and whenever the stored key or
+ * region moves, which is exactly when this line would have wanted a second
+ * answer, and one asker is what keeps "stored" from landing on top of it. */
 function renderSettings(): void {
-  region = settings.azureRegion || "";
   path = settings.metacom.path || "";
-  key = "";
   azureLine = settings.azureKey.set ? t("ui.azure_key_stored") : t("ui.azure_key_none");
-  probeAzure();
+  probeStored();
   // A folder that was set and cannot be read is the one state worth unfolding
   // for: somebody meant to configure this and it is not working.
   if (settings.metacom.path && !settings.metacom.ok) unfoldSymbols();
   folderMoved += 1;
-  folder?.refresh();
 }
 
 /* The one panel this file asks to be opened, and the one thing it needs the
@@ -508,30 +551,12 @@ export async function takeBoardFile(): Promise<void> {
  * This one is about this browser's whole state, in a shape only vorlaut reads,
  * and the two would blur into "export" if they shared a panel. */
 export function wireData(backup: Sicherung): void {
-  /* The store panel comes from the package, so every Lautstark programme shows
-     the same one. What stays here is what vorlaut alone offers besides it. */
-  const store = wherePanel({
-    store: ablage,
-    adopt: adoptFolder,
-    changed: () => { location.reload(); },
-    say: (line) => { dataLine = line; },
-    lang: LANG === "en" ? "en" : "de",
-  });
-  storeNode = store.node;
-  if (isStore()) {
-    keepOffered = false;
-  } else {
-    /* The 170 lines this replaces are @lautstark/sicherung/backup-panel's now.
-       `lang` is a function because LANG here is a live binding that moves when
-       the page changes language without reloading. */
-    keeping = backupPanel({
-      backup,
-      say: (message) => { dataLine = message; },
-      lang: () => (LANG === "en" ? "en" : "de"),
-    });
-    keepNode = keeping ? keeping.node : null;
-    keepOffered = !!keeping;
-  }
+  standing = backup;
+  /* Two answers rather than a panel, which is what building the blocks here
+     cost and no longer does. The store panel is drawn whatever it says; the
+     standing copy is offered only where it has something to offer, and that
+     is this page's question rather than the component's - see keepShown(). */
+  keepOffered = !isStore() && backup.status.kind !== "unsupported";
 }
 
 /* Delete everything, which this editor was the only one in the family without.
@@ -640,63 +665,54 @@ export async function importData(file: File): Promise<void> {
   }
 }
 
+/* The three things @lautstark/bildquelle's panel leaves to a product on
+ * purpose - which source is now active, what a heading has to say, and what
+ * this page says out loud - and nothing else. The licence paragraph, the link
+ * to the shop, the state line and its dot and the four acts are the panel's;
+ * SettingsSheet.svelte draws it and passes the four below.
+ *
+ * `lang` was a function here because LANG is a live binding that moves when
+ * the page changes language without reloading. §6.8 makes it a prop and the
+ * reactivity the framework's, so the thunk is gone and the component redraws
+ * with the rest of the sheet. */
+
+/** Told the heading line whenever it changes. */
+export const takeMetacomHeadline = (text: string): void => { folderHead = text; };
+
+/** The panel's own sentence, unless afterMetacom() has already put a bigger
+ *  one in the same status line.
+ *
+ * Switching source is the bigger one: it changes what every search from now on
+ * answers with, where "folder read" only says the press worked. `after` runs
+ * first and this would overwrite it, so it has to ask rather than assume - and
+ * when nothing was switched, which is every press on a folder that is already
+ * the active source, this is the only confirmation there is. */
+export function sayMetacom(line: string): void {
+  if (!announced) status(line);
+}
+
+/** What a finished act means to this page, awaited before the sentence above. */
+export async function afterMetacom(action: string): Promise<void> {
+  announced = false;
+  if (action === "forget") {
+    // Forgetting the folder cannot leave METACOM as the source: the picker
+    // would have nothing to search and would say so on every keystroke. The
+    // fallback is written down rather than left to readSettings() to infer
+    // on the next visit, so the answer is the same before and after a
+    // reload.
+    if (activeSource() === "metacom") {
+      symbols.setActiveSource("arasaac");
+      await saveSettings({ activeProvider: "arasaac" });
+    }
+    return;
+  }
+  // A re-confirm is a restore, and a restore does not decide which source
+  // is active. See adoptMetacom() and `reconfirming` above.
+  if (action === "choose" && reconfirming) return;
+  if (action === "choose" || action === "zip") announced = await adoptMetacom();
+}
+
 export function wireSymbolFolder(): void {
-  /* The 70 lines this replaces are @lautstark/bildquelle/metacom-panel's now:
-     the licence paragraph, the link to the shop, the state line and its dot,
-     and the four acts. What is left here is the three things the module leaves
-     to a product on purpose - which source is now active, what a language
-     switch has to repaint, and this page's own word for a folder nobody has
-     chosen. See the module's header for why each of those stayed.
-
-     `lang` is a function because LANG is a live binding that moves when the
-     page changes language without reloading - the same reason backupPanel()
-     above is passed one. */
-  folder = metacomPanel({
-    metacom: symbols.metacomProvider,
-    /* All four, including the one this repository did not have. `readMetacomZip`
-       had been sitting in data/symbols.ts since the search moved into the
-       browser with no caller at all - the wiring was built and never hung on a
-       button, which conventions.md §4.13 records as a hole rather than a
-       decision. bildhaft and wochenwerk both offer it. */
-    actions: ["choose", "zip", "reread", "forget"],
-    lang: () => (LANG === "en" ? "en" : "de"),
-    headline: (text) => { folderHead = text; },
-    say: (line) => {
-      /* The module's own sentence, unless after() has already put a bigger one
-         in the same status line. Switching source is the bigger one: it changes
-         what every search from now on answers with, where "folder read" only
-         says the press worked. after() runs first and this would overwrite it,
-         so it has to ask rather than assume - and when nothing was switched,
-         which is every press on a folder that is already the active source,
-         this is the only confirmation there is. */
-      if (!announced) status(line);
-    },
-    after: async (action) => {
-      announced = false;
-      if (action === "forget") {
-        // Forgetting the folder cannot leave METACOM as the source: the picker
-        // would have nothing to search and would say so on every keystroke. The
-        // fallback is written down rather than left to readSettings() to infer
-        // on the next visit, so the answer is the same before and after a
-        // reload.
-        if (activeSource() === "metacom") {
-          symbols.setActiveSource("arasaac");
-          await saveSettings({ activeProvider: "arasaac" });
-        }
-        return;
-      }
-      // A re-confirm is a restore, and a restore does not decide which source
-      // is active. See adoptMetacom() and `reconfirming` above.
-      if (action === "choose" && reconfirming) return;
-      if (action === "choose" || action === "zip") announced = await adoptMetacom();
-    },
-  });
-  metacomNode = folder.node;
-  folder.node.addEventListener("click", () => {
-    const state = symbols.metacomStatus();
-    reconfirming = state.kind === "needs-setup" && state.code === "permission-needed";
-  }, true);
-
   // The provider says when a folder arrives or goes; nothing here polls.
   //
   // The whole sheet and not just this panel. A folder arriving changes more
@@ -749,47 +765,57 @@ export async function loadSettings(): Promise<void> {
   });
 }
 
-/** Writes what the sheet's fields hold.
+/** Writes what the sheet's one remaining field holds, and whatever was asked.
  *
- * `extra` is for the settings that are not fields - the rendering preference
- * is a menu that acts on change, not something read back off the form when
- * some other panel is saved. It merges in last so a caller saying nothing
- * about a setting leaves it alone. */
+ * `extra` is for the settings that are not that field - the rendering
+ * preference is a menu that acts on change, the Azure pairing is a panel that
+ * hands back what it was told to keep. It merges in last so a caller saying
+ * nothing about a setting leaves it alone.
+ *
+ * **The region is no longer written on every save**, and that is the panel
+ * moving out rather than a rule changing. It used to ride along out of a rune
+ * mirroring the field, so every save of anything re-wrote it; there is no such
+ * rune now, and `azureRegion` absent is already "leave the stored one alone"
+ * in writeSettings(). Only keepAzure() passes one. */
 export async function saveSettings(
   extra: Partial<WantedSettings> = {},
 ): Promise<{ azureChanged: boolean }> {
   return inTurn(async () => {
-    // The fields are read inside the turn rather than as this is called, so
-    // that what is written is what they hold when the write actually happens.
-    const wanted: WantedSettings = {
-      azureRegion: region.trim(),
-      metacom: path.trim(),
-      ...extra,
-    };
-    // Only when something was typed: an untouched field must not wipe the key.
-    const typed = key.trim();
-    if (typed) wanted.azureKey = typed;
-    const azureChanged = !!typed || wanted.azureRegion !== (settings.azureRegion || "");
+    // The field is read inside the turn rather than as this is called, so that
+    // what is written is what it holds when the write actually happens.
+    const wanted: WantedSettings = { metacom: path.trim(), ...extra };
+    const azureChanged = wanted.azureKey !== undefined
+      || (wanted.azureRegion !== undefined
+          && wanted.azureRegion !== (settings.azureRegion || ""));
     settings = await writeSettings(wanted);
     renderSettings();
     return { azureChanged };
   });
 }
 
+/** Keeps the pairing the Azure panel was told to keep.
+ *
+ * `key` absent means "the stored one stands", which is what an untouched field
+ * means on a page whose key lives in a placeholder - and this page can never
+ * mean anything else by it, because the secret is not readable from here. So
+ * the absence goes straight through to writeSettings(), where absent leaves
+ * the stored key alone and `null` is the one explicit way to clear it. That
+ * three-state seam is this repository's own and is what `forgetKey()` below
+ * is the third state of. */
+export const keepAzure = (next: AzureAsk): Promise<{ azureChanged: boolean }> =>
+  saveSettings({
+    azureRegion: next.region,
+    ...(next.key ? { azureKey: next.key } : {}),
+  });
+
 /** Drops the stored key, as its own act.
  *
- * The empty field already means "leave the key alone" - the guard above - so
+ * The empty field already means "leave the key alone" - the rule above - so
  * the field cannot double as the way to remove one. Until this existed it did
  * not merely fail to: there was no way to remove a key at all, because
- * writeSettings only ever set it. The region and the METACOM path ride along
- * exactly as a save would take them; the null is the whole difference. */
+ * writeSettings only ever set it. The METACOM path rides along exactly as a
+ * save would take it; the null is the whole difference. The region is left
+ * alone rather than re-written, for the reason saveSettings() gives. */
 export async function forgetKey(): Promise<void> {
-  return inTurn(async () => {
-    settings = await writeSettings({
-      azureRegion: region.trim(),
-      metacom: path.trim(),
-      azureKey: null,
-    });
-    renderSettings();
-  });
+  await saveSettings({ azureKey: null });
 }

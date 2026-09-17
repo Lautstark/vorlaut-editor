@@ -802,6 +802,33 @@ dl.transfer dd { margin: 0; font-size: 14px; }
 .folderbox[hidden] { display: none; }
 .folderbox .row { margin-top: 8px; }
 
+/* The Azure panel's own box, which is one level in from where the column used
+   to be.
+   @lautstark/stimmquelle/svelte/AzurePanel draws its prose, its two
+   label-and-field pairs and its buttons inside a single `<div id>` - §6.0's
+   "every shared component takes an id" - so the panel body's own column stops
+   at that div and everything inside it stacks flush. This is `.setting`'s
+   arrangement repeated one level in, and the 6px is deliberately the same
+   number rather than a new one: what is being restored is the separation those
+   two label/input pairs had before the box existed, which `.setting` above
+   says in as many words is the only vertical rhythm most of these bodies have.
+
+   The descendant rules under `.setting` are unaffected and are why there is
+   nothing else here - `.setting label`, `.setting .lead`, `.setting .field`
+   and `.setting .field[type=password]` all still reach through the box.
+
+   The probe line is the exception, and it is the one thing on this panel that
+   has no class at all: it is the component's live region, and which class goes
+   on it is the product's - mitreden draws `.hint.probe` there - but a class
+   is not among the props, so it is reached by its id. Drawn as a `.note`,
+   because that is what every other run-time sentence in this column is, and
+   with the margin zeroed for the reason every `.setting` child has it zeroed:
+   the gap above is the column's to spend. The component's own stylesheet
+   already zeroes it while it is empty, so that an unasked panel has no blank
+   line in it; this is the other half, for when it has something to say. */
+#azureBox { display: flex; flex-direction: column; gap: 6px; }
+#azureProbe { margin: 0; font-size: 12px; color: var(--text-dim); }
+
 /* ---------------------------------------------------------------------------
    The board, in both editors.
 

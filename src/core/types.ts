@@ -664,7 +664,6 @@ export interface Settings {
    *  product's to know, and the person copies a number off a screen. See
    *  shell/tabletSend.svelte.ts, which is the only thing that reads or writes it. */
   tabletAddress?: string;
-  local?: boolean;
 }
 
 /** What the settings sheet asks to be written. A subset of Settings, because
@@ -771,10 +770,23 @@ export interface VoiceList {
   backend: string;
 }
 
-/** Whether Azure answers for the stored key and region. `code` is for the
- *  text table to branch on - "unreachable" is a region that is not one (the
- *  hostname never resolves), "refused" is a live region rejecting the key,
- *  "failed" is anything else. The seam stays wordless; the page owns words. */
+/** A key and the region it belongs to, for asking Azure about a pairing that
+ *  is not the stored one.
+ *
+ *  `key` absent means "the stored one", which is what the panel sends when
+ *  nothing has been typed into a field whose placeholder is the key. It is the
+ *  same shape @lautstark/stimmquelle/svelte/AzurePanel hands its probe, and it
+ *  is declared here rather than imported from there because this is a seam
+ *  between the page and the backend: the backend has never heard of a panel. */
+export interface AzureAsk {
+  key?: string;
+  region: string;
+}
+
+/** Whether Azure answers for a key and a region. `code` is for the text table
+ *  to branch on - "unreachable" is a region that is not one (the hostname
+ *  never resolves), "refused" is a live region rejecting the key, "failed" is
+ *  anything else. The seam stays wordless; the page owns words. */
 export interface AzureState {
   configured: boolean;
   ok: boolean;
