@@ -64,10 +64,17 @@
  * writes `{t("ui.settings")}` has no way to know that happened.
  *
  * So `t` below is the same lookup with the note attached. It is not a second
- * table and not a second lookup: it reads `said` and then calls
+ * table and not a second lookup: it reads the rune and then calls
  * core/texts.ts's, which is core/boot.ts's, which is the one table there is.
  * What it adds is that whoever drew the label is on the list to be drawn
  * again when `relanguaged()` says the page has moved.
+ *
+ * The rune and the wrapping are `@lautstark/werkzeuge/reactive-text`'s now -
+ * mitreden's `ui/words.svelte.ts` was the same six lines, and six lines whose
+ * subtlety is the whole of them is exactly what is worth holding in one place
+ * (conventions.md §6.11). What did **not** move is everything above: this
+ * module still owns which table is looked up, when the page has moved, and the
+ * import rule below. The factory carries the trick, not the language.
  *
  * **Components import `t` from here; every other module imports it from
  * core/texts.ts.** The rule is worth stating because the two are spelled the
@@ -76,6 +83,7 @@
  * e2e/language.spec.ts is what notices: it switches the page and reads the
  * labels back, which is exactly the failure this arrangement can have.
  */
+import { reactiveText } from "@lautstark/werkzeuge/reactive-text";
 import { state } from "../core/state.js";
 import { t as lookUp } from "../core/texts.js";
 import type { Layout } from "../core/types.js";
@@ -90,22 +98,31 @@ export function touched(): void {
   seen = { layout: state.layout, at: seen.at + 1 };
 }
 
-let said = $state(0);
+/* One lookup goes in, because this product has one: core/texts.ts's `t`, which
+ * is core/boot.ts's, which reads the live bindings a language switch
+ * reassigns. mitreden passes two in one call for the reason §6.11 gives - `tn`
+ * shares the rune and the single writer - and a second call here would make a
+ * second rune that `relanguaged()` would have to remember to bump.
+ *
+ * The three names below are this module's and they stay: `words` and
+ * `relanguaged` are what voices.svelte.ts says, and `relanguaged()` in
+ * particular is the sentence chooseLanguage() is making. What they are backed
+ * by is the factory's `touched()` and `moved()`. The factory's `touched()` is
+ * emphatically **not** re-exported under that name - `touched()` above is the
+ * layout's, a different subject sharing this file, and two exports spelled the
+ * same would be one import line away from a component watching the wrong one
+ * and nothing going red. */
+const said = reactiveText({ t: lookUp });
 
 /** A label out of the table, drawn by somebody who should be drawn again when
  *  the page changes language. See the head of this file. */
-export function t(key: string, params?: Record<string, string | number>): string {
-  void said;
-  return lookUp(key, params);
-}
+export const t = said.t;
 
 /** The same read on its own, for the two answers that put a word on screen
  *  without going through the table: a language named in its own word, out of
  *  LANGUAGE_NAMES. Written as a call rather than a value so that it cannot be
  *  captured into a local and quietly stop working. */
-export const words = (): number => said;
+export const words = said.touched;
 
 /** The page is in a different language now. */
-export function relanguaged(): void {
-  said += 1;
-}
+export const relanguaged = said.moved;
