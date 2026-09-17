@@ -22,7 +22,7 @@
   import type { Held, PickColumn } from "../sheet.svelte.js";
   import Negate from "./Negate.svelte";
   import Picture from "./Picture.svelte";
-  import Vanilla from "./Vanilla.svelte";
+  import Vanilla from "@lautstark/design/svelte/Vanilla";
 
   let { spec, held }: { spec: PickColumn; held: Held } = $props();
 

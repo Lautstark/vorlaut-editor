@@ -23,6 +23,24 @@ import { vitestConfig } from "@lautstark/toolchain/vitest";
  * at the far end of an import graph that now has .svelte files in it. Nothing
  * here renders one; without the plugin the import simply fails to resolve and
  * the test reads as a broken editor.
+ *
+ * **And the plugin is what lets a rune module out of node_modules work here.**
+ * @lautstark/werkzeuge ships reactive-text as source behind the `svelte`
+ * export condition, because `tsc` would emit its `$state(0)` as a call to an
+ * undefined identifier (conventions.md §6.0); shell/live.svelte.ts imports it.
+ * vitest externalises node_modules, and an externalised module reaches no
+ * transform - the `$state` survives to runtime and the import throws a
+ * ReferenceError out of whichever file happened to pull live.svelte.ts in,
+ * which is never the file the failing test is about. conventions.md §6.11 says
+ * a consumer owes itself either `server.deps.inline: [/@lautstark\/werkzeuge/]`
+ * or the full plugin. This one has the plugin, and the plugin already does it:
+ * measured on 2026-09-17, `resolveConfig` with `svelte()` alone reports
+ * `ssr.noExternal` holding all five @lautstark packages, because each declares
+ * a `svelte` condition and the plugin collects them. So no `server.deps.inline`
+ * is written below - it would be a second spelling of a line already in force,
+ * and the day it stopped being true it would hide which of the two was doing
+ * the work. mitreden is the app that owes itself the other half, because it
+ * cannot run the plugin in vitest at all.
  */
 export default vitestConfig({
   include: ["tests/unit/**/*.test.ts"],

@@ -132,9 +132,9 @@ let folderMoved = $state(0);
 export const folderState = (): number => folderMoved;
 
 /* The three shared panels, as the nodes they are. Vanilla by design - the
- * family's panels are built once and put in place by shell/pieces/Vanilla.svelte,
- * a `display: contents` host - so what is reactive is which node, never what is
- * inside one. */
+ * family's panels are built once and put in place by
+ * @lautstark/design/svelte/Vanilla, a `display: contents` host - so what is
+ * reactive is which node, never what is inside one. */
 let storeNode = $state.raw<HTMLElement | null>(null);
 let keepNode = $state.raw<HTMLElement | null>(null);
 let metacomNode = $state.raw<HTMLElement | null>(null);
