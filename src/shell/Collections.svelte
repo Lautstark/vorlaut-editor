@@ -22,5 +22,6 @@
 <!-- Filled by shell/collections.ts on every change to the list. Written empty
      and never touched again from here: what is inside it is the package's
      rows, and Svelte owning half of a box somebody else fills is the one way
-     these two idioms can hurt each other. -->
-<nav bind:this={list} class="collections sidebar__list" id="collectionList" aria-label={t("ui.collections")}></nav>
+     these two idioms can hurt each other.
+     `.sidebar__list` was on it too and no stylesheet has ever drawn it. -->
+<nav bind:this={list} class="collections" id="collectionList" aria-label={t("ui.collections")}></nav>

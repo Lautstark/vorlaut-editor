@@ -26,6 +26,9 @@
   import { HOME_TONES } from "./homekey.js";
   import { takeBoardFile, useBoardFile } from "./settings.svelte.js";
   import Sidebar from "./Sidebar.svelte";
+  import Scrim from "@lautstark/design/svelte/Scrim";
+  import Reveal from "@lautstark/design/svelte/Reveal";
+  import TopBar from "@lautstark/design/svelte/TopBar";
   import WorkHead from "./WorkHead.svelte";
   import Conflict from "./Conflict.svelte";
   import Footer from "./Footer.svelte";
@@ -41,6 +44,15 @@
 
   let hole: HTMLElement;
   let boardFile: HTMLInputElement;
+
+  /* Whether the Sammlungen are on screen at all, with the live breakpoint
+     already applied - the drawer below 820px, the remembered column above it.
+     The sidebar works it out because it is the one thing subscribed to that
+     breakpoint; the bar and the reveal are mounted out here and are handed the
+     answer rather than each computing it from a `narrow()` read at the moment
+     of a press, which is what all three products used to do and what left
+     whatever was announced before the press stale. */
+  let showing = $state(false);
 
   $effect(() => {
     useEditorHole(hole);
@@ -58,26 +70,46 @@
 
 <!-- Narrow screens get a bar instead of a column: the sidebar slides over the
      work rather than sitting above it, and the scrim closes it. Both siblings
-     have exactly this, at exactly this width. -->
+     have exactly this, at exactly this width, which is why the bar is
+     `@lautstark/design/svelte/TopBar` and owns the breakpoint itself - a
+     product keeping its own `@media { .topbar { display: flex } }` would lose
+     to the component's scoped base rule and get a bar that never appears.
+     The ☰ is the component's, because all three bars have exactly one control,
+     first, with the same class, the same tier and the same job. Only what is
+     between its tags is a snippet, and this page passes none: `☰` is the
+     default and is the character that was here. -->
 <!-- The two that dismiss and the two that reveal, each pair sharing a word:
      ‹ and ✕ both put the Sammlungen away, ☰ and › both bring them back. Which
      one is on screen is a question about the width, not about the words. -->
-<div class="topbar">
-  <button id="sidebarOpenBtn" class="btn quiet icon" type="button" title={t("ui.collections_show")} aria-label={t("ui.collections_show")} onclick={openDrawer}>☰</button>
-  <h1><img src={logo} alt="" class="logo" />vorlaut</h1>
-</div>
-<div class="scrim" id="scrim" hidden={!drawerOpen()} onclick={closeDrawer} role="presentation"></div>
+<TopBar buttonId="sidebarOpenBtn" controls="sidebar" expanded={showing}
+  label={t("ui.collections_show")} title={t("ui.collections_show")} onreveal={openDrawer}>
+  {#snippet brand()}<h1><img src={logo} alt="" class="logo" />vorlaut</h1>{/snippet}
+</TopBar>
+<!-- A `<button aria-label>` where this was a `<div role="presentation">`, which
+     is §6.3's one deliberate change of element here: bildhaft already had the
+     button, mitreden argues for the div, and one of the three had to move. What
+     it costs is nothing on screen and what it buys is a way out a keyboard can
+     reach. The component carries a `border: 0` reset with it, because a
+     `<button>` at `inset: 0` otherwise picks up the user agent's two-pixel
+     outset frame around the whole viewport - and no test in this family would
+     have caught that, because the one that exists clicks a position.
+     `drawerOpen()` rather than `showing`: above the breakpoint `showing` is the
+     column being there, and there is nothing to dismiss. -->
+<Scrim id="scrim" label={t("ui.collections_hide")} shown={drawerOpen()} ondismiss={closeDrawer} />
 
 <div class="frame">
-  <Sidebar {logo} />
+  <Sidebar {logo} bind:showing />
 
   <!-- What brings the column back once it is put away. It floats where the
        sidebar was, carrying the mark, which is where both siblings put it and
-       where the eye is already looking. -->
-  <div class="reveal" id="sidebarShow" hidden={columnOpen()}>
-    <button id="sidebarShowBtn" class="btn quiet icon" type="button" title={t("ui.collections_show")} aria-label={t("ui.collections_show")} onclick={() => void showColumn(true)}>›</button>
-    <img src={logo} alt="" class="logo logo--small" />
-  </div>
+       where the eye is already looking - so the component is the container and
+       the pair inside it is this page's, handed the wiring for its button. It
+       drops itself below 820px, for TopBar's reason turned round: down there
+       the bar's ☰ is the way back and this would be a second mark beside the
+       one already in it. -->
+  <Reveal id="sidebarShow" controls="sidebar" shown={!showing}>
+    {#snippet brand(wired: { "aria-controls": string | undefined; "aria-expanded": boolean })}<button id="sidebarShowBtn" class="btn quiet icon" type="button" {...wired} title={t("ui.collections_show")} aria-label={t("ui.collections_show")} onclick={() => void showColumn(true)}>›</button><img src={logo} alt="" class="logo logo--small" />{/snippet}
+  </Reveal>
 
   <div class="content">
     <WorkHead />

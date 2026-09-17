@@ -67,20 +67,28 @@ body {
   display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   height: 100dvh;
 }
-/* Both columns need `min-height: 0`: a grid item's automatic minimum size is
+/* The column, the brand row and the foot are
+   `@lautstark/design/svelte/Sidebar`'s scoped style now: the six declarations
+   that drew this rule, the four that drew `.sidebar__brand` and the five that
+   drew `.sidebar__foot` were character-identical in all three products, which
+   is the bar §6.3 set for putting any of them in the component at all.
+
+   What is left here is what that component deliberately leaves out, because
+   the three products disagree about it: this one is a grid item where
+   mitreden's is a fixed column, so the placement, the width, the overflow,
+   every z-index and the transform the drawer slides on all stay.
+
+   Both columns need `min-height: 0`: a grid item's automatic minimum size is
    its content, so without it they push the row past the height just set and
    nothing below can scroll. */
-.sidebar {
-  display: flex; flex-direction: column; gap: 20px;
-  padding: 16px 14px; border-right: 1px solid var(--line);
-  background: var(--surface);
-  min-height: 0;
-}
+.sidebar { min-height: 0; }
 /* The mark, where both siblings keep it once there is no bar across the top.
    "vorlaut" stays this word in every language and therefore stands in the
    markup rather than the text table; the weight and the tightened tracking are
-   bildhaft's brand wordmark, so the family says its own names the same way. */
-.sidebar__brand { display: flex; align-items: center; gap: 9px; padding: 2px 4px; }
+   bildhaft's brand wordmark, so the family says its own names the same way.
+   The row around it is the component's; this is what is inside it, which is
+   snippet content and carries this page's scope, so it could not be the
+   component's even if the three agreed on it. */
 .sidebar__brand h1 {
   flex: 1; margin: 0; display: flex; align-items: center; gap: 9px;
   font-size: 18px; font-weight: 650; letter-spacing: -.02em;
@@ -99,16 +107,17 @@ body {
    row - which they were not: the rows are the same shared component in all
    three products, and what made this one look different was a line-height this
    page had invented, not the gap. */
-/* The two quiet buttons at the foot, pushed there rather than placed: the list
-   above them grows, and they stay at the bottom of the column. */
-/* No rule above it. The gap is the separation, the way it is between every
-   other part of this column, and a line drawn only here made the one item
-   below it look like a different kind of thing. It sits at the same inset as
-   the rows and "+ Neue Sammlung", so the column reads as one list of places to
-   go rather than a list and a footnote. */
-.sidebar__foot {
-  margin-top: auto; display: flex; align-items: center; gap: 6px; padding: 0 4px;
-}
+/* The foot is the component's, `margin-top: auto` included - which is what
+   pushes Einstellungen to the bottom of the column rather than leaving it under
+   the list, and is the whole of §3.2's placement. It gains `flex-wrap: wrap`
+   from the union of the three, and gains nothing else.
+   What was here besides those five declarations was an argument rather than a
+   rule, and it still holds: there is no line above the foot. The gap is the
+   separation, the way it is between every other part of this column, and a
+   line drawn only here made the one item below it look like a different kind
+   of thing. It sits at the same inset as the rows and "+ Neue Sammlung", so
+   the column reads as one list of places to go rather than a list and a
+   footnote. */
 /* One Sammlung's row is components.css's `.collections` now - the name, the
    count, the ellipsis, the accent behind the open one. See §5 5b. */
 
@@ -152,30 +161,38 @@ body {
    Both siblings float it in the corner the sidebar vacated. */
 body.collapsed .sidebar { display: none; }
 body.collapsed .frame { grid-template-columns: minmax(0, 1fr); }
-.reveal {
-  position: fixed; left: 14px; top: 14px; z-index: 20;
-  display: flex; align-items: center; gap: 8px;
-}
-/* [hidden] is a UA rule and loses to the class above on specificity, so the
-   reveal stayed on screen beside the sidebar - two marks at once, which is
-   what it looked like. */
-.reveal[hidden] { display: none; }
+/* The corner it floats in, the row inside it and its `[hidden]` are all
+   `@lautstark/design/svelte/Reveal`'s now, and so is dropping itself below
+   820px. The `[hidden]` rule in particular had to move: it is a UA rule and
+   loses to the class on specificity, so without one somewhere the reveal
+   stayed on screen beside the sidebar - two marks at once, which is what it
+   looked like. The component's copy carries a scoping hash and cannot lose.
+   The stacking stays, because it is a fact about this page's own layers: 20
+   here, 21 in one of the siblings. */
+.reveal { z-index: 20; }
 
-/* The bar and the scrim exist only below 820px - see the block at the foot of
-   this file. Both are declared here and switched on there, which is how both
-   siblings write it. */
-.topbar {
-  display: none; position: sticky; top: 0; z-index: 15;
-  align-items: center; gap: 10px;
-  padding: 8px 12px;
-  background: var(--surface); border-bottom: 1px solid var(--line);
-}
+/* The bar exists only below 820px, and that is `@lautstark/design/svelte/TopBar`'s
+   to say now rather than this file's: the component draws `display: none` and
+   turns it to `flex` inside its own media query, because a scoped base rule is
+   0-2-0 and a product's `@media { .topbar { display: flex } }` at 0-1-0 would
+   lose to it - a bar that never appears, silently. The eight declarations that
+   were here are the component's six plus the two below.
+   The stacking stays, for the reveal's reason: 15 here, 30 in one of the
+   siblings, and it is about this page's layers. */
+.topbar { z-index: 15; }
 .topbar h1 {
   font-size: 19px; margin: 0; display: flex; align-items: center; gap: 8px;
   font-weight: 650; letter-spacing: -.03em;
 }
-.scrim { position: fixed; inset: 0; z-index: 19; background: rgba(0, 0, 0, .45); }
-.scrim[hidden] { display: none; }
+/* The scrim is a focusable `<button aria-label>` where it was a
+   `<div role="presentation">`, and `@lautstark/design/svelte/Scrim` draws its
+   placement, its ground and its `[hidden]` - plus the `border: 0` a `<button>`
+   at `inset: 0` needs, or the user agent draws a two-pixel outset frame around
+   the whole viewport. Only the stacking is left, which is 19 here and 55 in
+   one of the siblings. The `display: none` this rule used to switch on is
+   gone: `shown` answers that question now, and two answers to it is how a
+   scrim ends up over a page nobody asked to cover. */
+.scrim { z-index: 19; }
 
 /* Capped and centred, like both siblings - 720px is mitreden's number.
    The board would take more and should not: five cards that grow with the
@@ -440,22 +457,23 @@ pre.log {
     box-shadow: var(--shadow);
   }
   .sidebar.open { transform: none; }
-  .topbar { display: flex; }
   /* ‹ collapses a column, and down here there is no column - only a layer to
-     dismiss, which is what ✕ and the scrim are for. */
+     dismiss, which is what ✕ and the scrim are for. The ✕ needs no mirror of
+     this any more: the component draws it below the breakpoint and not at all
+     above it, which is better than drawn and hidden - the brand row is the
+     only head on screen while the drawer covers the bar. */
   #sidebarHide { display: none; }
   /* The collapsed state does not apply, and must not. It is remembered across
      visits (§1.3), so without this a sidebar put away on a laptop arrives on
      the phone as a drawer that cannot be opened: `display: none` would win over
      `.open`, and the ☰ in the bar would do nothing at all. */
   body.collapsed .sidebar { display: flex; }
-  /* Nothing to reveal: the bar's ☰ is the way back, and the reveal carries a
-     second mark beside the one already in the bar. */
-  .reveal { display: none; }
 }
 
-/* Nothing to dismiss when the sidebar is simply part of the page. */
-@media (min-width: 821px) { .scrim, .topbar, #sidebarClose { display: none; } }
+/* Nothing to dismiss when the sidebar is simply part of the page. The bar and
+   the reveal have their own answers inside their components; the scrim has
+   none, because unlike those two it has no display of its own to switch. */
+@media (min-width: 821px) { .scrim { display: none; } }
 
 @media (max-width: 620px) {
   /* Here the document scrolls again, which is bildhaft's finding rather than a
