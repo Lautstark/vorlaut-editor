@@ -2031,14 +2031,6 @@ dialog.sheet--page { max-width: 520px; }
 .form__row > .btn { justify-self: start; }
 .form__row > .menu-anchor { justify-self: stretch; }
 
-/* .field leaves display alone, which suits an <input> and not a <button> with
-   a mark at its far end. Layout only: everything the trigger is drawn with -
-   fill, border, radius, padding, focus - is still components.css's. */
-.field.dropdown {
-  display: flex; align-items: center; justify-content: space-between; gap: 7px;
-  text-align: left; cursor: pointer;
-}
-
 /* ---- where a row's sentence goes -----------------------------------------
 
    Three stacked lines - a caption, a control, a sentence - is what a question
