@@ -44,12 +44,13 @@
   import { t } from "./live.svelte.js";
   import { outward } from "./links.js";
   import {
-    azureKeyField, azureRegionField, azureState$, boardState, chooseRendering,
-    chooseTheme, dataState, exportData, importData, installed, keyPlaceholder,
-    metacomOffered, metacomPathField, metacomWord, ablagePanel, keepPanel,
-    keepShown, pickBoardFile, preferredRendering, renderingLabel, renderings,
-    setAzureKey, setAzureRegion, setMetacomPath, symbolPanelNode,
-    symbolsSummary, themeLabel, themeNow, useSource,
+    adoptDataFolder, afterMetacom, azureKeyField, azureRegionField, azureState$,
+    boardState, chooseRendering, chooseTheme, dataFolderChanged, dataState,
+    dataStore, exportData, importData, installed, keyPlaceholder,
+    metacomOffered, metacomPathField, metacomWord, keepShown, noteMetacomPress,
+    pickBoardFile, preferredRendering, renderingLabel, renderings, sayData,
+    sayMetacom, setAzureKey, setAzureRegion, setMetacomPath, standingBackup,
+    symbolsSummary, takeMetacomHeadline, themeLabel, themeNow, useSource,
     useUnfoldSymbols, wipeAll, activeSource,
   } from "./settings.svelte.js";
   import {
@@ -57,13 +58,45 @@
     languagePickerNode, OPENS_WITH, pageLanguageName, PANELS, saveAzure,
     settingsOpen, somethingMissing, startFetch, voicesHereState,
   } from "./voices.svelte.js";
-  import { attributionFor } from "../data/symbols.js";
+  import { attributionFor, metacomProvider } from "../data/symbols.js";
+  import { LANG } from "../core/boot.js";
+  import { words } from "./live.svelte.js";
+  import type { MetacomAction } from "@lautstark/bildquelle/metacom-panel";
   import Panel from "@lautstark/design/svelte/Panel";
   import Sheet from "@lautstark/design/svelte/Sheet";
   import Vanilla from "@lautstark/design/svelte/Vanilla";
+  import AblagePanel from "@lautstark/sicherung/svelte/AblagePanel";
+  import BackupPanel from "@lautstark/sicherung/svelte/BackupPanel";
+  import MetacomPanel from "@lautstark/bildquelle/svelte/MetacomPanel";
 
   let dataFile: HTMLInputElement;
   let renderingPick: HTMLButtonElement;
+
+  /* What the three shared panels are told the page is in.
+   *
+   * `lang` is a prop now rather than the thunk each builder took, and the
+   * reactivity is the framework's - conventions.md §6.8. The thunks existed
+   * because LANG is a live binding a language switch reassigns and a locale
+   * resolved once goes on answering in the language the reader has just left;
+   * `words()` is the note that the switch happened, so this derivation is that
+   * same guarantee in the shape a component can use. Their own tables hold
+   * German and English only, and this product has no third language. */
+  const reading = $derived.by<"de" | "en">(() => {
+    words();
+    return LANG === "en" ? "en" : "de";
+  });
+
+  /** The standing backup, read once the app has handed it over. Held as an
+   *  answer rather than a prop because app.ts wires it, not this tree. */
+  const backup = $derived(standingBackup());
+
+  /* All four acts, including the one this repository did not have.
+   * `readMetacomZip` had been sitting in data/symbols.ts since the search moved
+   * into the browser with no caller at all - the wiring was built and never
+   * hung on a button, which conventions.md §4.13 records as a hole rather than
+   * a decision. bildhaft and wochenwerk both offer it. */
+  const METACOM_ACTIONS: readonly MetacomAction[] =
+    ["choose", "zip", "reread", "forget"];
 
   /* Which of the nine panels are open, by the name the list gives them. Held so
      that opening the sheet can fold them back - see openSettings() - which is
@@ -244,12 +277,31 @@
          state={symbolsSummary()} class="setting">
     <p class="lead" id="metacomIntro">{t("ui.metacom_intro")}</p>
     <!-- The folder this browser reads, drawn by
-         @lautstark/bildquelle/metacom-panel so that all three programmes show
-         the same block. The licence paragraph and the link to the shop are
-         the module's now. They were this repository's own words, and are in
-         the package because it was the only one of the three that said where
-         a licence comes from - see the module's header. -->
-    <div id="metacomBox"><Vanilla node={symbolPanelNode()} /></div>
+         @lautstark/bildquelle/svelte/MetacomPanel so that all three programmes
+         show the same block. The licence paragraph and the link to the shop
+         are the package's now. They were this repository's own words, and are
+         in the package because it was the only one of the three that said
+         where a licence comes from - see the component's header.
+
+         The twin of the builder this replaces, not a second path: same
+         options, same emitted markup, same words. `#metacomBox` stays as the
+         box around it rather than becoming the component's own `id` - the
+         suite and the baseline both address the block as `#metacomBox
+         .metacom-panel`, and a panel that IS the box has nothing for that
+         descendant to find.
+
+         `onclickcapture` is the listener wireSymbolFolder() used to add to the
+         node the builder handed back: the panel's own click handler is what
+         moves the status noteMetacomPress() asks about, so the sample has to
+         happen on the way down. Capture on the box around it fires before the
+         handler on the button inside it, which is the same moment. -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div id="metacomBox" onclickcapture={noteMetacomPress}>
+      <MetacomPanel metacom={metacomProvider} actions={METACOM_ACTIONS}
+        lang={reading} headline={takeMetacomHeadline} say={sayMetacom}
+        after={afterMetacom} />
+    </div>
 
     <label id="metacomLabel" for="metacomPath">{t("ui.metacom_path")}</label>
     <input type="text" id="metacomPath" class="field" autocomplete="off"
@@ -310,11 +362,20 @@
        No state line, for the panel above's reason. -->
   <Panel bind:open={shown.dataPanel} id="dataPanel"
          section={t("ui.data_section")} class="setting">
-    <!-- The store: one panel for every Lautstark programme, built by
-         @lautstark/sicherung/ablage-panel so the words and the order are the
-         same wherever somebody meets them. Everything below is what vorlaut
-         offers besides the store. -->
-    <div id="whereBox"><Vanilla node={ablagePanel()} /></div>
+    <!-- The store: one panel for every Lautstark programme, drawn by
+         @lautstark/sicherung/svelte/AblagePanel so the words and the order are
+         the same wherever somebody meets them. Everything below is what vorlaut
+         offers besides the store.
+
+         Below it and not in its `below` snippet, which is what that option is
+         for: the folder question is answered first, and what this repository
+         offers besides the store is a separate offer under a subheading of its
+         own. `#whereBox` stays for the METACOM box's reason - the suite and the
+         baseline both address this as `#whereBox .where-panel`. -->
+    <div id="whereBox">
+      <AblagePanel store={dataStore()} adopt={adoptDataFolder}
+        changed={dataFolderChanged} say={sayData} lang={reading} />
+    </div>
     <hr class="hair" />
     <p class="subhead" id="keepHead">{t("ui.keep_head")}</p>
 
@@ -324,7 +385,9 @@
          somebody stops thinking about it. Hidden outright where the browser
          has no picker - Safari, Firefox, anything on Android - and then the
          two buttons below are the whole offer, unchanged. -->
-    <div id="folderBox" class="folderbox" hidden={!keepShown()}><Vanilla node={keepPanel()} /></div>
+    <div id="folderBox" class="folderbox" hidden={!keepShown()}>
+      {#if backup}<BackupPanel {backup} say={sayData} lang={reading} />{/if}
+    </div>
 
     <div class="row">
       <button id="dataExport" class="btn" type="button" onclick={() => void exportData()}>{t("ui.data_export")}</button>

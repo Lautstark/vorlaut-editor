@@ -26,8 +26,7 @@
 import type { OfferedVoice, VoiceList } from "../core/types.js";
 import { status } from "./dom.js";
 import { languagePicker, type LanguagePicker } from "@lautstark/design/language";
-import { voicePicker, type Pickable, type VoicePicker }
-  from "@lautstark/stimmquelle/voice-picker";
+import type { Pickable } from "@lautstark/stimmquelle/voice-picker";
 import { reason } from "../core/errors.js";
 import { listVoices, voiceFetchState, startVoiceFetch } from "../backend/index.js";
 import { LANG, LANGUAGE_NAMES, LANGUAGES, rememberLanguage, setLanguage }
@@ -85,24 +84,63 @@ let fetchDone = $state(false);   // finished in this dialog - worth saying so
 // would otherwise leave two of them polling and rendering over each other.
 let polling = false;
 
-/* The list itself: @lautstark/stimmquelle/voice-picker, held so that a repaint
- * and a language switch can reach it.
+/* The list itself is @lautstark/stimmquelle/svelte/VoicePicker, drawn by
+ * CollectionSheet.svelte.
  *
- * How the list narrows is the module's - the search field, the language pills,
- * and what a row matches on. So is where the keyboard is standing, which is the
- * half this repository never had: with an Azure key the list runs to several
- * hundred plain buttons, and Tab walked every one of them to reach the panel
- * underneath, which is the very thing the search field was added to prevent.
+ * How the list narrows is the component's - the search field, the language
+ * pills, and what a row matches on. So is where the keyboard is standing,
+ * which is the half this repository never had: with an Azure key the list runs
+ * to several hundred plain buttons, and Tab walked every one of them to reach
+ * the panel underneath, which is the very thing the search field was added to
+ * prevent. The `refresh()` and `dispose()` calls that used to be spread over
+ * this file went with the builder - the repaint follows `voices` because it is
+ * a rune, and the teardown is the component's own §6.8 `$effect`.
  *
- * Null until openCollectionSettings() builds one, and rebuilt on every open
- * rather than kept: the search text and the language pill are the module's own
- * state with no way in from out here, and this sheet narrows itself back on
- * every open for the reason its panels fold back - a filter left on hides
- * voices with no sign that it had. A fresh block is the whole of that reset.
+ * False until openCollectionSettings() has a catalogue, and back to false on
+ * the way into every open rather than left standing. Two things ride on that
+ * and both were the node's job before: the list must not show the last
+ * Sammlung's tick while this one's catalogue is still arriving, and the search
+ * text and the language pill are the component's own state with no way in from
+ * out here - so this sheet narrows itself back on every open for the reason its
+ * panels fold back. A fresh mount is the whole of that reset.
  */
-let picker: VoicePicker | null = null;
-let pickerBox = $state.raw<HTMLElement | null>(null);
-export const voiceListNode = (): HTMLElement | null => pickerBox;
+let pickerUp = $state(false);
+export const voiceListShown = (): boolean => pickerUp;
+
+/** The catalogue, in the shape the picker reads it in. Read on every paint
+ *  rather than handed over once, which is what lets a key saved in
+ *  Einstellungen, or a download that has just finished, show up here without
+ *  the sheet being closed and opened again. */
+export const pickableVoices = (): Pickable[] => voices.voices.map(pickable);
+
+/** Which one is ticked. An empty entry in layout.json means "whatever works
+ *  here", and that is the normal case for a fresh Sammlung. It is not offered
+ *  as a row of its own - "Automatic" tells nobody anything - so the voice it
+ *  comes out as stands marked instead, and voiceNotes() says nobody picked it. */
+export const tickedVoice = (): string => voices.chosen || voices.active;
+
+/** The name for a voice the layout still holds and this machine cannot offer.
+ *  Worked out by the backend, because that is where the naming rules are;
+ *  without it the row would be labelled with the id, and an id is
+ *  `azure:de-DE-KatjaNeural`. */
+export const chosenVoiceName = (): string => voices.chosenLabel;
+
+/** The one thing this product has to say about a row that the catalogue does
+ *  not: a voice that is in force without anybody having chosen it. Only this
+ *  Sammlung's storage makes that distinction, which is why it is a hook rather
+ *  than something the component could work out. */
+export const voiceNotes = (voice: Pickable): string[] =>
+  (!voices.chosen && voice.id === voices.active ? [t("ui.voice_auto_note")] : []);
+
+/** A sample, in the voice the row is about.
+ *
+ * No progress to report: synthesise() answers with a finished blob and says
+ * nothing on the way, so the button stays on the component's "…" for as long
+ * as this takes. No button handed over either: the component owns this one and
+ * is already labelling and disabling it, and two writers of one label is how a
+ * button ends up stuck saying "…". */
+export const hearVoice = (voice: Pickable): Promise<void> =>
+  speak(sampleText(), null, voice.id);
 
 async function loadVoices(): Promise<void> {
   try {
@@ -278,7 +316,6 @@ function pollFetch(): void {
     // The voices themselves have to be asked for again - the list was empty
     // when the dialog opened.
     await loadVoices();
-    picker?.refresh();
   }, 2000);
 }
 
@@ -294,11 +331,10 @@ function pollFetch(): void {
 // group of radios the arrows move the answer rather than only the focus, and a
 // keyboard that ticked without writing would be the one input on this sheet
 // whose choice did not survive closing it.
-async function chooseVoice(id: string): Promise<void> {
+export async function chooseVoice(id: string): Promise<void> {
   if (id === voices.chosen) return;
   state.layout.voice = id;
   voices = { ...voices, chosen: id };
-  picker?.refresh();
   await save();
 }
 
@@ -324,7 +360,6 @@ export async function saveAzure(): Promise<void> {
   // when the sheet opened - and one that has just been corrected can mean
   // rows that were missing come back.
   if (azureChanged) await loadVoices();
-  picker?.refresh();
   // No paintStates() here: saveSettings() has already run its own repaint,
   // which sets the Azure line and starts the probe that replaces it. Painting
   // again would put "stored" back on top of the probe's answer.
@@ -342,7 +377,6 @@ export async function forgetAzureKey(): Promise<void> {
     return;                       // stay open, the message is in the header
   }
   await loadVoices();
-  picker?.refresh();
   status(t("ui.azure_key_removed"));
 }
 
@@ -379,7 +413,6 @@ async function chooseLanguage(code: string): Promise<void> {
   // The trigger names the language in force, and that name is ours to keep.
   languageRow?.refresh();
   paintStates();
-  picker?.refresh();
   editor().render();
 }
 
@@ -406,7 +439,6 @@ export async function chooseCollectionLanguage(code: string): Promise<void> {
   // `active` is a guess. After the save, because the answer is read off the
   // stored layout rather than off this one.
   await loadVoices();
-  picker?.refresh();
 }
 
 /** The page's own language picker, built once and kept.
@@ -667,61 +699,13 @@ export async function reconnectSymbolFolder(): Promise<void> {
   if (await symbols.reconnectMetacom()) touched();
 }
 
-/** The list, thrown away and built again.
- *
- * Both halves matter. dispose() is not optional even though this module
- * subscribes to nothing: a preview may still be in flight, and a piper model
- * arriving after the sheet closed would otherwise write a per cent onto a
- * button in a tree nobody can see. And a fresh block is how the search text
- * and the language pill go back to nothing - they are the module's own state,
- * and this sheet narrows itself back on every open for the reason its panels
- * fold back.
- */
-function buildPicker(): void {
-  picker?.dispose();
-  picker = voicePicker({
-    // Read on every paint rather than handed over once, which is what lets a
-    // key saved in Einstellungen, or a download that has just finished, show
-    // up here without the sheet being closed and opened again.
-    voices: () => voices.voices.map(pickable),
-    /* An empty entry in layout.json means "whatever works here", and that is
-       the normal case for a fresh Sammlung. It is not offered as a row of its
-       own - "Automatic" tells nobody anything - so the voice it comes out as
-       stands marked instead, and notes() below says nobody picked it. */
-    current: () => voices.chosen || voices.active,
-    pick: (id) => void chooseVoice(id),
-    /* No progress to report: synthesise() answers with a finished blob and
-       says nothing on the way, so the button stays on the module's "…" for as
-       long as this takes. No button passed to speak(): the module owns this
-       one and is already labelling and disabling it, and two writers of one
-       label is how a button ends up stuck saying "…". */
-    hear: (voice) => speak(sampleText(), null, voice.id),
-    /* The one thing this product has to say about a row that the catalogue
-       does not: a voice that is in force without anybody having chosen it.
-       Only this Sammlung's storage makes that distinction, which is why it
-       comes through the hook rather than out of the module. */
-    notes: (voice) => (!voices.chosen && voice.id === voices.active
-      ? [t("ui.voice_auto_note")] : []),
-    /* The name for a voice the layout still holds and this machine cannot
-       offer. Worked out by the backend, because that is where the naming rules
-       are; without it the row would be labelled with the id, and an id is
-       `azure:de-DE-KatjaNeural`. */
-    chosenName: () => voices.chosenLabel,
-    // A function because LANG is a live binding: this page changes language
-    // without reloading, and a locale captured once would go on answering in
-    // the language somebody has just left.
-    lang: () => (LANG === "en" ? "en" : "de"),
-  });
-  pickerBox = picker.node;
-}
-
 export async function openCollectionSettings(): Promise<void> {
-  // Emptied on the way in, not left standing while the catalogue is fetched:
-  // what was here is the last Sammlung's answer, and a list that shows one
-  // voice ticked and then another is a list that looked wrong for a moment.
-  picker?.dispose();
-  picker = null;
-  pickerBox = null;
+  // Taken down on the way in, not left standing while the catalogue is
+  // fetched: what was there is the last Sammlung's answer, and a list that
+  // shows one voice ticked and then another is a list that looked wrong for a
+  // moment. Unmounting it is also what puts the search text and the language
+  // pill back to nothing - see voiceListShown().
+  pickerUp = false;
   /* Built from scratch on every open rather than left standing.
    *
    * Two reasons, and the second is the one that bites. An editor may have been
@@ -741,9 +725,9 @@ export async function openCollectionSettings(): Promise<void> {
   // after a language switch because they are translated, and this one names a
   // language in that language's own word.
   paintCollectionLanguage();
-  // After the catalogue has arrived, not before: the module paints as soon as
-  // it is built, and building it up with the panel would have drawn the list
+  // After the catalogue has arrived, not before: the component draws as soon
+  // as it is mounted, and mounting it with the panel would have drawn the list
   // this sheet was holding the last time it was open.
-  buildPicker();
+  pickerUp = true;
   if (fetching.running) pollFetch();
 }

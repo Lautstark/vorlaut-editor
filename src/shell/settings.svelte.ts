@@ -27,25 +27,17 @@ import { readSettings, writeSettings, azureState, listCollections }
   from "../backend/index.js";
 import { applyTheme, readTheme, saveTheme, type Theme }
   from "@lautstark/design/theme";
-
-import { LANG } from "../core/boot.js";
 import { load } from "../core/save.js";
 import { paintCollections } from "./collections.js";
 import * as symbols from "../data/symbols.js";
 import { exportEverything, importBackup, isBackup, TOO_NEW } from "../data/backup.js";
 import { boardTotals, wipeEverything } from "../data/store.js";
 import { adopt, adopted, refusal } from "./adopt.js";
-import { backupPanel, type BackupPanel } from "@lautstark/sicherung/backup-panel";
-import { wherePanel } from "@lautstark/sicherung/ablage-panel";
-import { metacomPanel, type MetacomPanel } from "@lautstark/bildquelle/metacom-panel";
 import { ablage, folderName, isStore, wipeReaches } from "../data/folder.js";
 import { adoptFolder } from "../data/store.js";
+import type { Ablage } from "@lautstark/sicherung/ablage";
 import type { Sicherung } from "@lautstark/sicherung";
 import { downloadJson } from "@lautstark/werkzeuge/download";
-
-/* Held so a language switch can repaint it: the panel paints its own words and
-   carries no data-i18n, so nothing that redraws the components can reach it. */
-let keeping: BackupPanel | null = null;
 
 /* $state.raw, and every record out of the backend below is the same. These
    come back from readSettings() and writeSettings() whole and are replaced
@@ -131,20 +123,41 @@ export const themeNow = (): Theme => theme;
 let folderMoved = $state(0);
 export const folderState = (): number => folderMoved;
 
-/* The three shared panels, as the nodes they are. Vanilla by design - the
- * family's panels are built once and put in place by
- * @lautstark/design/svelte/Vanilla, a `display: contents` host - so what is
- * reactive is which node, never what is inside one. */
-let storeNode = $state.raw<HTMLElement | null>(null);
-let keepNode = $state.raw<HTMLElement | null>(null);
-let metacomNode = $state.raw<HTMLElement | null>(null);
-export const ablagePanel = (): HTMLElement | null => storeNode;
-export const keepPanel = (): HTMLElement | null => keepNode;
-export const symbolPanelNode = (): HTMLElement | null => metacomNode;
+/* The three shared panels are components now - @lautstark/sicherung's
+ * `AblagePanel` and `BackupPanel` and @lautstark/bildquelle's `MetacomPanel`,
+ * drawn by SettingsSheet.svelte. What is left in this file is what a product
+ * owes them: the objects they are about, the words this page says about what
+ * they did, and the two answers that decide whether one is offered at all.
+ *
+ * The `Vanilla` hosts and the three `HTMLElement` runes that fed them are
+ * gone with the builders. A node held in a rune was the whole of what a
+ * vanilla panel's reactivity could be; a component subscribes itself, and its
+ * `$effect` returns the teardown these three never got. conventions.md §6.8. */
+
+/** The store this browser files its work in, as the panel's own subject. */
+export const dataStore = (): Ablage => ablage;
+
+/** What the store panel does once a folder is settled on. */
+export const adoptDataFolder = adoptFolder;
+
+/** Everything on screen is about to be wrong. The store panel says so and
+ *  this is the whole of what this page can do about it. */
+export const dataFolderChanged = (): void => { location.reload(); };
+
+/** The standing backup, handed in by app.ts and held so the panel can be
+ *  about it. Null until wireData() runs, which is before any sheet opens -
+ *  `$state.raw` because it is replaced whole and never mutated. */
+let standing = $state.raw<Sicherung | null>(null);
+export const standingBackup = (): Sicherung | null => standing;
+
 /** Only where there is no store folder: with one, the copies already go beside
  *  the work, and a second picker would be the same offer under a name that
- *  reads almost the same. */
-let keepOffered = $state(true);
+ *  reads almost the same. And only where the browser has a picker at all -
+ *  the component draws nothing in an unsupported browser, so without this the
+ *  box would be an empty div spending `.folderbox`'s margin. Asked once, the
+ *  way `!!backupPanel(...)` answered it once: an unsupported browser has no
+ *  other status to be in. */
+let keepOffered = $state(false);
 export const keepShown = (): boolean => keepOffered;
 
 /* The rendering chooser. METACOM ships the same symbols several times over -
@@ -315,20 +328,19 @@ export function paintStates(): void {
   // works. That answer is the whole reason azureState() exists.
   azureLine = settings.azureKey.set ? t("ui.azure_key_stored") : t("ui.azure_key_none");
   probeAzure();
-  /* The two panels drawn by the module that owns their folder rather than from
-     here. Neither carries a data-i18n, so nothing that redraws the components
-     can reach either, and each paints its own words in whichever language it is
-     asked for on the way past. There used to be one of these; §4.9's two folder
-     questions are both packaged now. */
-  keeping?.refresh();
-  folder?.refresh();
-  /* There was a second one, and the hook it registered through has gone with
-   * it. onPaintPanels() let a panel wired outside this file ask to be redrawn
-   * on a language switch, and existed because the Device panel belonged to
-   * editor-diy while the shell may not import that. The Device panel is gone -
-   * the transfer dialog grants a port where it needs one - so the list had no
-   * registrant left, and a registry nothing registers with is an extension
-   * point that reads as working code. */
+  /* The three shared panels used to be repainted from here, because each was a
+     node this file was holding and none of them carries a data-i18n. They are
+     components now and `lang` is a prop, so a language switch redraws them with
+     everything else on the sheet: the two `refresh()` calls that stood here are
+     §6.8's whole point and are gone rather than moved.
+
+     There was a third one before them, and the hook it registered through has
+     gone with it. onPaintPanels() let a panel wired outside this file ask to be
+     redrawn on a language switch, and existed because the Device panel belonged
+     to editor-diy while the shell may not import that. The Device panel is gone
+     - the transfer dialog grants a port where it needs one - so the list had no
+     registrant left, and a registry nothing registers with is an extension
+     point that reads as working code. */
 }
 
 /* --------------------------------------- the folder this browser can read ---
@@ -345,21 +357,26 @@ export function paintStates(): void {
  * lies; see docs/symbol-search.md.
  */
 
-/** The shared block, held so a language switch can repaint it. */
-let folder: MetacomPanel | null = null;
-
 /* Whether the press now running was a re-confirm rather than a pick.
  *
- * The module merges "choose a folder" and "confirm access" into one button -
+ * The panel merges "choose a folder" and "confirm access" into one button -
  * one press, three labels - and tells `after()` only that a `choose` happened.
  * This repository has to keep the two apart, because adoptMetacom() must not
  * fire on a re-confirm: the same folder coming back is a restore, not a new
  * answer to which source somebody wants searched.
  *
- * Sampled in the capture phase, before the module's own click handler runs,
+ * Sampled in the capture phase, before the panel's own click handler runs,
  * because that handler is what changes the status this asks about - by the time
- * after() is called the answer has already moved. */
+ * after() is called the answer has already moved. The listener was on the
+ * block the builder handed back and is `onclickcapture` on the box around the
+ * component now; what it samples, and when, is unchanged. */
 let reconfirming = false;
+
+/** A press is about to reach the symbol folder's panel. */
+export function noteMetacomPress(): void {
+  const how = symbols.metacomStatus();
+  reconfirming = how.kind === "needs-setup" && how.code === "permission-needed";
+}
 
 /** Whether after() has already put a sentence in the status line for this press.
  *
@@ -448,7 +465,6 @@ function renderSettings(): void {
   // for: somebody meant to configure this and it is not working.
   if (settings.metacom.path && !settings.metacom.ok) unfoldSymbols();
   folderMoved += 1;
-  folder?.refresh();
 }
 
 /* The one panel this file asks to be opened, and the one thing it needs the
@@ -508,30 +524,12 @@ export async function takeBoardFile(): Promise<void> {
  * This one is about this browser's whole state, in a shape only vorlaut reads,
  * and the two would blur into "export" if they shared a panel. */
 export function wireData(backup: Sicherung): void {
-  /* The store panel comes from the package, so every Lautstark programme shows
-     the same one. What stays here is what vorlaut alone offers besides it. */
-  const store = wherePanel({
-    store: ablage,
-    adopt: adoptFolder,
-    changed: () => { location.reload(); },
-    say: (line) => { dataLine = line; },
-    lang: LANG === "en" ? "en" : "de",
-  });
-  storeNode = store.node;
-  if (isStore()) {
-    keepOffered = false;
-  } else {
-    /* The 170 lines this replaces are @lautstark/sicherung/backup-panel's now.
-       `lang` is a function because LANG here is a live binding that moves when
-       the page changes language without reloading. */
-    keeping = backupPanel({
-      backup,
-      say: (message) => { dataLine = message; },
-      lang: () => (LANG === "en" ? "en" : "de"),
-    });
-    keepNode = keeping ? keeping.node : null;
-    keepOffered = !!keeping;
-  }
+  standing = backup;
+  /* Two answers rather than a panel, which is what building the blocks here
+     cost and no longer does. The store panel is drawn whatever it says; the
+     standing copy is offered only where it has something to offer, and that
+     is this page's question rather than the component's - see keepShown(). */
+  keepOffered = !isStore() && backup.status.kind !== "unsupported";
 }
 
 /* Delete everything, which this editor was the only one in the family without.
@@ -640,63 +638,54 @@ export async function importData(file: File): Promise<void> {
   }
 }
 
+/* The three things @lautstark/bildquelle's panel leaves to a product on
+ * purpose - which source is now active, what a heading has to say, and what
+ * this page says out loud - and nothing else. The licence paragraph, the link
+ * to the shop, the state line and its dot and the four acts are the panel's;
+ * SettingsSheet.svelte draws it and passes the four below.
+ *
+ * `lang` was a function here because LANG is a live binding that moves when
+ * the page changes language without reloading. §6.8 makes it a prop and the
+ * reactivity the framework's, so the thunk is gone and the component redraws
+ * with the rest of the sheet. */
+
+/** Told the heading line whenever it changes. */
+export const takeMetacomHeadline = (text: string): void => { folderHead = text; };
+
+/** The panel's own sentence, unless afterMetacom() has already put a bigger
+ *  one in the same status line.
+ *
+ * Switching source is the bigger one: it changes what every search from now on
+ * answers with, where "folder read" only says the press worked. `after` runs
+ * first and this would overwrite it, so it has to ask rather than assume - and
+ * when nothing was switched, which is every press on a folder that is already
+ * the active source, this is the only confirmation there is. */
+export function sayMetacom(line: string): void {
+  if (!announced) status(line);
+}
+
+/** What a finished act means to this page, awaited before the sentence above. */
+export async function afterMetacom(action: string): Promise<void> {
+  announced = false;
+  if (action === "forget") {
+    // Forgetting the folder cannot leave METACOM as the source: the picker
+    // would have nothing to search and would say so on every keystroke. The
+    // fallback is written down rather than left to readSettings() to infer
+    // on the next visit, so the answer is the same before and after a
+    // reload.
+    if (activeSource() === "metacom") {
+      symbols.setActiveSource("arasaac");
+      await saveSettings({ activeProvider: "arasaac" });
+    }
+    return;
+  }
+  // A re-confirm is a restore, and a restore does not decide which source
+  // is active. See adoptMetacom() and `reconfirming` above.
+  if (action === "choose" && reconfirming) return;
+  if (action === "choose" || action === "zip") announced = await adoptMetacom();
+}
+
 export function wireSymbolFolder(): void {
-  /* The 70 lines this replaces are @lautstark/bildquelle/metacom-panel's now:
-     the licence paragraph, the link to the shop, the state line and its dot,
-     and the four acts. What is left here is the three things the module leaves
-     to a product on purpose - which source is now active, what a language
-     switch has to repaint, and this page's own word for a folder nobody has
-     chosen. See the module's header for why each of those stayed.
-
-     `lang` is a function because LANG is a live binding that moves when the
-     page changes language without reloading - the same reason backupPanel()
-     above is passed one. */
-  folder = metacomPanel({
-    metacom: symbols.metacomProvider,
-    /* All four, including the one this repository did not have. `readMetacomZip`
-       had been sitting in data/symbols.ts since the search moved into the
-       browser with no caller at all - the wiring was built and never hung on a
-       button, which conventions.md §4.13 records as a hole rather than a
-       decision. bildhaft and wochenwerk both offer it. */
-    actions: ["choose", "zip", "reread", "forget"],
-    lang: () => (LANG === "en" ? "en" : "de"),
-    headline: (text) => { folderHead = text; },
-    say: (line) => {
-      /* The module's own sentence, unless after() has already put a bigger one
-         in the same status line. Switching source is the bigger one: it changes
-         what every search from now on answers with, where "folder read" only
-         says the press worked. after() runs first and this would overwrite it,
-         so it has to ask rather than assume - and when nothing was switched,
-         which is every press on a folder that is already the active source,
-         this is the only confirmation there is. */
-      if (!announced) status(line);
-    },
-    after: async (action) => {
-      announced = false;
-      if (action === "forget") {
-        // Forgetting the folder cannot leave METACOM as the source: the picker
-        // would have nothing to search and would say so on every keystroke. The
-        // fallback is written down rather than left to readSettings() to infer
-        // on the next visit, so the answer is the same before and after a
-        // reload.
-        if (activeSource() === "metacom") {
-          symbols.setActiveSource("arasaac");
-          await saveSettings({ activeProvider: "arasaac" });
-        }
-        return;
-      }
-      // A re-confirm is a restore, and a restore does not decide which source
-      // is active. See adoptMetacom() and `reconfirming` above.
-      if (action === "choose" && reconfirming) return;
-      if (action === "choose" || action === "zip") announced = await adoptMetacom();
-    },
-  });
-  metacomNode = folder.node;
-  folder.node.addEventListener("click", () => {
-    const state = symbols.metacomStatus();
-    reconfirming = state.kind === "needs-setup" && state.code === "permission-needed";
-  }, true);
-
   // The provider says when a folder arrives or goes; nothing here polls.
   //
   // The whole sheet and not just this panel. A folder arriving changes more

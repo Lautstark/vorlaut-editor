@@ -50,22 +50,35 @@
   import { menuOn } from "@lautstark/design/menu";
   import { t } from "./live.svelte.js";
   import {
-    chooseCollectionLanguage, chooseSymbolSource, closeCollectionSettings,
+    chooseCollectionLanguage, chooseSymbolSource, chooseVoice,
+    chosenVoiceName, closeCollectionSettings,
     collectionEpoch, collectionLanguageCode, collectionLanguageName, collectionSheetOpen,
-    deviceLanguages, deviceLanguageShown, editorPanels, reconnectSymbolFolder,
-    symbolSourceChosen, symbolSourceSleeping, voiceEmpty, voiceHint,
-    voiceListNode, voiceState, haveVoices,
+    deviceLanguages, deviceLanguageShown, editorPanels, hearVoice,
+    pickableVoices, reconnectSymbolFolder,
+    symbolSourceChosen, symbolSourceSleeping, tickedVoice, voiceEmpty,
+    voiceHint, voiceListShown, voiceNotes, voiceState, haveVoices,
   } from "./voices.svelte.js";
   import { metacomOffered } from "./settings.svelte.js";
+  import { LANG } from "../core/boot.js";
+  import { words } from "./live.svelte.js";
   import Panel from "@lautstark/design/svelte/Panel";
   import Sheet from "@lautstark/design/svelte/Sheet";
-  import Vanilla from "@lautstark/design/svelte/Vanilla";
+  import VoicePicker from "@lautstark/stimmquelle/svelte/VoicePicker";
 
   /* `$state` and optional, which the `{#if}` below is the reason for: a
      `bind:this` inside a conditional block is written twice - the element when
      the block is built and `undefined` when it is torn down - and Svelte says
      so rather than letting the second write go unnoticed. */
   let langPick = $state<HTMLButtonElement | undefined>(undefined);
+
+  /* What the list is told the page is in. A prop rather than the thunk the
+     builder took - conventions.md §6.8 - and `words()` is the note that a
+     language switch happened, which is what the thunk was there to survive.
+     The component's own table holds German and English only. */
+  const reading = $derived.by<"de" | "en">(() => {
+    words();
+    return LANG === "en" ? "en" : "de";
+  });
 
   const panels = $derived(editorPanels());
   const chosen = $derived(symbolSourceChosen());
@@ -230,12 +243,28 @@
          group="collection" stateId="voiceState" section={t("ui.voice")}
          state={voiceState()} class="setting">
     <!-- The search field, the language pills and the rows, drawn by
-         @lautstark/stimmquelle/voice-picker so that all three programmes
-         show the same list. The search field went into the module with the
-         rest: redrawing an input somebody is typing into takes the caret with
-         it, and the module makes the same guarantee one level in, by building
-         the field once and replacing only the rows under it. -->
-    <div id="voiceBox" hidden={!haveVoices()}><Vanilla node={voiceListNode()} /></div>
+         @lautstark/stimmquelle/svelte/VoicePicker so that all three programmes
+         show the same list. The search field is the component's with the rest:
+         redrawing an input somebody is typing into takes the caret with it,
+         and a field outside every block with `bind:value` is what that
+         guarantee looks like here.
+
+         `#voiceBox` stays as the box around it rather than becoming the
+         component's own `id`: the suite and the baseline both address the list
+         as `#voiceBox .voice-picker`, and a list that IS the box has nothing
+         for that descendant to find.
+
+         The `{#if}` is what a fresh mount is for - see voiceListShown(). It is
+         not a `{#key}` on the sheet's epoch, which §6.2 would refuse here
+         anyway: a key around a member of a `name`d accordion replaces the
+         <details> the browser is holding the group's open state in. -->
+    <div id="voiceBox" hidden={!haveVoices()}>
+      {#if voiceListShown()}
+        <VoicePicker voices={pickableVoices} current={tickedVoice}
+          pick={(id) => void chooseVoice(id)} hear={hearVoice}
+          notes={voiceNotes} chosenName={chosenVoiceName} lang={reading} />
+      {/if}
+    </div>
     <!-- Not the module's "no voice matches that": this is a machine with
          nothing to choose between at all, and what to do about it is this
          product's. -->
