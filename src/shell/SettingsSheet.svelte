@@ -191,24 +191,23 @@
      `open` one-way with `onclose`, which §6.1 says is as blessed as binding:
      the sheet's state is a question asked of another module, and `bind:` cannot
      take one. `closeId` because #voiceClose is clicked in fourteen places
-     across six spec files. -->
+     across six spec files. `titleId` because e2e/language.spec.ts reads
+     #settingsHeading to check that the sheet is titled in the language the page
+     was just switched to. That id used to come from a `head` snippet drawing
+     the same <h2> with the same words the frame would have drawn - a snippet
+     override existing for an attribute, which took the heading over as well and
+     would have gone on drawing this one the day §6.1 changed what a heading is.
+     v1.40.0 put the id on the frame's own <h2>. -->
 <Sheet
   open={settingsOpen()}
   onclose={closeSettings}
   id="voices"
   closeId="voiceClose"
+  titleId="settingsHeading"
   panels
   title={t("ui.settings")}
   closeLabel={t("ui.close")}
 >
-  <!-- The heading replaces the frame's own <h2> rather than sitting beside a
-       hidden one, which is what `head` is for. It is here at all only for the
-       id: e2e/language.spec.ts reads #settingsHeading to check that the sheet
-       is titled in the language the page was just switched to. It was a
-       <strong> with `font-weight: 600` restored by hand, so this is a real
-       size change - 17px and 650 - and it is in a baseline. §6.1. -->
-  {#snippet head()}<h2 id="settingsHeading">{t("ui.settings")}</h2>{/snippet}
-
   <!-- First, and deliberately: somebody who cannot read the page needs this
        one before anything else. The options name themselves. Open on arrival
        for the same reason.

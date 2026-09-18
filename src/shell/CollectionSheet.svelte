@@ -129,19 +129,21 @@
   }
 </script>
 
+<!-- `titleId` is on the frame's own <h2> since v1.40.0. The id is read in two
+     places: e2e/language.spec.ts checks that this sheet is titled in the
+     language the page was just switched to, and e2e/menu.spec.ts clicks the
+     heading as the press outside a drop-down. It used to come from a `head`
+     snippet redrawing the same <h2> with the same words, which is a snippet
+     override existing for an attribute. -->
 <Sheet
   open={collectionSheetOpen()}
   onclose={closeCollectionSettings}
   id="collectionSheet"
   closeId="collectionSheetClose"
+  titleId="collectionSheetHeading"
   title={t("ui.collection_settings")}
   closeLabel={t("ui.close")}
 >
-  <!-- Replaces the frame's <h2> only so that the id survives:
-       e2e/language.spec.ts reads #collectionSheetHeading to check that this
-       sheet is titled in the language the page was just switched to. -->
-  {#snippet head()}<h2 id="collectionSheetHeading">{t("ui.collection_settings")}</h2>{/snippet}
-
   <!-- The language the device shows its own menu in. First, and open on
        arrival, because it is the one a talker Sammlung is usually opened for -
        and not drawn at all on a tablet Sammlung, where the voice decides the
