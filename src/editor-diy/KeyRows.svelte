@@ -20,7 +20,7 @@
    */
   import { t } from "../shell/live.svelte.js";
   import { speak } from "../shell/speech.js";
-  import Dropdown from "../shell/pieces/Dropdown.svelte";
+  import Dropdown from "@lautstark/design/svelte/Dropdown";
   import FormRow from "../shell/pieces/FormRow.svelte";
   import Hint from "../shell/pieces/Hint.svelte";
   import type { KeySheet } from "./keySheet.svelte.js";
@@ -28,12 +28,13 @@
   let { s }: { s: KeySheet } = $props();
 </script>
 
-<!-- The same dropdown editor-app draws, and each answer's own sentence
+<!-- The same dropdown editor-app draws - `field` and `start` for the reason
+     given there - and each answer's own sentence
      following it as a hint. Three boxed options with their notes under them
      would be most of this sheet's height, and the distinction between the first
      two is exactly the thing a bare list of three words gets wrong. -->
 <FormRow label={t("ui.button_act")} caption>
-  {#snippet children({ labelledBy })}<Dropdown d={s.does} choices={s.kinds} id="diyDoes" {labelledBy} describedBy="diyDoesNote" />{/snippet}
+  {#snippet children({ labelledBy })}<Dropdown field start label={s.does.label} build={s.does.build} id={s.does.id} {labelledBy} describedBy="diyDoesNote" />{/snippet}
   {#snippet extra()}<Hint id="diyDoesNote" text={s.note} />{/snippet}
 </FormRow>
 
@@ -48,7 +49,7 @@
      whether somebody may type into this field, it is whether the key says
      anything at all. -->
 <FormRow label={t("ui.goto_page")} hidden={!s.leads}>
-  {#snippet children({ labelledBy })}<Dropdown d={s.targets} choices={s.where} id="diyGoto" {labelledBy} />{/snippet}
+  {#snippet children({ labelledBy })}<Dropdown field start label={s.targets.label} build={s.targets.build} id={s.targets.id} {labelledBy} />{/snippet}
 </FormRow>
 
 <FormRow label={t("ui.text_placeholder")} note={s.spokenNote} forId="diyKeyText" hidden={!s.speaks}>

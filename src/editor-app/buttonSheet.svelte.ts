@@ -132,9 +132,6 @@ export interface ButtonSheet {
   does: Dropdown;
   targets: Dropdown;
   classes: Dropdown;
-  readonly kinds: Choice[];
-  readonly where: Choice[];
-  readonly wordClasses: Choice[];
   /** The sentence under the act dropdown, which is the chosen option's own. */
   readonly note: string;
   /** Whether this button leads anywhere, and whether it says anything. */
@@ -230,7 +227,7 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
           ...carrying };
   };
 
-  const does = dropdown(chose ?? draft.act.kind, () => {
+  const does = dropdown("appDoes", kinds, chose ?? draft.act.kind, () => {
     /* Nothing is cleared on a change of act. The draft is a copy that reaches
        the layout only on Fertig, so what somebody typed before changing their
        mind is still there if they change it back. */
@@ -243,6 +240,7 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
   });
 
   const targets = dropdown(
+    "appGoto", where,
     draft.act.kind === "home" ? GOTO_HOME
       : draft.act.kind === "goto" && draft.act.page ? draft.act.page : page().id,
     () => {
@@ -250,7 +248,7 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
       draft.act = leadsTo();
     });
 
-  const classes = dropdown(draft.wordClass, (value) => {
+  const classes = dropdown("appClass", wordClasses, draft.wordClass, (value) => {
     draft.wordClass = value;
     /* Somebody has answered, so nothing may answer for them again. Set from
        the control rather than from the value: choosing "Keine Wortart"
@@ -323,9 +321,6 @@ function openButtonSheet(held: AppButton | null, at: [number, number]): Promise<
 
   const sheet: ButtonSheet = {
     draft, does, targets, classes,
-    get kinds() { return kinds; },
-    get where() { return where; },
-    get wordClasses() { return wordClasses; },
     /* "carry" is the one that answers both with yes: it says its word and it
        leads onward, so it is the only choice that draws Zielseite and
        Gesprochen at once. */

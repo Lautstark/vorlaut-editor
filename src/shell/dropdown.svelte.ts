@@ -1,6 +1,13 @@
 /**
- * A button and a menu, which is what this family means by a dropdown - as the
- * answer it is holding, apart from the markup that draws it.
+ * The answer a dropdown is holding, apart from the markup that draws it.
+ *
+ * The markup went. `@lautstark/design/svelte/Dropdown` draws the trigger and
+ * opens the list now, and `field` and `start` - the two things
+ * shell/pieces/Dropdown.svelte existed to add - are props on it: this file's
+ * own comment asked for the field variant "the next time a second product
+ * wants a dropdown inside a form", and conventions.md §6.10 is that time.
+ * `.field.dropdown` draws its chevron as of design v1.38.1, which is what the
+ * copy here was waiting on.
  *
  * Not a `<select>`, and the reason is components.css's rather than this
  * module's: a select's open list is drawn by the operating system, so it is
@@ -21,11 +28,26 @@
  * that a guess arriving late must not land on a question somebody has open,
  * and neither must it land a moment after they closed it.
  *
- * So the caller makes a handle, reads all four off it, and hands it to the
- * component. That is also what keeps the two sheets' drafts written the way
- * they were written - `does.value`, `targets.value`, `classes.opens` - which
- * is the half of those files this conversion had no business rewriting.
+ * So the caller makes a handle, reads all four off it, and hands the shared
+ * component the two things it asks for - `label` and `build`. That is also
+ * what keeps the two sheets' drafts written the way they were written -
+ * `does.value`, `targets.value`, `classes.opens`.
+ *
+ * ## Why the handle knows the trigger's id
+ *
+ * `opens` is counted where the list is built, because `menuOn` calls `build`
+ * once per opening and returns early on the press that dismisses one - so the
+ * count needs nothing from the DOM. `open` does: the list is also closed by a
+ * press anywhere else on the page, and that press never comes back through
+ * this module. The shared component does not hand its trigger out, so the one
+ * element this file needs is found by the id it was given - which is the same
+ * id the call site passes the component, named once and read twice.
+ *
+ * That is the one thing §6.10's component does not carry, and it is a handle
+ * on a live question rather than a defect in the spec: nothing else in the
+ * family asks whether a menu is standing open.
  */
+import type { AddItem } from "@lautstark/design/menu";
 
 /** One of the answers a dropdown offers. */
 export interface Choice {
@@ -39,6 +61,19 @@ export interface Dropdown {
   /** Which answer is in force. Assigning redraws the trigger and calls nobody
    *  back, which is what writing to a select's `.value` did. */
   value: string;
+  /** The trigger's id, which is also how `open` finds it. Passed to the
+   *  component rather than written at the call site a second time. */
+  readonly id: string;
+  /** What the trigger says: the chosen answer's own label.
+   *
+   *  Read from the answer rather than kept as a second copy. That is the
+   *  defect this shape shipped with the first time it replaced a select here -
+   *  the trigger went on naming the answer somebody had just switched away
+   *  from - and a derived read is what ends it. */
+  readonly label: string;
+  /** Builds the list, and counts the opening while it is at it. Handed to
+   *  `@lautstark/design/svelte/Dropdown`, which hands it to `menuOn`. */
+  build(add: AddItem): void;
   /** Whether the list is standing open - which is to say whether somebody is
    *  looking at this question right now.
    *
@@ -54,11 +89,7 @@ export interface Dropdown {
    *  answers it without an event to subscribe to - read it when the question
    *  goes out, compare it when the answer comes back. */
   readonly opens: number;
-  /** The component's half, and nobody else's: the trigger, once it exists. */
-  useTrigger(node: HTMLButtonElement): void;
-  /** The component's half: the list was opened. */
-  opened(): void;
-  /** The component's half: one of the entries was pressed.
+  /** One of the entries was pressed.
    *
    *  Choosing what is already chosen calls nothing back, which is the one
    *  piece of a select's behaviour worth copying deliberately rather than by
@@ -67,21 +98,42 @@ export interface Dropdown {
   choose(value: string): void;
 }
 
-export function dropdown(value: string, onChange: (value: string) => void): Dropdown {
+export function dropdown(
+  id: string, choices: Choice[], value: string,
+  onChange: (value: string) => void,
+): Dropdown {
   let held = $state(value);
   let times = $state(0);
-  let trigger: HTMLButtonElement | null = null;
+  const one = (): Choice | undefined => choices.find((it) => it.value === held);
+  /* A closure rather than a method reached through `this`: `build` is handed
+     to the component as a bare function, so a `this` inside it would be the
+     one thing about this handle that only breaks once it is passed on. */
+  const choose = (next: string): void => {
+    if (next === held) return;
+    held = next;
+    onChange(next);
+  };
   return {
     get value() { return held; },
     set value(next: string) { held = next; },
-    get open() { return trigger?.getAttribute("aria-expanded") === "true"; },
-    get opens() { return times; },
-    useTrigger(node) { trigger = node; },
-    opened() { times += 1; },
-    choose(next) {
-      if (next === held) return;
-      held = next;
-      onChange(next);
+    get id() { return id; },
+    get label() { return one()?.label ?? ""; },
+    build(add) {
+      times += 1;
+      for (const item of choices) {
+        /* `checked` is set on every item rather than only the one in force. It
+           is tri-state on purpose - see docs/lib/menu.d.ts - and these are
+           alternatives, so leaving it off would make them read as a list of
+           equal commands and put the current answer beyond anything but the
+           drawing. */
+        add(item.label, () => { choose(item.value); },
+            { checked: item.value === held });
+      }
     },
+    get open() {
+      return document.getElementById(id)?.getAttribute("aria-expanded") === "true";
+    },
+    get opens() { return times; },
+    choose,
   };
 }
