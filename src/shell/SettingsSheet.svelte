@@ -40,7 +40,6 @@
    * to keep meaning "leave the key alone" rather than "drop it".
    */
   import { THEMES, type Theme } from "@lautstark/design/theme";
-  import { menuOn } from "@lautstark/design/menu";
   import { t } from "./live.svelte.js";
   import { outward } from "./links.js";
   import {
@@ -63,6 +62,7 @@
   import { LANG } from "../core/boot.js";
   import { words } from "./live.svelte.js";
   import type { MetacomAction } from "@lautstark/bildquelle/metacom-panel";
+  import Dropdown from "@lautstark/design/svelte/Dropdown";
   import Panel from "@lautstark/design/svelte/Panel";
   import Sheet from "@lautstark/design/svelte/Sheet";
   import Vanilla from "@lautstark/design/svelte/Vanilla";
@@ -74,7 +74,6 @@
     from "@lautstark/stimmquelle/svelte/AzurePanel";
 
   let dataFile: HTMLInputElement;
-  let renderingPick: HTMLButtonElement;
 
   /* What the three shared panels are told the page is in.
    *
@@ -412,17 +411,21 @@
            is not a labelable element - the association has to be
            aria-labelledby rather than "for", which would silently do nothing. -->
       <span class="lbl" id="renderingLabel">{t("ui.rendering")}</span>
-      <span class="menu-anchor start"><button bind:this={renderingPick} id="renderingPick" class="btn quiet sm dropdown"
-        type="button" aria-haspopup="menu" aria-expanded="false"
-        aria-labelledby="renderingLabel"
-        onclick={() => menuOn(renderingPick, (add) => {
+      <!-- The shared trigger, and it is a `.btn` rather than a `.field` here:
+           this is a picker standing on its own in a settings panel, which is
+           the case components.css says `.btn.dropdown` is right for. `start`
+           because it sits at the left of the panel and the default hangs the
+           list rightward. conventions.md §6.10. -->
+      <Dropdown id="renderingPick" class="quiet sm" start labelledBy="renderingLabel"
+        label={renderingLabel(preferredRendering())}
+        build={(add) => {
           const live = preferredRendering();
           add(renderingLabel(null), () => chooseRendering(null), { checked: live === null });
           for (const entry of renderings()) {
             add(renderingLabel(entry.segment), () => chooseRendering(entry.segment),
                 { checked: live === entry.segment });
           }
-        })}>{renderingLabel(preferredRendering())}</button></span>
+        }} />
       <p class="note" id="renderingNote">{t("ui.rendering_note")}</p>
     </div>
   </Panel>

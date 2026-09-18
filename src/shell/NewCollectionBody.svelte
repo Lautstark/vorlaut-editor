@@ -8,14 +8,13 @@
    * and no validator allows, which is the same reason a cell in the grid is a
    * box holding two widgets rather than a button holding a button.
    */
-  import { menuOn } from "@lautstark/design/menu";
+  import Dropdown from "@lautstark/design/svelte/Dropdown";
   import { t } from "./live.svelte.js";
   import type { Target } from "../core/types.js";
   import type { Asking } from "./collectionNew.svelte.js";
   import Sizes from "./pieces/Sizes.svelte";
 
   let { s }: { s: Asking } = $props();
-  let langPick: HTMLButtonElement;
 </script>
 
 <!-- The tablet first. See the head of askTarget(): this order is the answer to
@@ -34,11 +33,13 @@
      whatever the catalogue says its language speaks with, which is a sensible
      answer nobody has to give, and the Sammlung's own sheet is where it is
      corrected. -->
-<div class="sizeask" hidden={s.target !== "diy"}><span class="lbl" id="collectionNewLangLabel">{t("ui.collection_language")}</span><span class="menu-anchor start"><button bind:this={langPick} class="btn quiet sm dropdown" type="button" aria-haspopup="menu" aria-expanded="false" aria-labelledby="collectionNewLangLabel" onclick={() => menuOn(langPick, (add) => {
+<!-- The shared trigger, as a `.btn` and opening leftward - the same two
+     answers the Sammlung's own sheet gives for the same control. §6.10. -->
+<div class="sizeask" hidden={s.target !== "diy"}><span class="lbl" id="collectionNewLangLabel">{t("ui.collection_language")}</span><Dropdown class="quiet sm" start labelledBy="collectionNewLangLabel" label={s.languageName} build={(add) => {
   for (const one of s.languages) {
     add(one.name, () => { s.language = one.code; }, { checked: one.code === s.language });
   }
-})}>{s.languageName}</button></span><p class="note">{t("ui.collection_language_note")}</p></div>
+}} /><p class="note">{t("ui.collection_language_note")}</p></div>
 
 <!-- The note under the two says it does not change later. That is the one
      thing somebody could reasonably expect to be able to undo, and the moment
