@@ -36,6 +36,20 @@ const SAVED = label("ui.saved");
 
 const rows = (page: Page) => page.locator("#collectionList .collections__item");
 
+/** The row of whichever Sammlung is open.
+ *
+ *  The modifier is put on it by the paint that draws the list, which is what
+ *  makes it worth a locator of its own: switchTo() below waits on it because it
+ *  is the last thing that paint does, and openCollection() waits on it for the
+ *  same reason.
+ *
+ *  Spelled out in full rather than as `.active`, which is what this was written
+ *  as first and matched nothing at all: the class is the package's
+ *  `collections__item--active`, and switchTo()'s `toHaveClass(/active/)` reads
+ *  as the short name only because a regex matches a substring. */
+const openRow = (page: Page) =>
+  page.locator("#collectionList .collections__item--active");
+
 /** The device language of whichever Sammlung is open, out of the database
  *  rather than off the screen. The same read e2e/language.spec.ts makes, and
  *  for the same reason: the layout is where this field has to end up for a
@@ -103,9 +117,39 @@ async function switchTo(page: Page, name: string) {
   await expect(row(page, name)).toHaveClass(/active/);
 }
 
+/** The page, open and finished booting - which is later than the board being
+ *  drawn, and the gap between the two is not small.
+ *
+ * The six cells say the editor came up. They say nothing about the sidebar, and
+ * on a first visit the sidebar cannot be drawn yet: app.ts paints the list once
+ * before the layout exists - out of a registry that is still empty, because the
+ * Sammlung this browser will open is the one ensureCollection() is about to
+ * make - and again at the foot of the boot chain, after load(). Only the second
+ * paint puts a row in the list, and load() is what draws the board. So there is
+ * a window, measured at up to 270ms with the CPU throttled, where the board is
+ * on screen over an empty list.
+ *
+ * Two tests failed intermittently in that window - :495 and :627 as they stood
+ * on 2026-09-17/18 - and neither failed anywhere near it. newCollection() below
+ * takes its baseline with `.count()`, which is the one read in Playwright that
+ * does not retry: a baseline taken inside the window is 0, and the assertion
+ * after the create then expects one row and finds two, the boot's Sammlung and
+ * the one just made. `Expected 1, Received 2` where the test seeded one
+ * Sammlung reads exactly like another test's collection arriving in this one's
+ * database, which is what it was first taken for. It was not: every test gets
+ * its own BrowserContext and so its own IndexedDB, and nothing here was ever
+ * shared. The count was right and the baseline was early.
+ *
+ * Waiting on the open row rather than on a row count, so this helper does not
+ * restate the claim that a first visit has exactly one Sammlung - that is
+ * :579's, and a helper holding a copy of it would fail twenty tests for a
+ * change that belongs to one. e2e/mobile.spec.ts's boot() has waited on the
+ * list rather than on the board since it was written, for the same reason.
+ */
 async function openCollection(page: Page) {
   await page.goto("./");
   await expect(page.locator("#device .cell")).toHaveCount(6);
+  await expect(openRow(page)).toBeVisible();
 }
 
 /** Makes a Sammlung and gives it a name, the way somebody does: the field in
