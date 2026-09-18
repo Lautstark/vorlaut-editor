@@ -43,7 +43,6 @@ import { mount, unmount, type Component } from "svelte";
 import { status } from "./dom.js";
 import { type AddItem } from "@lautstark/design/menu";
 import { confirmDialog } from "./dialog.js";
-import { renameField, type RenameField } from "@lautstark/design/rename";
 import { drawCollections } from "@lautstark/design/collections";
 import { reason } from "../core/errors.js";
 import {
@@ -59,15 +58,8 @@ import { isApp } from "../core/types.js";
 import type { Layout } from "../core/types.js";
 import { chooseExport } from "./collectionExport.js";
 import { defaultName, held, nameOf, usePaint } from "./openCollection.js";
+import { showName } from "./nameField.svelte.js";
 import { closeOnPick, restoreColumn } from "./sidebar.svelte.js";
-
-/** The bound name field, once the work head has handed it over. Held because
- *  paintCollections() may only reach the input through it - see there. */
-let name: RenameField | null = null;
-/** The input itself, for the two things renameField() does not own: the
- *  placeholder, which says whether there is a Sammlung at all, and whether the
- *  field can be typed in. */
-let field: HTMLInputElement | null = null;
 
 /** The box the rows go in. Handed over by shell/Collections.svelte rather than
  *  found by id: the element is that component's, and what is inside it is
@@ -80,32 +72,23 @@ export function useList(node: HTMLElement): void {
   drawList();
 }
 
-/* The name field, and the three things this module does to it.
+/* The name field, and the half of it that is this product's.
  *
- * The debounce, the write on the way out, and the rule that a repaint never
- * types over you are all @lautstark/design/rename's. What is left here is the
- * half that is this product's: trimming, which Sammlung is being renamed, and
- * what to say when the write fails. */
-/** Straight into the name, selected. The one thing a caller outside this file
- *  does to the field, and it is here rather than reaching for the element:
- *  making a Sammlung ends by putting the caret in the name it was given. */
-export function focusName(): void {
-  field?.focus();
-  field?.select();
-}
-
-export function useNameField(node: HTMLInputElement): void {
-  field = node;
-  name = renameField(node, async (typed) => {
-    const current = held.list.current;
-    if (!current) return;
-    try {
-      await renameCollection(current, typed.trim());
-      await paintCollections();
-    } catch (error) {
-      status(t("ui.save_failed", { error: reason(error) }));
-    }
-  });
+ * The field is @lautstark/design/svelte/TitleField now (conventions.md §6.5),
+ * and the debounce, the write on the way out, the refusal to write a value
+ * that has not moved and the rule that a repaint never types over you are all
+ * @lautstark/design/rename's under it - unchanged, and they always were. What
+ * is left here is trimming, which Sammlung is being renamed, and what to say
+ * when the write fails. */
+export async function writeName(typed: string): Promise<void> {
+  const current = held.list.current;
+  if (!current) return;
+  try {
+    await renameCollection(current, typed.trim());
+    await paintCollections();
+  } catch (error) {
+    status(t("ui.save_failed", { error: reason(error) }));
+  }
 }
 
 /* --- Drawing ---------------------------------------------------------------- */
@@ -212,21 +195,20 @@ export async function paintCollections(): Promise<void> {
   drawList();
 
   const at = collections.findIndex((one) => one.id === current);
-  // Through refresh() rather than by assigning, which is the whole reason that
+  // Said rather than written in. The field is a component and this is a paint,
+  // so the three answers go to shell/nameField.svelte.ts and the component
+  // puts the name in through refresh() - which is the whole reason that
   // function exists: it declines while the field is being typed in and while a
   // keystroke is still waiting out its debounce, so a repaint cannot put the
   // stored name back over what somebody has just written. Making a Sammlung is
   // the case where that is guaranteed rather than likely - the field is filled
   // the moment the row appears, and the paint that made the row is still
   // running.
-  //
-  // Optional only because the binding is module state: app.ts wires before it
-  // paints and always has, so in practice there is always a field here.
-  name?.refresh(at < 0 ? "" : collections[at]!.name);
-  if (field) {
-    field.placeholder = at < 0 ? t("ui.collection_name") : t("ui.collection_unnamed");
-    field.disabled = at < 0;
-  }
+  showName(
+    at < 0 ? "" : collections[at]!.name,
+    at < 0 ? t("ui.collection_name") : t("ui.collection_unnamed"),
+    at < 0,
+  );
 }
 
 // The modules that make, open and delete a Sammlung ask for this paint
