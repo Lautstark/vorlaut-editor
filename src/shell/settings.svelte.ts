@@ -25,8 +25,7 @@ import { reason } from "../core/errors.js";
 import type { AzureAsk, AzureState, Settings, WantedSettings } from "../core/types.js";
 import { readSettings, writeSettings, azureState, listCollections }
   from "../backend/index.js";
-import { applyTheme, readTheme, saveTheme, type Theme }
-  from "@lautstark/design/theme";
+import { readTheme, type Theme } from "@lautstark/design/theme";
 import { load } from "../core/save.js";
 import { paintCollections } from "./collections.js";
 import * as symbols from "../data/symbols.js";
@@ -302,16 +301,24 @@ async function adoptMetacom(): Promise<boolean> {
  * imported and flashed onto a device - and how bright this browser is on this
  * tablet is not a property of the board.
  */
-const THEME_KEY = "vorlaut.theme";
+export const THEME_KEY = "vorlaut.theme";
 
 export const themeLabel = (one: Theme): string => t(`ui.theme_${one}`);
 
-/** Somebody pressed one of the three. This control and its heading, and
- *  nothing else: the tokens carry the scheme to everything else on the page,
- *  which is what tokens are for. */
+/** Somebody pressed one of the three, and this is the half of it that is
+ *  still here.
+ *
+ *  Writing the choice down and putting it in force are
+ *  @lautstark/design/svelte/ThemePicker's now (conventions.md §6.10) - it is
+ *  handed THEME_KEY and calls saveTheme() and applyTheme() itself, which is
+ *  the whole of what this function used to do first. What is left is the one
+ *  thing that is this product's: the answer the panel's state line is drawn
+ *  from, so that the three buttons and the heading above them go on reading
+ *  from one place.
+ *
+ *  This control and its heading, and nothing else: the tokens carry the scheme
+ *  to everything else on the page, which is what tokens are for. */
 export function chooseTheme(one: Theme): void {
-  saveTheme(THEME_KEY, one);
-  applyTheme(one);
   theme = one;
 }
 
