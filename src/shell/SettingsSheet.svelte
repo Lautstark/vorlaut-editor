@@ -39,7 +39,6 @@
    * an Azure key must not be written on every keystroke, and an empty field has
    * to keep meaning "leave the key alone" rather than "drop it".
    */
-  import { THEMES, type Theme } from "@lautstark/design/theme";
   import { t } from "./live.svelte.js";
   import { outward } from "./links.js";
   import {
@@ -49,7 +48,7 @@
     metacomOffered, metacomPathField, metacomWord, keepShown, noteMetacomPress,
     pickBoardFile, preferredRendering, renderingLabel, renderings, sayData,
     sayMetacom, setMetacomPath, standingBackup,
-    symbolsSummary, takeMetacomHeadline, themeLabel, themeNow, useSource,
+    symbolsSummary, takeMetacomHeadline, THEME_KEY, themeLabel, themeNow, useSource,
     useUnfoldSymbols, wipeAll, activeSource,
   } from "./settings.svelte.js";
   import {
@@ -65,6 +64,7 @@
   import Dropdown from "@lautstark/design/svelte/Dropdown";
   import Panel from "@lautstark/design/svelte/Panel";
   import Sheet from "@lautstark/design/svelte/Sheet";
+  import ThemePicker from "@lautstark/design/svelte/ThemePicker";
   import Vanilla from "@lautstark/design/svelte/Vanilla";
   import AblagePanel from "@lautstark/sicherung/svelte/AblagePanel";
   import BackupPanel from "@lautstark/sicherung/svelte/BackupPanel";
@@ -249,13 +249,20 @@
   <Panel bind:open={shown.themePanel} id="themePanel"
          stateId="themeState" section={t("ui.theme")}
          state={themeLabel(themeNow())} class="setting">
-    <!-- role=group, not radiogroup: components.css marks the choice with
-         aria-pressed, which is the vocabulary bildhaft's print dialog already
-         uses, and a radiogroup whose children are not radios reads worse than
-         a labelled group of buttons. The panel's accessible name as well as
-         its heading: the group of buttons inside it is three unlabelled words
-         without one. -->
-    <div class="segmented" id="themePick" role="group" aria-label={t("ui.theme")}>{#each THEMES as one (one)}<button type="button" aria-pressed={one === themeNow() ? "true" : "false"} onclick={() => chooseTheme(one as Theme)}>{themeLabel(one as Theme)}</button>{/each}</div>
+    <!-- The group is @lautstark/design/svelte/ThemePicker's. Four products drew
+         it over one shared runtime and three of the four carried a near-
+         identical comment arguing role=group over radiogroup, which §6.10 calls
+         the strongest evidence in the audit that a control is ready to be
+         shared - so that argument is the component's now and is not repeated
+         here.
+         The binding is a getter and a setter rather than a field: the answer
+         lives in shell/settings.svelte.ts, where the panel's own state line
+         reads it, and the component writes it down and puts it in force.
+         initTheme() is the half no component mounted in a sheet can make, and
+         main.ts has always called it. -->
+    <ThemePicker id="themePick" key={THEME_KEY} label={themeLabel}
+                 ariaLabel={t("ui.theme")}
+                 bind:theme={() => themeNow(), (one) => chooseTheme(one)} />
     <!-- The counterpart to the language note above, and it exists for the
          same reason: this switch is the one that does NOT reach the device,
          and the language sitting directly above it is the reason somebody
