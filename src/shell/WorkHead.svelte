@@ -11,7 +11,7 @@
    * it belongs beside the controls it is reporting on. The count is not in it -
    * the sidebar row already carries one per Sammlung.
    */
-  import { menuOn } from "@lautstark/design/menu";
+  import Overflow from "@lautstark/design/svelte/Overflow";
   import { t } from "./live.svelte.js";
   import { useStatus } from "./dom.js";
   import { useHeadHole } from "./holes.js";
@@ -20,7 +20,6 @@
   let field: HTMLInputElement;
   let line: HTMLElement;
   let slot: HTMLElement;
-  let more: HTMLButtonElement;
 
   $effect(() => {
     useNameField(field);
@@ -48,6 +47,14 @@
        which puts it immediately left of whatever the editor puts there. -->
   <span bind:this={line} class="status" id="status" role="status"></span>
   <span bind:this={slot} class="tools" id="collectionAction"></span>
-  <!-- One character wide, and that character is not a word, so it is named. -->
-  <span class="menu-anchor"><button bind:this={more} id="collectionMenu" class="btn quiet icon" type="button" aria-haspopup="menu" aria-expanded="false" title={t("ui.collection_menu")} aria-label={t("ui.collection_menu")} onclick={(event) => { event.stopPropagation(); menuOn(more, collectionMenu); }}>⋯</button></span>
+  <!-- One character wide, and that character is not a word, so it is named -
+       which is the whole of `label` on the shared component: the title and the
+       accessible name are one string there rather than two written out beside
+       each other. conventions.md §6.10.
+       The `event.stopPropagation()` this handler carried is gone with the
+       markup, and it was never doing anything: menu.js attaches its
+       press-outside listener after the list is open, and that listener already
+       leaves a click inside a `.menu-anchor` alone. The other three triggers
+       in this product never had it. -->
+  <Overflow id="collectionMenu" label={t("ui.collection_menu")} build={collectionMenu} />
 </div>

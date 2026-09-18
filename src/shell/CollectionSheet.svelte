@@ -47,7 +47,8 @@
    * anything. The grid does destroy something - it throws buttons away when it
    * shrinks - so it keeps a button of its own, inside its panel.
    */
-  import { menuOn } from "@lautstark/design/menu";
+  import type { AddItem } from "@lautstark/design/menu";
+  import Dropdown from "@lautstark/design/svelte/Dropdown";
   import { t } from "./live.svelte.js";
   import {
     chooseCollectionLanguage, chooseSymbolSource, chooseVoice,
@@ -64,12 +65,6 @@
   import Panel from "@lautstark/design/svelte/Panel";
   import Sheet from "@lautstark/design/svelte/Sheet";
   import VoicePicker from "@lautstark/stimmquelle/svelte/VoicePicker";
-
-  /* `$state` and optional, which the `{#if}` below is the reason for: a
-     `bind:this` inside a conditional block is written twice - the element when
-     the block is built and `undefined` when it is torn down - and Svelte says
-     so rather than letting the second write go unnoticed. */
-  let langPick = $state<HTMLButtonElement | undefined>(undefined);
 
   /* What the list is told the page is in. A prop rather than the thunk the
      builder took - conventions.md §6.8 - and `words()` is the note that a
@@ -121,15 +116,16 @@
   /* The options name themselves - "Deutsch" stays "Deutsch" whatever the page
      is set to. That matters twice over here: this is the language of a device
      somebody else will hold. */
-  function pickLanguage(): void {
-    if (!langPick) return;
-    menuOn(langPick, (add) => {
-      const live = collectionLanguageCode();
-      for (const one of deviceLanguages()) {
-        add(one.name, () => void chooseCollectionLanguage(one.code),
-            { checked: one.code === live });
-      }
-    });
+  /* The entries, handed to the shared trigger, which hands them to menuOn.
+     `ariaLabel` rather than `labelledBy`: the heading is the Panel component's
+     span and carries no id of this component's making, so the name is written
+     out of the same key the heading reads. */
+  function pickLanguage(add: AddItem): void {
+    const live = collectionLanguageCode();
+    for (const one of deviceLanguages()) {
+      add(one.name, () => void chooseCollectionLanguage(one.code),
+          { checked: one.code === live });
+    }
   }
 </script>
 
@@ -160,14 +156,15 @@
            group="collection" stateId="collectionLanguageState"
            section={t("ui.collection_language")}
            state={collectionLanguageName()} class="setting">
-      <!-- `aria-label` where this pointed at the heading's own id with
-           aria-labelledby: the heading is the panel component's span now and
-           carries no id of this component's making, so the name is written out
-           of the same key the heading reads. -->
-      <span class="menu-anchor start"><button bind:this={langPick} id="collectionLangPick" class="btn quiet sm dropdown"
-        type="button" aria-haspopup="menu" aria-expanded="false"
-        aria-label={t("ui.collection_language")}
-        onclick={pickLanguage}>{collectionLanguageName()}</button></span>
+      <!-- A `.btn` rather than a `.field`: a picker standing on its own in a
+           settings panel, which is the case `.btn.dropdown` is right for, and
+           `start` because it stands at the left of the panel. §6.10. The
+           `bind:this` this call site used to need went with the markup - the
+           trigger is the component's element now, and so is the conditional
+           block's write of `undefined` when the panel is torn down. -->
+      <Dropdown id="collectionLangPick" class="quiet sm" start
+        ariaLabel={t("ui.collection_language")}
+        label={collectionLanguageName()} build={pickLanguage} />
       <p class="note" id="collectionLanguageNote">{t("ui.collection_language_note")}</p>
     </Panel>
   {/if}
