@@ -12,30 +12,55 @@
    * the sidebar row already carries one per Sammlung.
    */
   import Overflow from "@lautstark/design/svelte/Overflow";
+  import TitleField from "@lautstark/design/svelte/TitleField";
   import { t } from "./live.svelte.js";
   import { useStatus } from "./dom.js";
   import { useHeadHole } from "./holes.js";
-  import { collectionMenu, useNameField } from "./collections.js";
+  import { collectionMenu, writeName } from "./collections.js";
+  import { nameCaret, nameOff, namePlaceholder, nameShown } from "./nameField.svelte.js";
 
-  let field: HTMLInputElement;
   let line: HTMLElement;
   let slot: HTMLElement;
 
   $effect(() => {
-    useNameField(field);
     useStatus(line);
     useHeadHole(slot);
+  });
+
+  /* The one thing §6.5's component does not carry, and it is a real state
+     rather than a nicety: components.css draws `.title-input:disabled`, so a
+     page with no Sammlung open has a field the package has an answer for and
+     TitleField has no prop for. The input is the component's element now, so
+     the only handle left on it is the id this call site gives it.
+
+     Written here rather than worked around, because §6.0's own test says an
+     adopter that cannot use a component as specified has found a defect in the
+     spec: design owes TitleField a `disabled` prop, and this is the line that
+     goes when it arrives. It is not reachable in ordinary use -
+     ensureCollection() guarantees there is always one (§1.9) - which is
+     presumably why the audit read the markup and not the paint. */
+  $effect(() => {
+    const node = document.getElementById("collectionName");
+    if (node instanceof HTMLInputElement) node.disabled = nameOff();
   });
 </script>
 
 <div class="workhead">
-  <!-- The name IS the field that renames it - bildhaft's title input. No
-       dialog and no menu entry: renaming a thing you are looking at should be
-       typing over its name.
+  <!-- The name IS the field that renames it - @lautstark/design/svelte/TitleField
+       now, over the same rename.js it was always over. No dialog and no menu
+       entry: renaming a thing you are looking at should be typing over its
+       name.
        A field with no visible label: the Sammlung's name is its own heading,
        and a word in front of it would be a second one. So the name has to be
-       said to whoever cannot see that. -->
-  <input bind:this={field} type="text" id="collectionName" class="title-input" autocomplete="off" aria-label={t("ui.collection_name")} />
+       said to whoever cannot see that, which is `label`.
+       `select` is left at its default: the caret arrives here from
+       „+ Neue Sammlung", and the name it arrives on is a date somebody is
+       meant to type over. No `oninput` either - nothing on this page is drawn
+       from the Sammlung's name except the sidebar row, and that row is
+       repainted by the write. conventions.md §6.5. -->
+  <TitleField id="collectionName" label={t("ui.collection_name")}
+              value={nameShown()} placeholder={namePlaceholder()}
+              write={writeName} caret={nameCaret} />
   <!-- role="status" is aria-live="polite", and it belongs on the element
        rather than being set when there is something to say: a live region
        has to be in the accessibility tree already when the text lands, or

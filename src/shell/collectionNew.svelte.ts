@@ -14,7 +14,7 @@ import { GRID, LANG, LANGUAGE_NAMES, LANGUAGES } from "../core/boot.js";
 import { isApp } from "../core/types.js";
 import type { GridSize, Layout, Target } from "../core/types.js";
 import { defaultName, held, repaint } from "./openCollection.js";
-import { focusName } from "./collections.js";
+import { askName } from "./nameField.svelte.js";
 import NewCollectionBody from "./NewCollectionBody.svelte";
 import NewCollectionFoot from "./NewCollectionFoot.svelte";
 
@@ -248,8 +248,12 @@ export async function create(): Promise<void> {
   await repaint();
   // Straight into the name, selected: the first keystroke replaces the date it
   // was given. Focusing without selecting would make the invented name a chore
-  // to delete rather than a suggestion to type over.
-  focusName();
+  // to delete rather than a suggestion to type over - which is `select`, true
+  // by default on TitleField and left that way here.
+  // Asked rather than taken, which is §6.5's shape: this says a caret is owed
+  // and the field that takes it says so. It reached through a module singleton
+  // at the element before, which coupled this controller to that field.
+  askName();
   // And the start key's picture, behind all of that - see keepHomeSymbol. The
   // caret is already in the name field by the time this so much as asks the
   // network, which is the whole reason it is the last line here.
