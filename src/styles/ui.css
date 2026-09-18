@@ -2024,10 +2024,10 @@ dialog.sheet--page { max-width: 520px; }
 .form__row > .lbl { margin-bottom: 0; }
 /* A row whose control is a button takes the width the button needs, not the
    column's. A dropdown is not one of those: it answers a question the way the
-   fields above and below it do, so it spans the row as they do - see the note
-   at shell/pieces/Dropdown.svelte for why it wears .field rather than .btn.
-   The anchor is what the row is handed; the trigger inside it is already
-   width: 100% from .field. */
+   fields above and below it do, so it spans the row as they do - which is the
+   `field` prop on @lautstark/design/svelte/Dropdown, and components.css's
+   `.field.dropdown` is where the argument for it is. The anchor is what the
+   row is handed; the trigger inside it is already width: 100% from .field. */
 .form__row > .btn { justify-self: start; }
 .form__row > .menu-anchor { justify-self: stretch; }
 
@@ -2082,18 +2082,25 @@ dialog.sheet--page { max-width: 520px; }
    box and its height while claiming to be hidden. */
 .form__row[hidden] { display: none; }
 
-/* An open list, kept inside the sheet.
+/* An open list, kept inside the sheet - and both halves of it are the
+   package's now.
 
-   fit() in shell/sheet.svelte.ts measures the room the body has left and writes a
-   max-height; these two are the drawing half of it. Without the overflow the
-   cap would only cut the last rows off, and without the flip a menu near the
-   foot - the eleven word classes - would be capped at nothing worth opening.
+   fit() measures the room the body has left and writes a max-height; without a
+   scroll the cap would only cut the last rows off, and without the flip a menu
+   near the foot - the eleven word classes - would be capped at nothing worth
+   opening. The body is the sheet's one scrolling area, so a list hanging out of
+   it does not overhang the sheet: it lengthens what the sheet scrolls, which
+   moves the scrollbar and the fields under it while somebody is choosing.
 
-   The body is the sheet's one scrolling area, so a list hanging out of it does
-   not overhang the sheet: it lengthens what the sheet scrolls, which moves the
-   scrollbar and the fields under it while somebody is choosing. */
-.form__row .menu { overflow-y: auto; overscroll-behavior: contain; }
-.menu-anchor--up > .menu { top: auto; bottom: calc(100% + 6px); }
+   This file drew both, and they were here because this product wrote them.
+   `.form__row .menu { overflow-y: auto; overscroll-behavior: contain }` is
+   @lautstark/design/svelte/fit.js's last two lines now - written onto the
+   element beside the cap, because a cap and the scroll it needs are one
+   decision and the shared component cannot scope a rule to the rows it happens
+   to know are in a sheet. `.menu-anchor--up > .menu` was a character-identical
+   copy of components.css's, which draws it because Overflow and Dropdown emit
+   the class and §4.12 says a module that emits a name ships the rule for it.
+   Nothing is left to say here. */
 
 /* The foot carries the destructive act on the left, away from the confirming
    one - and between them the way to keep going, because a board is built in

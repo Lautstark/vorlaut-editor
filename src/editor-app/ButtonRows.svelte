@@ -16,7 +16,7 @@
    */
   import { t } from "../shell/live.svelte.js";
   import { speak } from "../shell/speech.js";
-  import Dropdown from "../shell/pieces/Dropdown.svelte";
+  import Dropdown from "@lautstark/design/svelte/Dropdown";
   import FormRow from "../shell/pieces/FormRow.svelte";
   import Hint from "../shell/pieces/Hint.svelte";
   import type { ButtonSheet } from "./buttonSheet.svelte.js";
@@ -43,9 +43,15 @@
      which is the only thing explaining a distinction people otherwise get wrong.
      So the chosen option's note follows the control as a hint.
      Named to the trigger by hand, because this row builds its sentence rather
-     than handing FormRow one: it is rewritten on every choice. -->
+     than handing FormRow one: it is rewritten on every choice.
+     `field` and `start` on every one of these, and both are the shared
+     component's props rather than this product's markup: a field wearing a
+     chevron because the fields above and below are full width and a trigger
+     that stops after "Wort" leaves four controls with no left edge to follow
+     down, and the list hanging leftward because these stand at the left of a
+     form column. conventions.md §6.10. -->
 <FormRow label={t("ui.button_act")} caption>
-  {#snippet children({ labelledBy })}<Dropdown d={s.does} choices={s.kinds} id="appDoes" {labelledBy} describedBy="appDoesNote" />{/snippet}
+  {#snippet children({ labelledBy })}<Dropdown field start label={s.does.label} build={s.does.build} id={s.does.id} {labelledBy} describedBy="appDoesNote" />{/snippet}
   {#snippet extra()}<Hint id="appDoesNote" text={s.note} />{/snippet}
 </FormRow>
 
@@ -57,7 +63,7 @@
      into Gesprochen, it is whether this button says anything at all, and a
      greyed field still reads as a field they have failed to reach. -->
 <FormRow label={t("ui.goto_page")} hidden={!s.goes}>
-  {#snippet children({ labelledBy })}<Dropdown d={s.targets} choices={s.where} id="appGoto" {labelledBy} />{/snippet}
+  {#snippet children({ labelledBy })}<Dropdown field start label={s.targets.label} build={s.targets.build} id={s.targets.id} {labelledBy} />{/snippet}
 </FormRow>
 
 <!-- The same treatment as Aufschrift, and the same sentence about the other
@@ -82,13 +88,13 @@
 
 <!-- Eleven entries, which is the longest list in the product and the one that
      decides whether an open menu still fits inside a sheet. See fit() in
-     shell/fit.ts: it opens upward from here and caps itself at what is above,
-     rather than hanging out of the body and taking the sheet's own scrollbar
-     with it.
+     @lautstark/design/svelte/fit.js, which the Dropdown calls for itself: it
+     opens upward from here and caps itself at what is above, rather than
+     hanging out of the body and taking the sheet's own scrollbar with it.
      Wortart stays for all four kinds, which looks like an oversight and is not:
      a page-leading button is coloured as a category on real German boards, and
      BuilderTabletPackageTest asserts exactly that of the navigating button in
      the round-trip sample. -->
 <FormRow label={t("ui.app_button_class")}>
-  {#snippet children({ labelledBy })}<Dropdown d={s.classes} choices={s.wordClasses} id="appClass" {labelledBy} />{/snippet}
+  {#snippet children({ labelledBy })}<Dropdown field start label={s.classes.label} build={s.classes.build} id={s.classes.id} {labelledBy} />{/snippet}
 </FormRow>

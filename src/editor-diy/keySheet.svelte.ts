@@ -32,8 +32,6 @@ export interface KeySheet {
   draft: Draft;
   does: Dropdown;
   targets: Dropdown;
-  readonly kinds: Choice[];
-  readonly where: Choice[];
   readonly note: string;
   readonly leads: boolean;
   readonly speaks: boolean;
@@ -58,7 +56,7 @@ function openKeySheet(index: number): Promise<Left> {
 
   const kinds: Choice[] = (["word", "carry", "goto"] as const)
     .map((kind) => ({ value: kind, label: t(`ui.diy_does_${kind}`) }));
-  const does = dropdown(chosenAs(held), () => {});
+  const does = dropdown("diyDoes", kinds, chosenAs(held), () => {});
 
   /* Where the key already leads is where the list stands. Where it leads nowhere
    * - a page deleted since, which nothing in this change prevents - the list
@@ -70,12 +68,10 @@ function openKeySheet(index: number): Promise<Left> {
     ({ value: String(index$), label: setName(one, index$) }));
   const leadsTo = held.kind === "goto"
     ? sets.findIndex((one) => one.id === held.set) : -1;
-  const targets = dropdown(String(leadsTo < 0 ? at() : leadsTo), () => {});
+  const targets = dropdown("diyGoto", where, String(leadsTo < 0 ? at() : leadsTo), () => {});
 
   const sheet: KeySheet = {
     draft, does, targets,
-    get kinds() { return kinds; },
-    get where() { return where; },
     get note() { return t(`ui.diy_does_${does.value}_note`); },
     get leads() { return does.value !== "word"; },
     get speaks() { return does.value !== "goto"; },

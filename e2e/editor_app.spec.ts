@@ -1409,10 +1409,10 @@ test("the sheet's three questions are dropdowns, and the long one stays in the s
      * it hangs off the last row of a sheet whose body is its one scrolling
      * area. Left alone it lengthened what the sheet scrolls, which moves the
      * fields under it while somebody is choosing, and put its own last rows
-     * behind the foot. fit() in shell/sheet.ts opens it upward and caps it at
-     * the room there is; what is asserted is the outcome - the list is inside
-     * the body, and the body scrolls no further than it did with the list
-     * shut. */
+     * behind the foot. fit() in @lautstark/design/svelte/fit.js, which the
+     * shared Dropdown calls for itself, opens it upward and caps it at the
+     * room there is; what is asserted is the outcome - the list is inside the
+     * body, and the body scrolls no further than it did with the list shut. */
     const scroll = () => box.locator(".body").evaluate(
       (one) => one.scrollHeight - one.clientHeight);
     const shut = await scroll();
