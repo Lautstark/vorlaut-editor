@@ -122,7 +122,14 @@ export const press = (box: Locator, key: string) =>
 
 /** A board, open and drawn. Six cells, which is the assertion that the editor
  *  came up at all - it was five tiles before the board became the device's own
- *  2x3 with the speaker's hole in it. */
+ *  2x3 with the speaker's hole in it.
+ *
+ *  Six cells is the *board*, and on a first visit the sidebar is drawn a beat
+ *  after it - see openCollection() in e2e/collections.spec.ts, which waits for
+ *  the list as well and says why. Nothing on this side of the suite reads the
+ *  list without retrying, so this helper is left as it is rather than made to
+ *  wait for something none of its callers looks at; a spec that wants to take
+ *  a row count with `.count()` after this needs the second wait too. */
 export async function openBoard(page: Page): Promise<void> {
   await page.goto("./");
   await expect(cells(page)).toHaveCount(6);
