@@ -26,23 +26,6 @@
     useStatus(line);
     useHeadHole(slot);
   });
-
-  /* The one thing §6.5's component does not carry, and it is a real state
-     rather than a nicety: components.css draws `.title-input:disabled`, so a
-     page with no Sammlung open has a field the package has an answer for and
-     TitleField has no prop for. The input is the component's element now, so
-     the only handle left on it is the id this call site gives it.
-
-     Written here rather than worked around, because §6.0's own test says an
-     adopter that cannot use a component as specified has found a defect in the
-     spec: design owes TitleField a `disabled` prop, and this is the line that
-     goes when it arrives. It is not reachable in ordinary use -
-     ensureCollection() guarantees there is always one (§1.9) - which is
-     presumably why the audit read the markup and not the paint. */
-  $effect(() => {
-    const node = document.getElementById("collectionName");
-    if (node instanceof HTMLInputElement) node.disabled = nameOff();
-  });
 </script>
 
 <div class="workhead">
@@ -57,10 +40,16 @@
        „+ Neue Sammlung", and the name it arrives on is a date somebody is
        meant to type over. No `oninput` either - nothing on this page is drawn
        from the Sammlung's name except the sidebar row, and that row is
-       repainted by the write. conventions.md §6.5. -->
+       repainted by the write. conventions.md §6.5.
+       `disabled` is one of the attributes an <input> carries, and v1.39.0 gave
+       the component the rest of them: components.css draws
+       `.title-input:disabled`, so a page with no Sammlung open is a state the
+       package has always had an answer for. It was set on the element by id
+       from an effect here until that release, which was the reach past the
+       component §6.0 calls a defect in the spec rather than in the adopter. -->
   <TitleField id="collectionName" label={t("ui.collection_name")}
               value={nameShown()} placeholder={namePlaceholder()}
-              write={writeName} caret={nameCaret} />
+              write={writeName} caret={nameCaret} disabled={nameOff()} />
   <!-- role="status" is aria-live="polite", and it belongs on the element
        rather than being set when there is something to say: a live region
        has to be in the accessibility tree already when the text lands, or
