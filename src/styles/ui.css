@@ -326,7 +326,9 @@ main {
    own content instead of filling the row - and that rule was already putting
    the stretch back. Its `align-self: stretch` is the initial value now and
    could go; it is left because taking it out is a change to a photographed
-   surface and not to any of the names this pass is about.
+   surface and not to any of the names that pass was about. What *has* gone
+   from that rule since is the `width: 100%` beside it, which restated
+   `.field`'s own and was a copy rather than a decision.
    shadows .field: what is left is the disabled state, which components.css
    does not draw at all - it has no :disabled rule for a field - so this adds a
    state rather than replacing the drawing of one. */
@@ -695,7 +697,12 @@ dialog.sheet > .head, dialog.sheet > .foot { flex: none; }
 .setting .lead a { color: var(--accent); }
 .setting .lead a:hover { text-decoration: none; }
 .setting .note { margin: 0; font-size: 12px; color: var(--text-dim); }
-.setting .field { width: 100%; align-self: stretch; }
+/* What is left after `width: 100%` went: components.css's `.field` is already
+   `width: 100%`, so this restated it, and a restatement is worse than nothing
+   - it reads as the answer while being a copy that can go stale. The
+   `align-self` is the half the note at `.row` above explains and is left where
+   it is, on that note's own terms. */
+.setting .field { align-self: stretch; }
 .setting .field[type=password] { font-family: ui-monospace, monospace; }
 /* The transfer sheet. Three states in one body - what is about to be written,
    the transfer with its log, and how it ended. It is prose and a list, so it
@@ -1842,10 +1849,22 @@ dialog.sheet--page { max-width: 520px; }
 }
 /* The box, the slider and the one sentence, for as long as there is a crop.
    Grid rather than the column's own gap, because these three belong to each
-   other more closely than to what is above and below them. The slider's row
-   takes .pick__zoom rather than the component's .crop__row - §6.5's bargain,
-   and here because .crop__row's margin-top would add to this gap. */
+   other more closely than to what is above and below them. */
 .pick__crop { display: grid; gap: 8px; }
+/* The slider's row. It takes `rowClass="pick__zoom"` rather than the
+   component's own .crop__row because that class carries `margin-top: 10px`,
+   which would add to the 8px gap above - a gap that is already the whole of
+   the spacing these three want.
+
+   The rule is here because until now there was none, anywhere: the name was
+   passed in and nothing drew it, and shedding the margin was a side effect of
+   the class being unknown to every stylesheet in the page. That works and it
+   is not a decision - any word at all would have done the same thing, and the
+   day somebody draws `.pick__zoom` for an unrelated reason it stops working
+   with nothing to say why. So the margin is refused rather than avoided, and
+   the name means what the line says it means. Same computed value, which is
+   the point: nothing moves. */
+.pick__zoom { margin: 0; }
 /* --text-dim, the same as .pick__near above: it stands over a control that is
    waiting to be used rather than replacing something, so it has to be read
    without competing with the picture. */
@@ -1919,8 +1938,11 @@ dialog.sheet--page { max-width: 520px; }
    whose tiles are labelled; this one passes an empty caption snippet and draws
    the square. */
 .pick .picker__item {
+  /* No border-radius: components.css's `.picker__item` already sets the same
+     `var(--radius-sm)`, and repeating a shared value here is how the two come
+     apart the day one of them moves. */
   padding: 0; aspect-ratio: 1; gap: 0;
-  border: 2px solid transparent; border-radius: var(--radius-sm); background: #fff;
+  border: 2px solid transparent; background: #fff;
 }
 .pick .picker__item img { width: 100%; height: 100%; object-fit: contain; }
 /* The hover is a border rather than a ground, because the ground is the
