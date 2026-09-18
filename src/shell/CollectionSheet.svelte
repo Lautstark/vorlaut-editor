@@ -223,8 +223,8 @@
     <!-- Disabled rather than hidden: a source that is not on offer here is
          still one of the two answers, and hiding it would make the panel look
          like it had one. The sentence under it says what is missing. -->
-    <button type="button" class="btn choice" aria-pressed={chosen === "arasaac" ? "true" : "false"} onclick={() => void chooseSymbolSource("arasaac")}><strong>{t("ui.arasaac")}</strong><span>{t("ui.symbol_source_arasaac_note")}</span></button>
-    <button type="button" class="btn choice" aria-pressed={chosen === "metacom" ? "true" : "false"} disabled={!ready} onclick={() => void chooseSymbolSource("metacom")}><strong>{t("ui.metacom")}</strong><span>{ready ? t("ui.symbol_source_metacom_note") : t("ui.symbol_source_needs_folder")}</span></button>
+    <button type="button" class="btn choice" aria-pressed={chosen === "arasaac"} onclick={() => void chooseSymbolSource("arasaac")}><strong>{t("ui.arasaac")}</strong><span>{t("ui.symbol_source_arasaac_note")}</span></button>
+    <button type="button" class="btn choice" aria-pressed={chosen === "metacom"} disabled={!ready} onclick={() => void chooseSymbolSource("metacom")}><strong>{t("ui.metacom")}</strong><span>{ready ? t("ui.symbol_source_metacom_note") : t("ui.symbol_source_needs_folder")}</span></button>
     <!-- The way back in, where the folder is remembered and the browser wants
          a click. Only then: with no folder at all there is nothing to
          re-grant, and the sentence above already says to go and connect one.

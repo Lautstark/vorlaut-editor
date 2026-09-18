@@ -20,7 +20,7 @@
 <!-- The tablet first. See the head of askTarget(): this order is the answer to
      "what is somebody most likely making", not the order the two editors were
      written in. -->
-{#each ["app", "diy"] as const as one (one)}<button class="btn choice" type="button" aria-pressed={s.target === one ? "true" : "false"} onclick={() => s.pick(one as Target)}><strong>{t(one === "app" ? "ui.collection_target_app" : "ui.collection_target_diy")}</strong><span>{t(one === "app" ? "ui.collection_target_app_note" : "ui.collection_target_diy_note")}</span></button>{/each}
+{#each ["app", "diy"] as const as one (one)}<button class="btn choice" type="button" aria-pressed={s.target === one} onclick={() => s.pick(one as Target)}><strong>{t(one === "app" ? "ui.collection_target_app" : "ui.collection_target_diy")}</strong><span>{t(one === "app" ? "ui.collection_target_app_note" : "ui.collection_target_diy_note")}</span></button>{/each}
 
 <!-- How much fits on a page, asked only of the target that has pages. Beside
      the choice rather than after the Sammlung exists, because it is the one
