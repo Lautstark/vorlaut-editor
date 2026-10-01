@@ -193,7 +193,12 @@ export function renderingLabel(segment: string | null): string {
  *  exactly as long as the tab did. */
 export function chooseRendering(chosen: string | null): void {
   symbols.preferRendering(chosen);
-  void saveSettings({ metacomRendering: chosen });
+  /* The provider already ranks by it, so a write that fails costs only the
+     remembering - said on the status line, where it used to be an unhandled
+     rejection and a choice that quietly lasted as long as the tab. */
+  saveSettings({ metacomRendering: chosen }).catch((error: unknown) => {
+    status(t("ui.data_failed", { error: reason(error) }));
+  });
   folderMoved += 1;
 }
 

@@ -97,6 +97,7 @@ import { openParts } from "./parts.js";
 import SendBody from "./SendBody.svelte";
 import SendFoot from "./SendFoot.svelte";
 import { status } from "./dom.js";
+import { reason } from "../core/errors.js";
 import { t } from "../core/texts.js";
 import { readSettings, writeSettings } from "../backend/index.js";
 
@@ -337,8 +338,21 @@ export async function openTabletSend(what: Sending): Promise<boolean> {
         // Only now, and only here. An address that answered nothing is the one
         // worth not remembering: it would come back filled in on the next
         // visit, looking exactly like an address that had worked.
-        await writeSettings({ tabletAddress: address });
-        status(landed(answer.outcome, answer.name || what.name));
+        //
+        // And a write that fails is not a send that failed. It used to be: the
+        // rejection left arrive() before the status line and before finish(),
+        // so a package already installed on the tablet sat under a sheet
+        // still saying it was sending, with an unhandled rejection the only
+        // record. The arrival is said either way, and the address not being
+        // kept is said after it, in the page's sentence for a store that
+        // refused - the next visit will simply ask for the number again.
+        const said = landed(answer.outcome, answer.name || what.name);
+        try {
+          await writeSettings({ tabletAddress: address });
+          status(said);
+        } catch (error) {
+          status(`${said} ${t("ui.data_failed", { error: reason(error) })}`);
+        }
         finish(true);
         return;
       }
