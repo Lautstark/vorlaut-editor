@@ -39,7 +39,12 @@
   import { outside, resize, shareFirstColumn, shared, spreadFirstColumn } from "./pages.js";
   import { board, commit, wordColor } from "./standing.svelte.js";
 
-  const layout = $derived(board());
+  /* No `const layout = $derived(board())` here, though it reads naturally and
+     this panel had one. board() is the same object before and after every edit,
+     so a `$derived` holding it re-runs, compares equal, and tells nobody: the
+     trial below went on counting against the board as it stood when the panel
+     opened, and the spread notice with it. shell/live.svelte.ts's one rule -
+     board() is called inside each expression that wants the answer. */
 
   let size = $state<GridSize>({ ...board().grid });
   let colour = $state(wordColor(board()));
@@ -78,12 +83,13 @@
    * always was rather than as a `$state` proxy, precisely so that this line, the
    * save loop and IndexedDB all go on working unchanged. */
   const trial = $derived.by(() => {
-    const copy = structuredClone(layout);
+    const copy = structuredClone(board());
     const dropped = share(copy);
     return { dropped, lost: outside(copy, size.rows, size.columns).length };
   });
 
   function apply(): void {
+    const layout = board();
     // The first column first, then the size: the same order trial() counted
     // in, so that what the notices said is what happens.
     share(layout);
@@ -160,7 +166,7 @@
 <!-- Turning it off costs nothing and says so: the column is written onto every
      page, which is what the export has been doing with it all along, so every
      page keeps exactly the buttons it was drawn with. -->
-{#if !column && shared(layout)}<div class="notice">{t("ui.app_first_column_spread")}</div>{/if}
+{#if !column && shared(board())}<div class="notice">{t("ui.app_first_column_spread")}</div>{/if}
 
 <!-- The foot of the panel, and drawn as one. One press applies everything above
      it - the size, how a word class is worn, and whether the first column
