@@ -287,9 +287,18 @@ export async function uploadSymbol(file, name = file.name) {
  * file in the store, or a name in a licensed collection the package resolves,
  * and neither is a path anybody can write down. The previous blob is let go of
  * on the way, or every render leaks one.
+ *
+ * `signal` is how a caller says it no longer wants this answer. Resolving a
+ * reference takes a store read or a folder walk, so a component asked for one
+ * symbol and then another can see the first answer arrive second - and without
+ * the signal it would put the earlier symbol on screen, under the later one's
+ * name, or fire an `error` the component reads as the later one failing. A
+ * withdrawn call touches the image not at all: no src, no event, and so no
+ * blob made for an image nobody is going to look at.
  */
-export async function symbolInto(image, reference) {
+export async function symbolInto(image, reference, signal?: AbortSignal) {
   const source = await picture(reference);
+  if (signal?.aborted) return;
   const previous = image.dataset.blobUrl;
   if (previous) URL.revokeObjectURL(previous);
   if (!source) {
@@ -315,6 +324,7 @@ export async function symbolInto(image, reference) {
   }
   context.drawImage(source, 0, 0);
   canvas.toBlob((blob) => {
+    if (signal?.aborted) return;
     if (!blob) {
       image.removeAttribute("src");
       image.dispatchEvent(new Event("error"));

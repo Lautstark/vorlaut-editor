@@ -7,6 +7,8 @@
    * leave a stray zip behind every single time. */
   import { t } from "./live.svelte.js";
   import type { Exporting } from "./packageExport.svelte.js";
+  import { status } from "./dom.js";
+  import { reason } from "../core/errors.js";
 
   let { s }: { s: Exporting } = $props();
   let sending = $state(false);
@@ -23,6 +25,12 @@
     // The sheet behind it goes only if the package got there. Every other way
     // out of that one leaves this one standing, with Speichern on it.
     if (await s.send()) s.dismiss();
+  } catch (error) {
+    // The send sheet is opened after a read of the remembered address, and a
+    // store that refuses that read rejects here. A `finally` with no `catch`
+    // put the button back and let the rejection go unhandled - a press that did
+    // nothing, said nowhere. This sheet stays, with Speichern still on it.
+    status(t("ui.data_failed", { error: reason(error) }));
   } finally {
     sending = false;
   }

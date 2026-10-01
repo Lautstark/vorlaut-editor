@@ -376,6 +376,43 @@ test("nothing at that number keeps the address editable and offers another go",
     expect(await typed(again)).toEqual(["", "", "", ""]);
   });
 
+/* Abbrechen while the package is still going up is a send that stops.
+ *
+ * It used to close the sheet and leave the POST running: tens of megabytes on
+ * their way to a tablet that could install them after somebody had said not to.
+ * The tablet here never answers, which is a long upload as far as the page can
+ * tell, and what is asserted is that the browser gave up on the request rather
+ * than that anything was drawn - the sheet closing was always true. */
+test("Abbrechen during a send withdraws the upload", async ({ page }) => {
+  await standIn(page);
+  await permission(page, "granted");
+  let arrived!: () => void;
+  const asked = new Promise<void>((resolve) => { arrived = resolve; });
+  // Held, never answered: the request is in flight for as long as the test
+  // wants it to be.
+  await tablet(page, () => { arrived(); });
+  const withdrawn = page.waitForEvent("requestfailed", {
+    predicate: (request) => request.url() === PAKET && request.method() === "POST",
+    timeout: 20_000,
+  });
+  await ready(page);
+  const send = await sending(page);
+
+  await boxes(send).first().click();
+  await page.keyboard.type("192.168.178.42");
+  await send.locator("button", { hasText: label("ui.send_go") }).click();
+  await asked;
+  await expect(send.locator("button", { hasText: label("ui.send_running") }))
+    .toBeDisabled();
+
+  await send.locator("button", { hasText: label("ui.cancel") }).click();
+  await expect(send).toBeHidden();
+  expect((await withdrawn).failure()?.errorText).toMatch(/ABORTED/);
+  // And the address is not remembered: nothing arrived.
+  await page.locator("dialog[open] button", { hasText: label("ui.close") }).click();
+  expect(await typed(await sending(page))).toEqual(["", "", "", ""]);
+});
+
 test("a refused permission says so instead, and offers Speichern rather than a retry",
   async ({ page }) => {
     await standIn(page);

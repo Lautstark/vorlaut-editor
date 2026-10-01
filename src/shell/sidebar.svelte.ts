@@ -1,5 +1,17 @@
 /* --- The sidebar itself ------------------------------------------------------- */
 import { readSettings, writeSettings } from "../backend/index.js";
+import { status } from "./dom.js";
+import { reason } from "../core/errors.js";
+import { t } from "../core/texts.js";
+
+/* A preference that could not be read or written is said and then let go of.
+ * The column is already where it was asked to be either way - the open default
+ * on a failed read, the press's answer on a failed write - so what is lost is
+ * only that it is remembered, and that is worth a line rather than an
+ * unhandled rejection nobody sees. */
+const unremembered = (error: unknown): void => {
+  status(t("ui.data_failed", { error: reason(error) }));
+};
 
 /* Whether the column is there at all. A choice about the shape of the window is
  * not one to make every visit, so it is remembered - and in the settings record
@@ -25,7 +37,7 @@ export const drawerOpen = (): boolean => drawer;
 
 export async function showColumn(open: boolean, remember = true): Promise<void> {
   column = open;
-  if (remember) await writeSettings({ sidebarOpen: open });
+  if (remember) await writeSettings({ sidebarOpen: open }).catch(unremembered);
 }
 
 export const openDrawer = (): void => { drawer = true; };
@@ -46,5 +58,7 @@ export function closeOnPick(): void {
 /** The remembered answer for the column, read once. Called by
  *  wireCollections(), which is where the four button bindings used to be. */
 export function restoreColumn(): void {
-  void readSettings().then((held) => { column = held.sidebarOpen !== false; });
+  void readSettings()
+    .then((held) => { column = held.sidebarOpen !== false; })
+    .catch(unremembered);
 }

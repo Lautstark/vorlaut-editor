@@ -97,6 +97,7 @@ import { openParts } from "./parts.js";
 import SendBody from "./SendBody.svelte";
 import SendFoot from "./SendFoot.svelte";
 import { status } from "./dom.js";
+import { reason } from "../core/errors.js";
 import { t } from "../core/texts.js";
 import { readSettings, writeSettings } from "../backend/index.js";
 
@@ -190,16 +191,28 @@ async function bodyOf(answer: Response): Promise<Record<string, unknown>> {
  * perfectly well: these are tens of megabytes over wifi, and the measurement
  * that says a small one lands in about two seconds says the same thing about a
  * large one taking a good deal longer.
+ *
+ * No timer, but a way to stop: `signal` is the sheet's Abbrechen, its corner
+ * and Escape. A send without one carried on after the sheet had closed - tens
+ * of megabytes still going up the wifi for a package somebody had just said
+ * they did not want sent, and a tablet that could install it anyway. Aborting
+ * cuts the body short, and a tablet that gets half a zip has nothing to
+ * install. What it cannot take back is a body that had already arrived whole;
+ * that tablet is answering, and the answer is simply not listened to.
  */
-async function send(address: string, blob: Blob): Promise<Answer> {
+async function send(address: string, blob: Blob, signal: AbortSignal): Promise<Answer> {
   let answer: Response;
   try {
     answer = await fetch(`http://${address}:${PORT}${ROUTE}`, {
       method: "POST",
       headers: { "Content-Type": "application/zip" },
       body: blob,
+      signal,
     });
   } catch {
+    // Withdrawn, not failed: nobody is left to tell, and asking the
+    // permission would only be a question with no reader.
+    if (signal.aborted) return { said: "nothing_there" };
     // Both failures land here as the same TypeError, which is the whole
     // reason the permission is asked rather than the error read.
     return { said: await refused() ? "blocked" : "nothing_there" };
@@ -291,10 +304,15 @@ export async function openTabletSend(what: Sending): Promise<boolean> {
 
   return await new Promise<boolean>((resolve) => {
     let settled = false;
+    /* The attempt in flight, if there is one. One per press of Senden, since a
+       failed attempt can be followed by another to a corrected number. */
+    let attempt: AbortController | null = null;
 
     const finish = (arrived: boolean) => {
       if (settled) return;
       settled = true;
+      // Every way out that is not an arrival withdraws the upload. See send().
+      attempt?.abort();
       resolve(arrived);
       sheet.close();
     };
@@ -312,7 +330,8 @@ export async function openTabletSend(what: Sending): Promise<boolean> {
         send$.running = true;
         send$.trouble = "";
         send$.failed = false;
-        void arrive(send$.address);
+        attempt = new AbortController();
+        void arrive(send$.address, attempt.signal);
       },
       stop() { finish(false); },
       instead() { finish(false); what.save(); },
@@ -328,8 +347,11 @@ export async function openTabletSend(what: Sending): Promise<boolean> {
       onClose: () => finish(false),
     });
 
-    async function arrive(address: string): Promise<void> {
-      const answer = await send(address, what.blob);
+    async function arrive(address: string, signal: AbortSignal): Promise<void> {
+      const answer = await send(address, what.blob, signal);
+      // The sheet is already gone and has said what it had to: nothing is
+      // remembered, nothing goes on the status line.
+      if (signal.aborted) return;
       send$.running = false;
       send$.tried = true;
 
@@ -337,8 +359,21 @@ export async function openTabletSend(what: Sending): Promise<boolean> {
         // Only now, and only here. An address that answered nothing is the one
         // worth not remembering: it would come back filled in on the next
         // visit, looking exactly like an address that had worked.
-        await writeSettings({ tabletAddress: address });
-        status(landed(answer.outcome, answer.name || what.name));
+        //
+        // And a write that fails is not a send that failed. It used to be: the
+        // rejection left arrive() before the status line and before finish(),
+        // so a package already installed on the tablet sat under a sheet
+        // still saying it was sending, with an unhandled rejection the only
+        // record. The arrival is said either way, and the address not being
+        // kept is said after it, in the page's sentence for a store that
+        // refused - the next visit will simply ask for the number again.
+        const said = landed(answer.outcome, answer.name || what.name);
+        try {
+          await writeSettings({ tabletAddress: address });
+          status(said);
+        } catch (error) {
+          status(`${said} ${t("ui.data_failed", { error: reason(error) })}`);
+        }
         finish(true);
         return;
       }

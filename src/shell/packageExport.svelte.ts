@@ -300,7 +300,11 @@ export const TALKER_PAGE = "https://lautstark.github.io/vorlaut-diy-talker/";
  * exists, is the whole of what stands between "exported" and a device.
  */
 export function openDeviceExport(name: string, stem: string): void {
-  void openExport({
+  /* What comes back is the sheet's close, not a promise - `void` in front of
+     it read as a write left running. This sheet has no door that closes it
+     from inside, so the ✕ is the only way out and nothing needs to hold it;
+     the app package keeps it because Speichern closes its sheet. */
+  openExport({
     title: t("ui.device_export_title"),
     lead: t("ui.device_export_lead", { name }),
     go: t("ui.device_export_go"),

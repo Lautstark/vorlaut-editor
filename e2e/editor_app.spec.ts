@@ -771,6 +771,16 @@ test("a press timing set in Bedienung reaches the package", async ({ page }) => 
   await card.locator("b").filter({ hasText: label("ui.app_press_held") }).click();
   // The heading follows immediately, which is what says the choice took.
   await expect(stated).toHaveText(label("ui.app_press_held"));
+  /* And the panel is still open under the pointer. The heading alone could not
+   * say so - the state line is in the <summary>, drawn folded or not - and for
+   * a while the press folded it: the sheet's arrival fold re-ran on every
+   * commit and put the first panel back open, which on a tablet is the grid.
+   * A choice that closes the panel it was made in reads as one that did not
+   * take. The radio is asserted too, because it is drawn from the layout and
+   * a stale read of it is the other half of the same kind of bug. By value,
+   * because the radio's name carries its explaining sentence as well. */
+  await expect(card).toHaveAttribute("open", "");
+  await expect(card.locator('input[type="radio"][value="held"]')).toBeChecked();
 
   await page.locator("#collectionSheetClose").click();
   await expect(page.locator("#collectionSheet")).toBeHidden();
@@ -1592,6 +1602,40 @@ test("the sidebar lists every page, orphans and all, and opens one",
     await goPage(page, /3/);
     await expect(page.locator(".pagehead__warn")).toBeVisible();
   });
+
+/* The list is a listbox, and a listbox is one stop with arrows inside it.
+ *
+ * Every row used to be a tab stop of its own, and "+ Neue Seite" sat inside the
+ * listbox as a button that was not an option. Both are what a screen reader
+ * user meets first in the sidebar, so both are asserted on the tree rather than
+ * on the pixels: the listbox holds options and nothing else, only the current
+ * page takes Tab, and an arrow moves the stop with the page.
+ */
+test("the page list is one tab stop, walked with the arrows", async ({ page }) => {
+  await standIn(page);
+  await build(page);
+  await goHome(page);
+
+  const list = page.getByRole("listbox", { name: label("ui.app_pages_list") });
+  await expect(list.getByRole("option")).toHaveCount(2);
+  await expect(list.locator(".pagelist__new")).toHaveCount(0);
+  await expect(page.locator(".pagelist__new")).toHaveCount(1);
+
+  const rows = page.locator(".pagelist__item");
+  await expect(rows.first()).toHaveAttribute("tabindex", "0");
+  await expect(rows.nth(1)).toHaveAttribute("tabindex", "-1");
+
+  await rows.first().focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(rows.nth(1)).toBeFocused();
+  await expect(rows.nth(1)).toHaveAttribute("tabindex", "0");
+  await expect(rows.first()).toHaveAttribute("tabindex", "-1");
+
+  // Tab leaves the list rather than walking it: the next stop is the button
+  // under it, not the row that was current a moment ago.
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".pagelist__new")).toBeFocused();
+});
 
 /* The case the old row was blank on, which is every Sammlung before any of the
  * linking is done.

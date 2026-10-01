@@ -21,10 +21,15 @@
   import { board, commit } from "./standing.svelte.js";
   import { PRESS_MODES, pressModeOf, pressName, pressNote } from "./panels.svelte.js";
 
-  const layout = $derived(board());
-  const now = $derived(pressModeOf(layout));
+  /* board() inside the expression, never a `$derived` of the board itself:
+     the layout is the same object after choose() writes into it, so a derived
+     layout compares equal, stops, and `now` goes on naming the mode from before
+     the press. shell/live.svelte.ts's one rule. A mode is an answer, a string,
+     and that is what may be cached. */
+  const now = $derived(pressModeOf(board()));
 
   function choose(mode: typeof PRESS_MODES[number]): void {
+    const layout = board();
     /* Absent rather than 0, so a Sammlung asking for nothing carries no such
        field - which is what data/app_package.ts reads when it decides whether to
        write the manifest entry at all, and what keeps 1.3.0 a minor version for

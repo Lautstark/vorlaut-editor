@@ -36,7 +36,7 @@
  * Not a verdict either. There is no threshold for good or bad, in the document
  * or here; smaller is better and that is the whole of what may be said.
  */
-import { allButtons, opens, pageById, sharedColumn } from "./pages.js";
+import { opens, pageById, sharedColumn } from "./pages.js";
 import type { AppLayout, AppPage } from "../core/types.js";
 
 /** Every button drawn on one page: its own, plus the shared first column where
@@ -150,8 +150,3 @@ export function effortByPage(layout: AppLayout): Map<string, number> {
   }
   return cost;
 }
-
-/** How many buttons are in the whole Sammlung. The count the sidebar row used
- *  to carry, kept here because it is the same walk and the same file's
- *  business - see allButtons() for why a shared button counts once. */
-export const buttonCount = (layout: AppLayout): number => allButtons(layout).length;

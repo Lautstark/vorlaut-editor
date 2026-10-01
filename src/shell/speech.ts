@@ -24,13 +24,24 @@ export async function speak(text: string, button: HTMLElement | null,
   // nameless refusal underneath it, and there is no longer a path to it.
   const before = button?.textContent;
   if (button) button.textContent = "···";
+  /* The blob is let go of when the sound is finished with, and "finished" has
+     three spellings. `ended` was the only one handled, and it never comes for a
+     sound that did not start: play() rejects under an autoplay rule or on a
+     format this browser will not decode, and a decode that fails part-way
+     fires `error` rather than `ended`. Each of those kept a recording - seconds
+     of WAV, for a listen somebody did not even hear - for the life of the
+     page. Revoking twice is harmless, so the three paths do not coordinate. */
+  let url = "";
   try {
-    const url = URL.createObjectURL(await synthesise(text, voice));
+    url = URL.createObjectURL(await synthesise(text, voice));
     const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
+    const done = () => URL.revokeObjectURL(url);
+    audio.onended = done;
+    audio.onerror = done;
     await audio.play();
     status("");
   } catch (error) {
+    if (url) URL.revokeObjectURL(url);
     status(t("ui.play_failed", { error: reason(error) }));
   } finally {
     if (button) button.textContent = before ?? "";

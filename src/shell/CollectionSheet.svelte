@@ -76,6 +76,18 @@
   });
 
   const panels = $derived(editorPanels());
+
+  /* Whether the talker's language panel is drawn, as an answer rather than a
+     call. deviceLanguageShown() is isApp(live()), and live() is the note that
+     the layout moved - so anything calling it directly is re-run by every
+     commit() on the page, the press timings' and the grid's included. The
+     fold below read it that way, and each of those commits put the first
+     panel back open and folded the one that had just been used: choosing
+     "Erst beim Halten" closed Bedienung under the pointer. A boolean in a
+     `$derived` is the shape live.svelte.ts allows - an answer, not the
+     layout - and it propagates only when it flips, which is only when the
+     Sammlung on screen changes kind. */
+  const languageShown = $derived(deviceLanguageShown());
   const chosen = $derived(symbolSourceChosen());
   const ready = $derived(metacomOffered());
 
@@ -106,7 +118,7 @@
     if (!collectionSheetOpen()) return;
     collectionEpoch();
     const order = [
-      ...(deviceLanguageShown() ? ["collectionLanguagePanel"] : []),
+      ...(languageShown ? ["collectionLanguagePanel"] : []),
       ...panels.map((one) => `${one.name}Panel`),
       "symbolPanel", "voicePanel",
     ];
@@ -153,7 +165,7 @@
        package's now. The suite reads it with toBeHidden(), which is true of an
        element that is not there - and is already how it reads the editor's
        panel on a talker, where nothing registers one. -->
-  {#if deviceLanguageShown()}
+  {#if languageShown}
     <Panel bind:open={shown.collectionLanguagePanel} id="collectionLanguagePanel"
            group="collection" stateId="collectionLanguageState"
            section={t("ui.collection_language")}

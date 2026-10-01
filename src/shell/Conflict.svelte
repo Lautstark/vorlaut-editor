@@ -9,10 +9,24 @@
   import { t } from "./live.svelte.js";
   import { conflict } from "./conflict.svelte.js";
   import { keepMine, load } from "../core/save.js";
+  import { status } from "./dom.js";
+  import { reason } from "../core/errors.js";
+
+  /* Both answers are a read of the store, and keepMine() a write after it, so
+     either can fail - a store closed by another tab's upgrade, a quota. Each was
+     `void` here, which made the failure an unhandled rejection and the press a
+     button that did nothing at all. The banner stays up, because the conflict
+     it describes is still true; the status line says why the answer did not
+     take, in the sentence the rest of the page uses for a store that refused. */
+  function answer(act: () => Promise<void>): void {
+    act().catch((error: unknown) => {
+      status(t("ui.data_failed", { error: reason(error) }));
+    });
+  }
 </script>
 
 <div class="conflict" id="conflict" class:show={conflict.shown}>
   <span id="conflictText">{conflict.text}</span>
-  <button id="overwriteBtn" class="btn" type="button" onclick={() => void keepMine()}>{t("ui.keep_mine")}</button>
-  <button id="reloadBtn" class="btn" type="button" onclick={() => void load()}>{t("ui.reload")}</button>
+  <button id="overwriteBtn" class="btn" type="button" onclick={() => answer(keepMine)}>{t("ui.keep_mine")}</button>
+  <button id="reloadBtn" class="btn" type="button" onclick={() => answer(load)}>{t("ui.reload")}</button>
 </div>
