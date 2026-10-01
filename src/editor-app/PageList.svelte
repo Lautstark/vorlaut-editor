@@ -75,4 +75,14 @@
   }
 </script>
 
-<div bind:this={box} class="pagelist" id="collectionPages" role="listbox" aria-label={t("ui.app_pages_list")}>{#each pages as one, index (one.id)}<button type="button" class="pagelist__item" role="option" aria-selected={one.id === hereId} aria-current={one.id === hereId ? "true" : undefined} data-page={one.id} onclick={() => goToPage(one.id)} onkeydown={(event) => walk(event, index)}>{#if one.id === homeId}<span class="pagelist__home" title={t("ui.app_page_home")}>⌂</span>{/if}{#if !found.has(one.id)}<span class="tab__lost" title={t("ui.app_page_unreachable")}>⚠</span>{/if}<span class="pagelist__name">{pageName(one)}</span><span class="pagelist__cost">{cost.get(one.id) === undefined ? "—" : decimals.format(cost.get(one.id)!)}</span></button>{/each}<button type="button" class="pagelist__new" onclick={make}>{t("ui.app_page_new")}</button></div>
+<!-- Two elements where there was one, and the split is the accessibility tree's.
+     A listbox may hold options and nothing else, so "+ Neue Seite" inside it was
+     a button a screen reader announced as part of the list of pages - or, in
+     the stricter ones, did not announce at all. The outer box keeps the id, the
+     scroll and the rule down the left; the listbox is the rows alone.
+
+     And one tab stop for the whole list rather than one per page: the current
+     page is the stop, and the arrow keys in walk() are how the others are
+     reached - which is what a listbox promises and what a sidebar of thirty
+     pages needs before the field over the board can be tabbed to. -->
+<div bind:this={box} class="pagelist" id="collectionPages"><div class="pagelist__list" role="listbox" aria-label={t("ui.app_pages_list")}>{#each pages as one, index (one.id)}<button type="button" class="pagelist__item" role="option" aria-selected={one.id === hereId} aria-current={one.id === hereId ? "true" : undefined} tabindex={one.id === hereId ? 0 : -1} data-page={one.id} onclick={() => goToPage(one.id)} onkeydown={(event) => walk(event, index)}>{#if one.id === homeId}<span class="pagelist__home" title={t("ui.app_page_home")}>⌂</span>{/if}{#if !found.has(one.id)}<span class="tab__lost" title={t("ui.app_page_unreachable")}>⚠</span>{/if}<span class="pagelist__name">{pageName(one)}</span><span class="pagelist__cost">{cost.get(one.id) === undefined ? "—" : decimals.format(cost.get(one.id)!)}</span></button>{/each}</div><button type="button" class="pagelist__new" onclick={make}>{t("ui.app_page_new")}</button></div>

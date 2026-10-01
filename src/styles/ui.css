@@ -975,6 +975,10 @@ a.factlinks__line:hover { text-decoration: underline; }
   border-left: 1px solid var(--surface-2);
   max-height: 260px; overflow-y: auto; overscroll-behavior: contain;
 }
+/* The listbox inside the box, which holds the rows and not the button under
+   them (PageList.svelte says why). The same column the box was, so moving the
+   rows one level down moves nothing on screen. */
+.pagelist__list { display: flex; flex-direction: column; gap: 0; }
 .pagelist__item {
   display: flex; align-items: center; gap: 7px;
   width: 100%; text-align: left; padding: 4px 4px 4px 2px;
