@@ -86,10 +86,14 @@ export function readPackage(bytes: Uint8Array): AppPackage {
   const manifest = JSON.parse(new TextDecoder().decode(manifestEntry.data)) as PackageManifest;
 
   const boards: PackageBoard[] = [];
+  // Where each board was found, so the checker can tell a path that names a
+  // member from one that names nothing - see AppPackage.boardMembers.
+  const boardMembers: string[] = [];
   for (const path of Object.values(manifest.paths?.boards ?? {})) {
     const entry = members.get(path) ?? members.get(path.normalize("NFC"));
     if (!entry) continue;   // the checker's board-unresolved case says so
     boards.push(JSON.parse(new TextDecoder().decode(entry.data)) as PackageBoard);
+    boardMembers.push(path);
   }
 
   const files = new Map<string, Uint8Array<ArrayBuffer>>();
@@ -97,7 +101,7 @@ export function readPackage(bytes: Uint8Array): AppPackage {
     if (name === "manifest.json" || name.endsWith(".obf")) continue;
     files.set(name, new Uint8Array(entry.data));
   }
-  return { manifest, boards, files };
+  return { manifest, boards, files, boardMembers };
 }
 
 export const readPackageFile = (path: string): AppPackage =>

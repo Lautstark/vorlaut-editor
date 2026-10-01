@@ -239,6 +239,12 @@ export interface AppPackage {
   boards: PackageBoard[];
   /** Archive path -> bytes, for everything that is not a board document. */
   files: Map<string, Uint8Array<ArrayBuffer>>;
+  /** Where the board documents sit in the archive, for a package that was
+   *  READ rather than built - a conformance fixture may put board `hallo` at
+   *  boards/hello.obf. Absent on one this file builds, which packageBytes()
+   *  writes at boardPath(board.id). checkPackage() checks paths.boards against
+   *  this and never against paths.boards itself. */
+  boardMembers?: string[];
 }
 
 /** One resolved symbol: the PNG somebody's reference turned into.
@@ -565,7 +571,8 @@ export function spokenTexts(layout: Layout): string[] {
     for (const { button } of appButtons(layout)) {
       // Both questions, because both utter: does it join the sentence, or is
       // it the interjection that speaks without joining one.
-      if (!appends(button.act) && button.act?.kind !== "speak") continue;
+      const act = actAsWritten(button.act, layout.pages ?? []);
+      if (!appends(act) && act?.kind !== "speak") continue;
       const spoken = spokenTextOf(button);
       if (spoken) out.push(spoken);
     }
@@ -591,6 +598,21 @@ export function spokenTexts(layout: Layout): string[] {
  *  the two navigating acts that carry §7.3's flag. `speak` is deliberately not
  *  here: it utters without appending, and the two questions - does it speak,
  *  does it join the sentence - are only the same question for these. */
+/** What a press really does, once a `goto` whose page is gone is read as
+ *  what the package writes for it: an ordinary appending button.
+ *
+ *  One answer for both places that ask. appBoards() writes no load_board for
+ *  such a button, so on a tablet it joins the sentence and says its word
+ *  (§7.2's default) - and spokenTexts() used to ask the stored act, which
+ *  said "goto, not appending", so the word was never recorded and the button
+ *  spoke with no baked Opus behind it. And because the writer's empty-button
+ *  rule asked the stored act too, a dangling goto with no label and no picture
+ *  was written as a live button that does nothing. */
+export const actAsWritten = (act: Act | undefined,
+                             pages: readonly { id: string }[]): Act | undefined =>
+  act?.kind === "goto" && !pages.some((page) => page.id === act.page)
+    ? { kind: "append" } : act;
+
 export const appends = (act: Act | undefined): boolean =>
   act === undefined || act.kind === "append"
   || ((act.kind === "goto" || act.kind === "home") && act.alsoAppend === true);
@@ -1033,15 +1055,17 @@ function appBoards(
       if (colour && mode === "border") button.border_color = cssColor(colour);
       else if (colour) button.background_color = cssColor(colour);
 
-      const act = one.act ?? { kind: "append" as const };
+      const act = actAsWritten(one.act, pages) ?? { kind: "append" as const };
       switch (act.kind) {
         case "goto": {
           const target = idOf.get(act.page);
-          // A `goto` whose page is gone writes no load_board at all, and so
-          // becomes an ordinary appending button - which is what the editor
-          // does to it the moment a page is deleted. Writing a load_board
-          // pointing nowhere would be a button that looks live on a tablet and
-          // does nothing, and §7.4 is emphatic about what that teaches.
+          // A `goto` whose page is gone never reaches here: actAsWritten()
+          // has already made it an ordinary appending button, which is what
+          // the editor does to it the moment a page is deleted. Writing a
+          // load_board pointing nowhere would be a button that looks live on
+          // a tablet and does nothing, and §7.4 is emphatic about what that
+          // teaches. Checked again all the same, because what is written is a
+          // path that must resolve.
           if (target) {
             button.load_board = {
               id: target,
@@ -1137,14 +1161,22 @@ export function checkPackage(pkg: AppPackage): string[] {
 
   // §2: the member names, which is where a package can be actively dangerous.
   //
-  // Taken from `paths` rather than derived from the board ids, because §3
-  // makes `paths` the authority on where a member lives and because this also
-  // reads packages nobody here wrote - the conformance fixtures name a board
-  // `hallo` and put it at boards/hello.obf, which is legal and which a checker
-  // assuming its own naming would call a missing board.
-  const members = new Set([MANIFEST, ...Object.values(manifest.paths?.boards ?? {}),
-                           ...files.keys()].map((name) => String(name).normalize("NFC")));
-  for (const name of members) {
+  // What the archive holds: the manifest, the board documents where they
+  // really sit, and `files`. For a package built here that is what
+  // packageBytes() writes, each board at boardPath(board.id); for one read
+  // from an archive it is where the reader found them (`boardMembers`) - a
+  // conformance fixture may put board `hallo` at boards/hello.obf, which is
+  // legal. The board members were taken from the manifest's own
+  // `paths.boards` until 2026-10-01, which made the board-unresolved check
+  // below ask the manifest whether the manifest's paths exist - always yes,
+  // so a manifest naming a member no board is written to passed, and a tablet
+  // opening it found no root.
+  const placed = pkg.boardMembers ?? boards.map((board) => boardPath(board.id));
+  const members = new Set([MANIFEST, ...placed, ...files.keys()]
+    .map((name) => String(name).normalize("NFC")));
+  const named = Object.values(manifest.paths?.boards ?? {})
+    .map((name) => String(name).normalize("NFC"));
+  for (const name of new Set([...members, ...named])) {
     if (name.startsWith("/") || /(^|\/)\.\.(\/|$)/.test(name) || /^[A-Za-z]:/.test(name)) {
       say("path-unsafe", `${name} escapes the archive root`);
     }
