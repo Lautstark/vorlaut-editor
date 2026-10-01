@@ -771,6 +771,16 @@ test("a press timing set in Bedienung reaches the package", async ({ page }) => 
   await card.locator("b").filter({ hasText: label("ui.app_press_held") }).click();
   // The heading follows immediately, which is what says the choice took.
   await expect(stated).toHaveText(label("ui.app_press_held"));
+  /* And the panel is still open under the pointer. The heading alone could not
+   * say so - the state line is in the <summary>, drawn folded or not - and for
+   * a while the press folded it: the sheet's arrival fold re-ran on every
+   * commit and put the first panel back open, which on a tablet is the grid.
+   * A choice that closes the panel it was made in reads as one that did not
+   * take. The radio is asserted too, because it is drawn from the layout and
+   * a stale read of it is the other half of the same kind of bug. By value,
+   * because the radio's name carries its explaining sentence as well. */
+  await expect(card).toHaveAttribute("open", "");
+  await expect(card.locator('input[type="radio"][value="held"]')).toBeChecked();
 
   await page.locator("#collectionSheetClose").click();
   await expect(page.locator("#collectionSheet")).toBeHidden();
