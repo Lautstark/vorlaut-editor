@@ -81,6 +81,12 @@ export interface BackedCollection {
   id: string;
   name: string;
   layout: Layout;
+  /** When it was last written, which is the sidebar's order. Optional, and
+   *  added without a version bump: a file without it is read exactly as it
+   *  was, and a reader that predates it skips a field it does not know. It
+   *  travels because a restore that stamped every board "now" lost the order
+   *  the list was in - see replaceCollections(). */
+  updatedAt?: number;
 }
 
 export interface Backup {
@@ -155,7 +161,11 @@ export async function exportEverything(notice: string): Promise<Backup> {
     // A row in the list with nothing behind it cannot happen through any write
     // in store.ts - both land in one transaction - but backing up a board of
     // nulls would be worse than backing up one board fewer.
-    if (layout) boards.push({ id: board.id, name: board.name, layout });
+    if (layout) {
+      boards.push({ id: board.id, name: board.name, layout,
+                    ...(typeof board.updatedAt === "number"
+                      ? { updatedAt: board.updatedAt } : {}) });
+    }
   }
 
   const symbols: StoredSymbol[] = [];
@@ -228,8 +238,9 @@ export async function importBackup(backup: Backup): Promise<Restored> {
    * A Sicherung is bytes somebody kept: it can be older than any database this
    * browser has ever held, and there is no version on it to run steps from. */
   const incoming: store.IncomingCollection[] = backup.boards?.length
-    ? backup.boards.map(({ id, name, layout }) =>
-        ({ id, name, layout: fileLayout(layout) }))
+    ? backup.boards.map(({ id, name, layout, updatedAt }) =>
+        ({ id, name, layout: fileLayout(layout),
+           ...(typeof updatedAt === "number" ? { updatedAt } : {}) }))
     // Version 1. The board it held, unnamed, with an id minted by the store.
     : backup.layout ? [{ name: "", layout: fileLayout(backup.layout) }]
       : [];

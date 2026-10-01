@@ -942,10 +942,16 @@ export async function replaceCollections(incoming: IncomingCollection[],
   const written: {
     id: string; name: string; text: string; updatedAt: number; version: string;
   }[] = [];
-  for (const one of incoming) {
+  /* A board the file gives no time for arrives as touched now - and one
+   * millisecond before the board ahead of it in the file, because the list
+   * is the sidebar's order (newest first) and every board stamped with one
+   * clock reading tied, so the sidebar fell back to ordering by UUID: a
+   * restore shuffled the list somebody had arranged by using it. */
+  const now = Date.now();
+  for (const [at, one] of incoming.entries()) {
     const text = serialise(one.layout);
     written.push({ id: one.id || mintId(), name: one.name, text,
-                   updatedAt: one.updatedAt ?? Date.now(),
+                   updatedAt: one.updatedAt ?? now - at,
                    version: await versionOf(text) });
   }
   const list: CollectionList = {
@@ -966,6 +972,9 @@ export async function replaceCollections(incoming: IncomingCollection[],
   await layouts.clear();
   for (const one of written) {
     await collections.put({ id: one.id, name: one.name, updatedAt: one.updatedAt });
+    // The layout's own updatedAt stays "now": it is what the folder mirror
+    // compares, and a restored text has to go out even where the registry
+    // row kept the time it had.
     await layouts.put({ id: one.id, text: one.text, version: one.version, updatedAt: Date.now() });
   }
   await tx.objectStore(MARKS).put(list.current, CURRENT);
