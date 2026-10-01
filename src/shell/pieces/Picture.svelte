@@ -41,7 +41,48 @@
     failed = "";
   });
 
-  $effect(() => { if (image) void symbolInto(image, symbol); });
+  /* One request per image and symbol, and each one owns its teardown.
+   *
+   * The abort is the per-run token. symbolInto() waits on a store read or a
+   * folder walk, so a cell whose symbol changes twice can hear the first answer
+   * last; without the signal it would draw that picture under the second one's
+   * name, or fire an `error` that the handler below reads as the *new* symbol
+   * failing - which puts the Missing sentence on a picture that is fine.
+   *
+   * The catch is the same reading of a different failure. A store that throws,
+   * or a METACOM folder that refuses mid-read, used to be an unhandled
+   * rejection and nothing on screen - the previous picture simply stayed, and
+   * backend/local.ts is plain that a left-over picture is worse than a broken
+   * one, because it is somebody else's symbol. So a throw is a miss, drawn the
+   * way a miss is drawn.
+   *
+   * The blob URL is revoked when the image goes, not when the run does. A
+   * rerun is a new symbol on the same element, and symbolInto() lets go of the
+   * previous blob itself once the new one is ready - revoking it here first
+   * would pull the picture out from under an image that may not have finished
+   * loading it, and that is an `error` too. What nobody let go of was the last
+   * blob, on the element being thrown away: one per cell, every time a page
+   * was left. `dataset.blobUrl` is where symbolInto() keeps it. */
+  $effect(() => {
+    const target = image;
+    if (!target) return;
+    const asked = symbol;
+    const run = new AbortController();
+    symbolInto(target, asked, run.signal).catch(() => {
+      if (!run.signal.aborted) failed = asked;
+    });
+    return () => run.abort();
+  });
+
+  $effect(() => {
+    const target = image;
+    if (!target) return;
+    return () => {
+      const url = target.dataset.blobUrl;
+      if (url) URL.revokeObjectURL(url);
+      delete target.dataset.blobUrl;
+    };
+  });
 </script>
 
 {#if failed === symbol && symbol}<Missing {symbol} />{:else}<img bind:this={image} class={className || undefined} alt="" onerror={() => { failed = symbol; }} />{/if}
