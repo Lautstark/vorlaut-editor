@@ -141,23 +141,6 @@ export function unreachable(layout: AppLayout): AppPage[] {
   return layout.pages.filter((one) => !found.has(one.id));
 }
 
-/**
- * The pages the shared first column leads to, if there is one.
- *
- * The other half of opens()'s decision. Those pages are one press from
- * anywhere, so they are in no page's row and no page's path - and something
- * has to say so, or the column's targets are simply missing from the strip
- * with nothing to explain it. The picker is where they are said, once, because
- * the picker is the list that is already complete.
- */
-export function columnTargets(layout: AppLayout): Set<string> {
-  const found = new Set<string>();
-  for (const button of sharedColumn(layout)) {
-    if (button.act.kind === "goto") found.add(button.act.page);
-  }
-  return found;
-}
-
 /* --- What the strip walks ------------------------------------------------ */
 
 /**
