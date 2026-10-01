@@ -142,10 +142,10 @@ export interface BoardSet {
   id?: string;
   /** What the page is called.
    *
-   * **Not the text of a key.** The firmware prints it on the panel in the last
-   * row's first cell, which is where the case puts the page key
-   * (`docs/hardware.md`), and the device's own menu reads it to name a page a
-   * `goto` leads to - vorlaut-diy-talker's adr/0021. So it is a fact about the
+   * **Not the text of a key.** The page key says it where that key has no
+   * word of its own - see PAGE_KEY; the device draws no caption anywhere -
+   * and the device's own menu reads it to name a page a `goto` leads to -
+   * vorlaut-diy-talker's adr/0021. So it is a fact about the
    * page and the key on that panel keeps its own `text` like any other.
    *
    * Empty means nobody has named it rather than a page without a name: every
@@ -172,18 +172,23 @@ export interface BoardSet {
   slots: Slot[];
 }
 
-/** Which of the five sits on the panel the device prints the page's name on.
+/** Which of the five sits on the page-key panel.
  *
  * The last row's first cell, under the speaker, which is where the case puts
  * it (`docs/hardware.md`) and where vorlaut-diy-talker's adr/0020 §3 says a
- * reader finds it: "the button the grid puts in the set key's cell". The
- * firmware draws `name` there whatever the key itself does.
+ * reader finds it: "the button the grid puts in the set key's cell".
  *
  * **A drawing position and not a role.** The key on it speaks, leads onward or
  * stays put exactly like the other four, and every door reads it out of the
  * grid rather than out of what it does. What the position still decides is one
- * thing: a key on this panel with no word of its own shows the page's name,
- * because that is what is printed there.
+ * thing: a key on this panel with no word of its own SAYS the page's name.
+ *
+ * **Says, and does not show.** This read "the firmware draws `name` there"
+ * until 2026-10-01, and it never did: drawCurrentSet() in vorlaut.ino draws
+ * the key's picture tile on this panel and nothing else, and a key with no
+ * picture is the grey cross there. The name is printed to the serial log and
+ * read by the device's menu, never onto a key. So the editor draws the name on
+ * this cell only where the key will say it - adr/0024's note of that date.
  */
 export const PAGE_KEY = 2;
 

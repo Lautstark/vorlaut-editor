@@ -54,6 +54,7 @@
 // opened on a tablet.
 
 import { LIMITS } from "../core/boot_data.js";
+import { t } from "../core/boot.js";
 import { reason } from "../core/errors.js";
 import {
 
@@ -513,8 +514,8 @@ export function grid(boardId) {
  * Asked for one thing only, and it is worth saying what it is *not* asked for
  * any more: which button is the page key. That is the cell now, on every board
  * alike. What is left is a caption - a key on the page-key panel with no word
- * of its own is written out carrying the page's name, because that is what the
- * firmware prints there, and only a board written under that convention may
+ * of its own is written out carrying the page's name, because that is the
+ * word it says, and only a board written under that convention may
  * have the name read back off it as nothing. On a phone's board of sixty
  * buttons a label that happens to match the board's name is a word somebody
  * typed, and it stays one.
@@ -656,7 +657,7 @@ export function documentToLayout(document) {
    * stable if the same Sammlung goes back out and comes in again. */
   const pointedAt = new Set<string>();
 
-  for (const boardId of ids) {
+  for (const [position, boardId] of ids.entries()) {
     const board = document.boards[boardId];
     const images = imagesById(board);
     const name = text(board.name) || boardId;
@@ -700,7 +701,7 @@ export function documentToLayout(document) {
        *
        * And the one place the page-key panel is different, on this file's own
        * boards: a key there with no word of its own was written out carrying
-       * the page's name, because that is what the firmware prints on it. Read
+       * the page's name, because that is the word an empty one says. Read
        * back as the nothing it was, or a round trip would quietly type the
        * name onto the key - and renaming the page afterwards would leave the
        * copy behind, still saying what the page used to be called.
@@ -711,9 +712,19 @@ export function documentToLayout(document) {
        * the name as its vocalization too. What comes back is a key saying the
        * page's name either way, since the same fallback runs on the way out
        * again - so the reading that keeps the field empty is the one that
-       * leaves a Sammlung exactly as it was found. */
+       * leaves a Sammlung exactly as it was found.
+       *
+       * An unnamed page is the one case where the word is not the name: the
+       * device door says "Seite N" for it, as the editor does - devicePlan()
+       * and setName(). So on a board with no name, that is the word read back
+       * as nothing. In the language the page is in now, which is the one it
+       * was written in unless somebody switched between export and import;
+       * then the key keeps the number as a word, which is visible and
+       * harmless. */
       const word = text(button.vocalization || button.label);
-      const captioned = ours && at === PAGE_KEY && word === name;
+      const unnamed = !text(board.name)
+        && word === t("ui.set_n", { n: position + 1 });
+      const captioned = ours && at === PAGE_KEY && (word === name || unnamed);
       slots.push({
         text: captioned ? "" : word,
         symbol,

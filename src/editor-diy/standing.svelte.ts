@@ -164,11 +164,16 @@ export const mint = (): string => crypto.randomUUID();
 export const setName = (entry: BoardSet, index: number): string =>
   entry.name || t("ui.set_n", { n: index + 1 });
 
-/** What the page-key seat prints where the key has no word of its own: the
- *  page's name, because that is what the firmware prints there - core/types.ts's
- *  PAGE_KEY, and ADR 0024 §1 for why that is a fact about a seat rather than a
- *  role. */
-export const printsName = (index: number): boolean => index === PAGE_KEY;
+/** The seat whose key, with no word of its own, says the page's name -
+ *  core/types.ts's PAGE_KEY, and ADR 0024 §1 for why that is a fact about a
+ *  seat rather than a role.
+ *
+ *  It was printsName(), on the belief that the firmware prints the name on
+ *  that panel. It does not - it draws the key's picture and nothing else - so
+ *  the name is a word the key says, and the board draws it only where it is
+ *  said. devicePlan() in data/device_package.ts gives the same fallback as
+ *  setName() above, so ▶ here and the talker say the same thing. */
+export const saysName = (index: number): boolean => index === PAGE_KEY;
 
 /* The grid itself, handed over by the component that draws it. The one element
  * this editor still holds a reference to, and it is held for one line: focus has

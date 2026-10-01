@@ -1086,16 +1086,11 @@ test("the board says which keys carry the page on, and to which page",
   await expect(asking.locator(".cell__eyebrow")).toHaveCount(0);
   await expectSaid(page, PAGE_KEY, asked);
 
-  /* The one cell where the two lines want the same seat: the panel the device
-   * prints the page's name on, holding a key with no word of its own that
-   * leads onward.
-   *
-   * The caption keeps it. It explains a word that is drawn on the cell and
-   * would otherwise read as one somebody typed, and it has nowhere else to go;
-   * the target has the corner, which is still there and still names the page
-   * to anybody who follows it. A second line would push the picture down on
-   * one cell of five and make the board disagree with the device about how a
-   * key is laid out.
+  /* The page-key panel, holding a key with no word of its own that leads
+   * onward. It says nothing, so it carries no name: the talker draws a key's
+   * picture and no caption, and the name is a word this seat SAYS where the
+   * key has none. So the line over the picture is the target, as on any
+   * other key that leads anywhere.
    */
   await key(page, PAGE_KEY).click();
   const box = keySheet(page);
@@ -1109,16 +1104,13 @@ test("the board says which keys carry the page on, and to which page",
   await expect(asking.locator(".cell__follow")).toHaveCount(1);
   await expect(asking.locator(".cell__follow"))
     .toHaveAttribute("aria-label", label("ui.page_follow", { name: "Tafel 2" }));
-  /* The name is still drawn, because all three export doors write that label
-   * whatever the key does - the firmware prints it on this panel either way,
-   * so a cell without it would be a board that is not the one on the table.
-   * What the line above it says is which of the two this is: *shows*, not
-   * *says*, on a key that only leads onward. Everywhere else on this board a
-   * word on a cell is a word the key speaks, and this is the one seat where
-   * the two come apart. */
+  /* No name drawn. This cell used to carry it under "shows the page's name",
+   * on the belief that the firmware prints the name on this panel; it draws
+   * the key's picture and nothing else (drawCurrentSet() in vorlaut.ino), so
+   * that cell was a board that is not the one on the table. */
   await expect(asking.locator(".cell__eyebrow"))
-    .toHaveText(label("ui.diy_page_name_shows"));
-  await expectSaid(page, PAGE_KEY, "Tafel 1");
+    .toHaveText(label("ui.diy_leads_to", { name: "Tafel 2" }));
+  await expectSaid(page, PAGE_KEY, "");
   // And nothing to audition, which is the same fact by the other mark.
   await expect(asking.locator(".cell__play")).toHaveCount(0);
 });

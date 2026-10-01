@@ -148,6 +148,7 @@ import {
 import { HASH_BYTES, SLOTS_PER_SET } from "../device/layout_facts.js";
 import { zipBytes, type ZipMember } from "./zip.js";
 import { PAGE_KEY, actOf } from "../core/types.js";
+import { t } from "../core/boot.js";
 import type { DiyLayout, Slot, SlotAct } from "../core/types.js";
 
 export const FORMAT = "open-board-0.1";
@@ -288,7 +289,7 @@ export function devicePlan(layout: DiyLayout, voice: string): DevicePlan {
     language: String(layout.language ?? ""),
     voice: String(voice ?? ""),
     sleepTimeoutSeconds: Number(layout.sleep_timeout_seconds ?? 0),
-    sets: sets.map((set) => {
+    sets: sets.map((set, index) => {
       const slots = set?.slots ?? [];
       /* The five keys, sorted into the two places the file keeps them. The
        * page key is the one on PAGE_KEY's panel and the other four follow it
@@ -307,9 +308,16 @@ export function devicePlan(layout: DiyLayout, voice: string): DevicePlan {
         name: String(set?.name ?? ""),
         key: {
           ...page,
-          // What the panel says, which is the key's own word or else the name
-          // the firmware prints there - see PAGE_KEY.
-          text: page.text || String(set?.name ?? ""),
+          // What the key says: its own word, or else what the page is called -
+          // see PAGE_KEY. **Called as the editor calls it**, which is
+          // standing.svelte.ts's setName(): the name, or "Seite N" for a page
+          // nobody named. This said `set.name` alone, so a page key with no
+          // word on an unnamed page was ▶ "Seite 1" in the editor and silence
+          // on the talker. The two rules are one rule written twice, because
+          // setName() reads the reactive table a component redraws from and
+          // this reads the plain one; the label table is what keeps them one.
+          text: page.text || String(set?.name ?? "")
+            || t("ui.set_n", { n: index + 1 }),
         },
         slots: slots.filter((_, at) => at !== PAGE_KEY)
           .slice(0, SLOTS_PER_SET).map((slot) => ({
@@ -856,9 +864,10 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
     // it has always sat in buttons[]; the grid is what says where it is drawn.
     const switchKey: DeviceButton = {
       id: `${id}-set`,
-      // Its own word, or the name the firmware prints on that panel where it
-      // has none. devicePlan() is where the fallback is applied, so this is
-      // one field rather than a second copy of the rule.
+      // Its own word, or the page's name where it has none. devicePlan() is
+      // where the fallback is applied, so this is one field rather than a
+      // second copy of the rule. The talker draws no label at all - the panel
+      // shows the key's picture - so this is for whatever reads the file.
       label: set.key.text,
     };
     const setPicture = putImage(set.key.symbol);

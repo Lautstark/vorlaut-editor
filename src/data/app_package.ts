@@ -856,8 +856,8 @@ function diyBoards(
        * Through slotIsEmpty() rather than written out here, because the build
        * has to reach the same answer - see the note on that function. Two
        * things are drawn even so, and neither is a picture: a key that leads
-       * onward is a live button whichever way it looks, and the panel the
-       * page's name is printed on has the name on it - see PAGE_KEY. Leaving
+       * onward is a live button whichever way it looks, and the page-key
+       * panel carries the page's name as its label - see PAGE_KEY. Leaving
        * either out would take the only way off a page with it. */
       if (slotIsEmpty(slot) && !navigates && at !== PAGE_KEY) {
         present[at] = false;
@@ -867,7 +867,8 @@ function diyBoards(
       const button: PackageButton = {
         id: `${boardId}-${KEY_IDS[at]}`,
         // The key's own word, and on the page-key panel the page's name where
-        // the key has none, because that is what the firmware prints there.
+        // the key has none: on a tablet the label is what a button shows, and
+        // a page key with nothing on it would be a blank way off the page.
         label: String(slot?.text ?? "")
                || (at === PAGE_KEY ? String(set.name ?? "") : ""),
         // No border_color. It was the set's colour, drawn per button because
