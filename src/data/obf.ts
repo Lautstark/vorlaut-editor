@@ -311,13 +311,19 @@ export function order(document) {
   /* Board ids, in the order a device walks them. Annotated because an empty
      literal has no element type to infer. */
   const seen: string[] = [];
-  const queue = document.root in document.boards ? [document.root] : [];
+  /* Object.hasOwn rather than `in`, here and wherever a board id or a
+     button id is looked up in a plain object: ids are somebody else's
+     strings, and `"constructor" in {}` is true. A foreign board linking to
+     `constructor`, or a button called `toString`, found a function where a
+     board or a button should have been and threw a TypeError nobody could
+     read. */
+  const queue = Object.hasOwn(document.boards, document.root) ? [document.root] : [];
   while (queue.length) {
     const current = queue.shift();
     if (seen.includes(current)) continue;
     seen.push(current);
     queue.push(...targetsOf(document, current).filter(
-      (t) => t in document.boards));
+      (t) => Object.hasOwn(document.boards, t)));
   }
   seen.push(...sorted(Object.keys(document.boards).filter(
     (b) => !seen.includes(b))));
@@ -576,7 +582,7 @@ export function keysInCells(board) {
                  cells[1]![0], cells[1]![1], cells[1]![2]].map((one) => text(one));
   const byId = {};
   for (const button of board.buttons || []) byId[text(button.id)] = button;
-  const placed = named.map((id) => (id && id in byId ? byId[id] : undefined));
+  const placed = named.map((id) => (id && Object.hasOwn(byId, id) ? byId[id] : undefined));
   // Buttons the grid leaves out are appended rather than dropped, which is
   // gridOrder()'s own rule and for its own reason: OBF lets a board carry more
   // buttons than the grid shows, and losing one silently on import is how a
@@ -587,7 +593,7 @@ export function keysInCells(board) {
 export function buttonsInOrder(board) {
   const byId = {};
   for (const button of board.buttons || []) byId[text(button.id)] = button;
-  return gridOrder(board).filter((key) => key in byId).map((key) => byId[key]);
+  return gridOrder(board).filter((key) => Object.hasOwn(byId, key)).map((key) => byId[key]);
 }
 
 export function imagesById(board) {
@@ -619,7 +625,7 @@ export function linkTarget(document, button) {
   const link = button.load_board;
   if (!isObject(link)) return "";
   const wanted = text(link.id);
-  if (wanted in document.boards) return wanted;
+  if (Object.hasOwn(document.boards, wanted)) return wanted;
   const path = text(link.path);
   if (path) {
     for (const boardId of Object.keys(document.boards)) {
@@ -1261,7 +1267,7 @@ export async function readObz(bytes, name = "This file") {
     let board = readJson(members, member, name);
     if (!isObject(board)) board = {};
     const boardId = text(board.id) || key;
-    if (!(boardId in boards)) inserted.push(boardId);
+    if (!Object.hasOwn(boards, boardId)) inserted.push(boardId);
     boards[boardId] = board;
     byMember.set(member, boardId);
   }
@@ -1317,6 +1323,42 @@ export async function importObz(bytes, name = "This file") {
   const data = new Uint8Array(bytes);
   // "PK", which is where every zip starts and no JSON document does.
   const zipped = data[0] === 0x50 && data[1] === 0x4b;
-  return documentToLayout(
-    zipped ? await readObz(data, name) : readObf(data, name));
+  const document = zipped ? await readObz(data, name) : readObf(data, name);
+  wellFormed(document, name);
+  return documentToLayout(document);
+}
+
+/** Refuses, in a sentence, a board whose lists are not lists.
+ *
+ * Everything after this walks `buttons`, `images`, `sounds` and
+ * `grid.order` with for-of, and a foreign file that put a number or an object
+ * where a list goes surfaced as "x is not iterable" from three functions down
+ * - a TypeError, which the import door reports as a fault in this page. It is
+ * a fault in the file, and this says which board and which field. Absent is
+ * fine everywhere: every reader falls back to an empty list. */
+function wellFormed(document, name: string): void {
+  const notList = (value: unknown) => value !== undefined && value !== null
+    && !Array.isArray(value);
+  for (const [boardId, board] of Object.entries(document.boards ?? {})) {
+    if (!isObject(board)) continue;
+    const said = (field: string) => new Error(
+      `${name}: board "${boardId}" has a "${field}" that is not a list.`);
+    for (const field of ["buttons", "images", "sounds"]) {
+      if (notList(board[field])) throw said(field);
+    }
+    const grid = board.grid;
+    if (grid === undefined || grid === null) continue;
+    if (!isObject(grid)) throw new Error(
+      `${name}: board "${boardId}" has a "grid" that is not an object.`);
+    if (notList(grid.order)) throw said("grid.order");
+    for (const row of grid.order ?? []) {
+      if (notList(row)) throw said("grid.order row");
+    }
+    // Only the hole, which every reader dereferences. A button that is a
+    // number or a string reads as one with no id, which they already handle.
+    for (const button of board.buttons ?? []) {
+      if (button === null || button === undefined) throw new Error(
+        `${name}: board "${boardId}" has an empty entry in "buttons".`);
+    }
+  }
 }
