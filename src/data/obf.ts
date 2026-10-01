@@ -195,8 +195,10 @@ export function sorted(names) {
   });
 }
 
-/** Python's isinstance(value, dict), which an array and null are not. */
-function isObject(value) {
+/** Python's isinstance(value, dict), which an array and null are not. A guard,
+ *  so that a value read out of a foreign file can be asked for its fields once
+ *  it has been asked this. */
+function isObject(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
