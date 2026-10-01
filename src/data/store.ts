@@ -67,7 +67,8 @@ import type { CollectionList, CollectionRef, HeldLayout, Layout, SaveResult, Set
   from "../core/types.js";
 import { touched } from "./changed.js";
 import { adopt, adopted, isStore, pushKind, readKind } from "./folder.js";
-import { migrate, MISSING_STEP, type OldDB, type OldTx } from "./migrations.js";
+import { later, migrate, MISSING_STEP, type OldDB, type OldTx } from "./migrations.js";
+import { bringTextForward } from "./upgrade.js";
 import { type Dump } from "./rescue.js";
 
 /** The folder of files, as the callers name them.
@@ -395,7 +396,16 @@ async function mirror(): Promise<void> {
 
    The marks are not touched: which board is open here is this machine's answer,
    and a board that went away leaves `current` pointing at nothing, which the
-   reader already has to handle. */
+   reader already has to handle.
+
+   **And what comes in is brought forward, as a step would have.** The folder
+   is written by whatever version last saved to it, and the database upgrade
+   (migrations.ts) only ever sees the browser's copy - which this then replaced
+   wholesale, so a v5 layout read out of a folder landed in a v6 database with
+   four slots and the set's picture still on `BoardSet.symbol`, and
+   normalizeLayout() padded the fifth key in at the end instead of at
+   PAGE_KEY. Each record that moves gets `updatedAt` one later, like the step's,
+   so the next mirror writes the new text back and the folder catches up. */
 export async function pullFromFolder(): Promise<boolean> {
   if (!isStore() || !(await adopted())) return false;
   const db = await open();
@@ -406,8 +416,17 @@ export async function pullFromFolder(): Promise<boolean> {
   const tx = db.transaction([COLLECTIONS, LAYOUTS], "readwrite");
   await tx.objectStore(COLLECTIONS).clear();
   await tx.objectStore(LAYOUTS).clear();
-  for (const one of collections) await tx.objectStore(COLLECTIONS).put(one);
-  for (const one of layouts) await tx.objectStore(LAYOUTS).put(one);
+  const moved = new Set<string>();
+  for (const one of layouts) {
+    const next = typeof one.text === "string" ? bringTextForward(one.text) : null;
+    if (next !== null) moved.add(one.id);
+    await tx.objectStore(LAYOUTS).put(next === null ? one
+      : { ...one, text: next, updatedAt: later(one as unknown as Record<string, unknown>) });
+  }
+  for (const one of collections) {
+    await tx.objectStore(COLLECTIONS).put(moved.has(one.id)
+      ? { ...one, updatedAt: later(one) } : one);
+  }
   await tx.done;
   touched();
   return true;
