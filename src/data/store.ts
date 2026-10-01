@@ -364,13 +364,40 @@ export async function wipeEverything(): Promise<void> {
   touched();
 }
 
+/** The keys a layout holds something on, either kind.
+ *
+ * It read `layout.buttons`, which no layout has - a talker's keys are
+ * `sets[].slots` and a tablet's are `pages[].buttons` - so the wipe question
+ * said "0 Tasten" over every household's boards. A key counts where it holds a
+ * word or a picture, because that is what is lost; the five panels a new page
+ * starts with are not somebody's work. */
+function keysIn(layout: unknown): number {
+  const listed = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  const held = (key: unknown): boolean => {
+    if (!key || typeof key !== "object") return false;
+    const one = key as { text?: unknown; label?: unknown; symbol?: unknown; image?: unknown };
+    return [one.text, one.label, one.symbol, one.image]
+      .some((field) => typeof field === "string" && field.trim() !== "");
+  };
+  if (!layout || typeof layout !== "object") return 0;
+  const { sets, pages } = layout as { sets?: unknown; pages?: unknown };
+  let count = 0;
+  for (const set of listed(sets)) {
+    for (const slot of listed((set as { slots?: unknown })?.slots)) if (held(slot)) count++;
+  }
+  for (const page of listed(pages)) {
+    for (const button of listed((page as { buttons?: unknown })?.buttons)) if (held(button)) count++;
+  }
+  return count;
+}
+
 /** How much has to go, so the asking can count it. */
 export async function boardTotals(): Promise<{ sammlungen: number; tasten: number }> {
   const db = await open();
   const [collections, layouts] = await Promise.all([db.getAll(COLLECTIONS), db.getAll(LAYOUTS)]);
   let tasten = 0;
   for (const one of layouts) {
-    try { tasten += (JSON.parse(String(one.text)) as { buttons?: unknown[] }).buttons?.length ?? 0; }
+    try { tasten += keysIn(JSON.parse(String(one.text))); }
     catch { /* A layout this build cannot read still counts as a Sammlung. */ }
   }
   return { sammlungen: collections.length, tasten };
