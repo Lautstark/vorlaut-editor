@@ -388,14 +388,15 @@ def cap_from_the_page() -> int:
 
     Out of the source rather than written down here, for the reason
     check_the_module_still_says_the_format() gives: a number restated in a test
-    agrees with itself for ever. MAX_SETS is LIMITS.maxSets, so this reads the
-    table that declares it.
+    agrees with itself for ever. MAX_SETS is LIMITS.maxSets, which is
+    src/device/layout_facts.ts's MAX_SETS, so this reads the file that declares
+    it.
     """
-    found = re.search(r'^export const LIMITS = \{"maxSets": (\d+)\};',
-                      (ROOT / "src" / "core" / "boot_data.ts").read_text(
+    found = re.search(r'^export const MAX_SETS = (\d+);',
+                      (ROOT / "src" / "device" / "layout_facts.ts").read_text(
                           encoding="utf-8"), re.M)
     if not found:
-        raise SystemExit("src/core/boot_data.ts no longer declares LIMITS.maxSets")
+        raise SystemExit("src/device/layout_facts.ts no longer declares MAX_SETS")
     return int(found.group(1))
 
 

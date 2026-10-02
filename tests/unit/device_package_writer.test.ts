@@ -3,9 +3,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 /* The writer's half of src/data/device_package.ts, and nothing else out of it.
- * readDevicePackage(), planLayout(), wavFormat() and wavSeconds() are the
- * reader's names and are deliberately absent - see "what this file may not
- * import" at the foot. */
+ * wavFormat(), wavSeconds() and isDeviceWav() check what a reader checks and
+ * are deliberately absent - see "what this file may not import" at the foot.
+ * The module's own reader, readDevicePackage() and planLayout(), is gone
+ * since 2026-10-01: the loader's is the only one. */
 import {
   buildDevicePackage, devicePackageBytes, digest, sniffImageType,
   type DeviceSound, type DeviceSource,
@@ -277,6 +278,10 @@ describe("what this file may not import", () => {
      * same rule, and this is the half of it that can be checked here. */
     const source = readFileSync(new URL(import.meta.url), "utf8");
     const imports = source.slice(0, source.indexOf("const HERE"));
+    /* readDevicePackage and planLayout stay on the list although the module
+     * no longer has them: a reader brought back to make a check here "work"
+     * is the exact edit this exists to stop, and it would come back under its
+     * old name. */
     for (const name of ["readDevicePackage", "planLayout", "compileDevice",
                         "readPackageFile", "wavFormat", "wavSeconds",
                         "isDeviceWav"]) {

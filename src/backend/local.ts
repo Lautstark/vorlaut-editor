@@ -957,7 +957,7 @@ export async function exportDevicePackage(
   let missing = 0;
   const references = new Set<string>();
   for (const set of plan.sets) {
-    if (set.symbol) references.add(set.symbol);
+    if (set.key.symbol) references.add(set.key.symbol);
     for (const slot of set.slots) if (slot.symbol) references.add(slot.symbol);
   }
   for (const reference of references) {

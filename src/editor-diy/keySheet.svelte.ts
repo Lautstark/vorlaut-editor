@@ -19,7 +19,7 @@ import type { Left } from "../shell/sheet.svelte.js";
 import { dropdown, type Choice, type Dropdown } from "../shell/dropdown.svelte.js";
 import KeyRows from "./KeyRows.svelte";
 import {
-  at, board, chosenAs, commit, mint, printsName, set, setName,
+  at, board, chosenAs, commit, mint, saysName, set, setName,
 } from "./standing.svelte.js";
 
 interface Draft { text: string; symbol: string; negated: boolean }
@@ -35,8 +35,8 @@ export interface KeySheet {
   readonly note: string;
   readonly leads: boolean;
   readonly speaks: boolean;
-  /** The page's name as the placeholder on the panel the firmware prints it on,
-   *  and only there. */
+  /** The page's name as the placeholder on the page-key panel, where an
+   *  empty key says it, and only there. */
   readonly placeholder: string;
   /** The sentence under the field, which differs on that one seat. */
   readonly spokenNote: string;
@@ -81,12 +81,14 @@ function openKeySheet(index: number): Promise<Left> {
      * would come back out of Fertig carrying a word it never had. It would also
      * come loose - renaming the page afterwards would leave the typed copy
      * behind, still saying the old name with nothing on screen to say why. */
-    get placeholder() { return printsName(index) ? entry.name.trim() : ""; },
+    // setName() rather than the bare name, so that an unnamed page offers and
+    // plays "Seite N" - what the cell, devicePlan() and the talker say.
+    get placeholder() { return saysName(index) ? setName(entry, at()).trim() : ""; },
     get spokenNote() {
-      return printsName(index) ? t("ui.diy_set_spoken_note") : t("ui.diy_key_spoken_note");
+      return saysName(index) ? t("ui.diy_set_spoken_note") : t("ui.diy_key_spoken_note");
     },
     get saying() {
-      return draft.text.trim() || (printsName(index) ? entry.name.trim() : "");
+      return draft.text.trim() || (saysName(index) ? setName(entry, at()).trim() : "");
     },
   };
 
@@ -199,6 +201,6 @@ export async function editKey(index: number): Promise<void> {
 }
 
 /* PAGE_KEY is imported for the seat question in standing.svelte.ts's
- * printsName(); it is named here only so that a reader looking for where the
+ * saysName(); it is named here only so that a reader looking for where the
  * placeholder rule comes from finds the constant rather than a number. */
 void PAGE_KEY;

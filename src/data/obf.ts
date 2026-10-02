@@ -54,6 +54,7 @@
 // opened on a tablet.
 
 import { LIMITS } from "../core/boot_data.js";
+import { t } from "../core/boot.js";
 import { reason } from "../core/errors.js";
 import {
 
@@ -194,8 +195,10 @@ export function sorted(names) {
   });
 }
 
-/** Python's isinstance(value, dict), which an array and null are not. */
-function isObject(value) {
+/** Python's isinstance(value, dict), which an array and null are not. A guard,
+ *  so that a value read out of a foreign file can be asked for its fields once
+ *  it has been asked this. */
+function isObject(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -310,13 +313,19 @@ export function order(document) {
   /* Board ids, in the order a device walks them. Annotated because an empty
      literal has no element type to infer. */
   const seen: string[] = [];
-  const queue = document.root in document.boards ? [document.root] : [];
+  /* Object.hasOwn rather than `in`, here and wherever a board id or a
+     button id is looked up in a plain object: ids are somebody else's
+     strings, and `"constructor" in {}` is true. A foreign board linking to
+     `constructor`, or a button called `toString`, found a function where a
+     board or a button should have been and threw a TypeError nobody could
+     read. */
+  const queue = Object.hasOwn(document.boards, document.root) ? [document.root] : [];
   while (queue.length) {
     const current = queue.shift();
     if (seen.includes(current)) continue;
     seen.push(current);
     queue.push(...targetsOf(document, current).filter(
-      (t) => t in document.boards));
+      (t) => Object.hasOwn(document.boards, t)));
   }
   seen.push(...sorted(Object.keys(document.boards).filter(
     (b) => !seen.includes(b))));
@@ -513,8 +522,8 @@ export function grid(boardId) {
  * Asked for one thing only, and it is worth saying what it is *not* asked for
  * any more: which button is the page key. That is the cell now, on every board
  * alike. What is left is a caption - a key on the page-key panel with no word
- * of its own is written out carrying the page's name, because that is what the
- * firmware prints there, and only a board written under that convention may
+ * of its own is written out carrying the page's name, because that is the
+ * word it says, and only a board written under that convention may
  * have the name read back off it as nothing. On a phone's board of sixty
  * buttons a label that happens to match the board's name is a word somebody
  * typed, and it stays one.
@@ -575,7 +584,7 @@ export function keysInCells(board) {
                  cells[1]![0], cells[1]![1], cells[1]![2]].map((one) => text(one));
   const byId = {};
   for (const button of board.buttons || []) byId[text(button.id)] = button;
-  const placed = named.map((id) => (id && id in byId ? byId[id] : undefined));
+  const placed = named.map((id) => (id && Object.hasOwn(byId, id) ? byId[id] : undefined));
   // Buttons the grid leaves out are appended rather than dropped, which is
   // gridOrder()'s own rule and for its own reason: OBF lets a board carry more
   // buttons than the grid shows, and losing one silently on import is how a
@@ -586,7 +595,7 @@ export function keysInCells(board) {
 export function buttonsInOrder(board) {
   const byId = {};
   for (const button of board.buttons || []) byId[text(button.id)] = button;
-  return gridOrder(board).filter((key) => key in byId).map((key) => byId[key]);
+  return gridOrder(board).filter((key) => Object.hasOwn(byId, key)).map((key) => byId[key]);
 }
 
 export function imagesById(board) {
@@ -618,7 +627,7 @@ export function linkTarget(document, button) {
   const link = button.load_board;
   if (!isObject(link)) return "";
   const wanted = text(link.id);
-  if (wanted in document.boards) return wanted;
+  if (Object.hasOwn(document.boards, wanted)) return wanted;
   const path = text(link.path);
   if (path) {
     for (const boardId of Object.keys(document.boards)) {
@@ -656,7 +665,7 @@ export function documentToLayout(document) {
    * stable if the same Sammlung goes back out and comes in again. */
   const pointedAt = new Set<string>();
 
-  for (const boardId of ids) {
+  for (const [position, boardId] of ids.entries()) {
     const board = document.boards[boardId];
     const images = imagesById(board);
     const name = text(board.name) || boardId;
@@ -700,7 +709,7 @@ export function documentToLayout(document) {
        *
        * And the one place the page-key panel is different, on this file's own
        * boards: a key there with no word of its own was written out carrying
-       * the page's name, because that is what the firmware prints on it. Read
+       * the page's name, because that is the word an empty one says. Read
        * back as the nothing it was, or a round trip would quietly type the
        * name onto the key - and renaming the page afterwards would leave the
        * copy behind, still saying what the page used to be called.
@@ -711,9 +720,19 @@ export function documentToLayout(document) {
        * the name as its vocalization too. What comes back is a key saying the
        * page's name either way, since the same fallback runs on the way out
        * again - so the reading that keeps the field empty is the one that
-       * leaves a Sammlung exactly as it was found. */
+       * leaves a Sammlung exactly as it was found.
+       *
+       * An unnamed page is the one case where the word is not the name: the
+       * device door says "Seite N" for it, as the editor does - devicePlan()
+       * and setName(). So on a board with no name, that is the word read back
+       * as nothing. In the language the page is in now, which is the one it
+       * was written in unless somebody switched between export and import;
+       * then the key keeps the number as a word, which is visible and
+       * harmless. */
       const word = text(button.vocalization || button.label);
-      const captioned = ours && at === PAGE_KEY && word === name;
+      const unnamed = !text(board.name)
+        && word === t("ui.set_n", { n: position + 1 });
+      const captioned = ours && at === PAGE_KEY && (word === name || unnamed);
       slots.push({
         text: captioned ? "" : word,
         symbol,
@@ -1250,7 +1269,7 @@ export async function readObz(bytes, name = "This file") {
     let board = readJson(members, member, name);
     if (!isObject(board)) board = {};
     const boardId = text(board.id) || key;
-    if (!(boardId in boards)) inserted.push(boardId);
+    if (!Object.hasOwn(boards, boardId)) inserted.push(boardId);
     boards[boardId] = board;
     byMember.set(member, boardId);
   }
@@ -1306,6 +1325,42 @@ export async function importObz(bytes, name = "This file") {
   const data = new Uint8Array(bytes);
   // "PK", which is where every zip starts and no JSON document does.
   const zipped = data[0] === 0x50 && data[1] === 0x4b;
-  return documentToLayout(
-    zipped ? await readObz(data, name) : readObf(data, name));
+  const document = zipped ? await readObz(data, name) : readObf(data, name);
+  wellFormed(document, name);
+  return documentToLayout(document);
+}
+
+/** Refuses, in a sentence, a board whose lists are not lists.
+ *
+ * Everything after this walks `buttons`, `images`, `sounds` and
+ * `grid.order` with for-of, and a foreign file that put a number or an object
+ * where a list goes surfaced as "x is not iterable" from three functions down
+ * - a TypeError, which the import door reports as a fault in this page. It is
+ * a fault in the file, and this says which board and which field. Absent is
+ * fine everywhere: every reader falls back to an empty list. */
+function wellFormed(document, name: string): void {
+  const notList = (value: unknown) => value !== undefined && value !== null
+    && !Array.isArray(value);
+  for (const [boardId, board] of Object.entries(document.boards ?? {})) {
+    if (!isObject(board)) continue;
+    const said = (field: string) => new Error(
+      `${name}: board "${boardId}" has a "${field}" that is not a list.`);
+    for (const field of ["buttons", "images", "sounds"]) {
+      if (notList(board[field])) throw said(field);
+    }
+    const grid = board.grid;
+    if (grid === undefined || grid === null) continue;
+    if (!isObject(grid)) throw new Error(
+      `${name}: board "${boardId}" has a "grid" that is not an object.`);
+    if (notList(grid.order)) throw said("grid.order");
+    for (const row of grid.order ?? []) {
+      if (notList(row)) throw said("grid.order row");
+    }
+    // Only the hole, which every reader dereferences. A button that is a
+    // number or a string reads as one with no id, which they already handle.
+    for (const button of board.buttons ?? []) {
+      if (button === null || button === undefined) throw new Error(
+        `${name}: board "${boardId}" has an empty entry in "buttons".`);
+    }
+  }
 }

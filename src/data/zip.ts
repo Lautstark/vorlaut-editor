@@ -165,6 +165,15 @@ export async function zipBytes(members: readonly ZipMember[]): Promise<Uint8Arra
   }
 
   const directorySize = central.reduce((total, one) => total + one.length, 0);
+  // Classic zip counts members in sixteen bits and offsets in thirty-two, and a
+  // DataView setter wraps a number that does not fit rather than refusing it:
+  // an archive past either limit would be written, and be a different archive
+  // than the one asked for, with nothing said. This writer has no Zip64, so it
+  // says so instead. A package that size is not one a tablet would open anyway.
+  if (members.length > 0xffff || offset > 0xffffffff || directorySize > 0xffffffff) {
+    throw new RangeError(
+      `zipBytes: ${members.length} members, ${offset} bytes - past what a zip without Zip64 can say`);
+  }
   const end = new Uint8Array(22);
   const tail = new DataView(end.buffer);
   tail.setUint32(0, END, true);

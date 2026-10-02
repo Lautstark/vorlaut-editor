@@ -30,10 +30,11 @@
 // beside a build that lived in IndexedDB and went down a cable from the same
 // page. That build is gone from the editor - adr/0011 - and what is left is
 // this: the editor writes the file, loader/ reads it, compiles it and sends
-// it, and neither half knows the other exists. Both halves of the round trip
-// are still here, readDevicePackage() below and compileDevice() in
-// loader/src/compile.ts, and the claim they make together is unchanged: the
-// file turns back into exactly the bytes a talker holds.
+// it, and neither half knows the other exists. The reading half is the
+// loader's alone - loader/src/device_package.ts and compileDevice() in
+// vorlaut-diy-talker. A second reader stayed here after the split, with nothing
+// but a test forbidding its import to call it, and went on 2026-10-01: a
+// reader nobody runs is a second opinion about the format that nothing checks.
 //
 // device/fixtures/package/ is where the two halves are held to it, and they
 // are held to it SEPARATELY: the writer must produce a package the fixtures
@@ -113,7 +114,7 @@
 // data/app_package.ts is the door the same acts go through for the tablet.
 //
 // A marker field saying "this one is compilable" was considered and left out.
-// readDevicePackage() refuses a package it cannot compile by looking at what is
+// The loader's reader refuses a package it cannot compile by looking at what is
 // actually there - an image entry with no bytes behind it, a sound that is not
 // a 16 kHz mono WAV - and a structural check beats a flag, because a flag can
 // be written by a wrong writer too. docs/device-interface.md §6 is the reason
@@ -147,6 +148,7 @@ import {
 import { HASH_BYTES, SLOTS_PER_SET } from "../device/layout_facts.js";
 import { zipBytes, type ZipMember } from "./zip.js";
 import { PAGE_KEY, actOf } from "../core/types.js";
+import { t } from "../core/boot.js";
 import type { DiyLayout, Slot, SlotAct } from "../core/types.js";
 
 export const FORMAT = "open-board-0.1";
@@ -165,7 +167,6 @@ const AUDIO_NAME = new RegExp(`^a[0-9a-f]{${HASH_BYTES * 2}}\\.wav$`);
 
 /* ------------------------------------------------------------- reading --- */
 
-/** One slot, as the device build reads it. */
 /** What one press does, in the device interface's own three words.
  *
  * `Slot.act` is the editor's vocabulary and this is the file format's, and the
@@ -193,13 +194,10 @@ export interface DeviceKey {
   target: number;
 }
 
-export interface DeviceSlot {
-  text: string;
-  /** The picture reference, "" for none. Not crossed out: see `negated`. */
-  symbol: string;
-  negated: boolean;
-  does: DeviceDoes;
-  target: number;
+/** One of the four keys the file calls slots: a key, and whether it holds
+ *  anything. The page key is a DeviceKey without `empty`, because the compiler
+ *  never draws a blank for it. */
+export interface DeviceSlot extends DeviceKey {
   /** slotIsEmpty(), asked once and carried.
    *
    *  Carried rather than re-derived at each of the three places that want it,
@@ -222,12 +220,6 @@ export interface DeviceSlot {
  */
 export interface DeviceSet {
   name: string;
-  /** The page key's picture reference, "" for none.
-   *
-   *  Kept beside `key` rather than folded into it, because it is where it was
-   *  before that key had anything else and moving it would rewrite every
-   *  caller to say the same thing. `key.symbol` carries the same string. */
-  symbol: string;
   /** The key on the page-key panel - core/types.ts's PAGE_KEY, which is a key
    *  like the other four since adr/0020. */
   key: DeviceKey;
@@ -297,7 +289,7 @@ export function devicePlan(layout: DiyLayout, voice: string): DevicePlan {
     language: String(layout.language ?? ""),
     voice: String(voice ?? ""),
     sleepTimeoutSeconds: Number(layout.sleep_timeout_seconds ?? 0),
-    sets: sets.map((set) => {
+    sets: sets.map((set, index) => {
       const slots = set?.slots ?? [];
       /* The five keys, sorted into the two places the file keeps them. The
        * page key is the one on PAGE_KEY's panel and the other four follow it
@@ -314,12 +306,18 @@ export function devicePlan(layout: DiyLayout, voice: string): DevicePlan {
       const page = keyed(slots[PAGE_KEY]);
       return {
         name: String(set?.name ?? ""),
-        symbol: page.symbol,
         key: {
           ...page,
-          // What the panel says, which is the key's own word or else the name
-          // the firmware prints there - see PAGE_KEY.
-          text: page.text || String(set?.name ?? ""),
+          // What the key says: its own word, or else what the page is called -
+          // see PAGE_KEY. **Called as the editor calls it**, which is
+          // standing.svelte.ts's setName(): the name, or "Seite N" for a page
+          // nobody named. This said `set.name` alone, so a page key with no
+          // word on an unnamed page was ▶ "Seite 1" in the editor and silence
+          // on the talker. The two rules are one rule written twice, because
+          // setName() reads the reactive table a component redraws from and
+          // this reads the plain one; the label table is what keeps them one.
+          text: page.text || String(set?.name ?? "")
+            || t("ui.set_n", { n: index + 1 }),
         },
         slots: slots.filter((_, at) => at !== PAGE_KEY)
           .slice(0, SLOTS_PER_SET).map((slot) => ({
@@ -330,31 +328,6 @@ export function devicePlan(layout: DiyLayout, voice: string): DevicePlan {
     }),
   };
 }
-
-/** The plan back as the Layout renderLayoutBin() reads.
- *
- * That function wants a layout rather than a plan, and it is device-format
- * code that this file has no business reshaping. So the plan is handed back in
- * the shape it asks for, which is also the proof that nothing was lost on the
- * way through: every field it reads is one the plan carries. */
-export const planLayout = (plan: DevicePlan): DiyLayout => ({
-  language: plan.language,
-  voice: plan.voice,
-  sleep_timeout_seconds: plan.sleepTimeoutSeconds,
-  sets: plan.sets.map((set) => {
-    const said = (one: { text: string; symbol: string; negated: boolean }) =>
-      ({ text: one.text, symbol: one.symbol, negated: one.negated });
-    // The file's order back into the board's: the page key returns to its own
-    // panel and the four fill the cells around it. devicePlan() above is the
-    // way out and this is the way back, so the two tables are one.
-    const slots = set.slots.map(said);
-    return {
-      name: set.name,
-      slots: [...slots.slice(0, PAGE_KEY), said(set.key),
-              ...slots.slice(PAGE_KEY)],
-    };
-  }),
-});
 
 /* -------------------------------------------------------------- shapes --- */
 
@@ -537,14 +510,53 @@ export function sniffImageType(bytes: Uint8Array): string {
   if (starts(0xff, 0xd8, 0xff)) return "image/jpeg";
   if (starts(0x47, 0x49, 0x46, 0x38)) return "image/gif";
   if (starts(0x52, 0x49, 0x46, 0x46) && bytes.length > 12
-      && starts(0x52, 0x49, 0x46, 0x46) && [0x57, 0x45, 0x42, 0x50]
+      && [0x57, 0x45, 0x42, 0x50]
         .every((byte, at) => bytes[8 + at] === byte)) return "image/webp";
-  // SVG is text and has no magic number. The declaration is optional, so both
-  // openings are looked for, and only at the very start - a "<svg" further in
-  // is a string in some other document.
-  const head = new TextDecoder().decode(bytes.slice(0, 256)).trimStart();
-  if (head.startsWith("<svg") || head.startsWith("<?xml")) return "image/svg+xml";
-  return "application/octet-stream";
+  // SVG is text and has no magic number, so it is recognised by its first
+  // element - after everything XML allows in front of it. A declaration, a
+  // comment and a DOCTYPE are all legal there, and all three are what a vector
+  // program writes: Illustrator opens with a generator comment, and older
+  // exports with <!DOCTYPE svg PUBLIC ...>. Looking only at the first bytes
+  // answered octet-stream for those, and the device drew a grey cross for a
+  // picture that was perfectly good. Only the prolog is skipped - a "<svg"
+  // after any element is a string in some other document.
+  return svgRoot(new TextDecoder().decode(bytes.slice(0, 4096)))
+    ? "image/svg+xml" : "application/octet-stream";
+}
+
+/** Whether a text's first element is <svg>, past a BOM, whitespace, an XML
+ *  declaration, processing instructions, comments and a DOCTYPE. A DOCTYPE
+ *  with an internal subset is skipped bracket and all. */
+function svgRoot(text: string): boolean {
+  let at = text.charCodeAt(0) === 0xfeff ? 1 : 0;
+  for (;;) {
+    while (at < text.length && /\s/.test(text[at]!)) at++;
+    const rest = text.slice(at);
+    if (rest.startsWith("<?")) {
+      const end = text.indexOf("?>", at + 2);
+      if (end < 0) return false;
+      at = end + 2;
+    } else if (rest.startsWith("<!--")) {
+      const end = text.indexOf("-->", at + 4);
+      if (end < 0) return false;
+      at = end + 3;
+    } else if (/^<!DOCTYPE/i.test(rest)) {
+      const subset = text.indexOf("[", at);
+      const close = text.indexOf(">", at);
+      if (close < 0) return false;
+      if (subset >= 0 && subset < close) {
+        const end = text.indexOf("]", subset);
+        if (end < 0) return false;
+        const after = text.indexOf(">", end);
+        if (after < 0) return false;
+        at = after + 1;
+      } else {
+        at = close + 1;
+      }
+    } else {
+      return /^<svg[\s>/]/.test(rest);
+    }
+  }
 }
 
 /** A short content hash, which is what a source is named for.
@@ -565,9 +577,10 @@ export async function digest(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
  *
  * A resolved one is named for its content hash, which an unresolved one has
  * none of - there are no bytes. The reference itself is what is left, and it
- * is unique within the board by construction, so it is used directly with the
- * characters an OBF id should not carry replaced. It never names a member of
- * the archive: there is no member.
+ * is used with the characters an OBF id should not carry replaced. That
+ * replacing can fold two references into one id, so putImage() claims it
+ * rather than trusting it. It never names a member of the archive: there is
+ * no member.
  */
 const unresolvedId = (reference: string): string =>
   `none-${reference.replace(/[^A-Za-z0-9._-]+/g, "-")}`;
@@ -579,8 +592,6 @@ function splitReference(reference: string): { set: string; filename: string } {
     : { set: OWN_SET, filename: reference };
 }
 
-const joinReference = (set: string, filename: string): string =>
-  !filename ? "" : set === METACOM_SET ? `${METACOM_SET}:${filename}` : filename;
 
 /* ---------------------------------------------------------------- WAVs --- */
 
@@ -709,6 +720,24 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
   for (const [index, set] of plan.sets.entries()) {
     const id = ids[index]!;
     const images = new Map<string, DeviceImageEntry>();
+    /* Which id each reference was given on this board. An entry is a
+     * REFERENCE - its `symbol` is what the file imports back as - so two
+     * references are two entries even where their bytes are one member. They
+     * used to share the id their content hash gave them, the second entry
+     * overwrote the first, and a key holding somebody's own upload came back
+     * as a METACOM reference that happened to have the same pixels. */
+    const idOf = new Map<string, string>();
+    const claim = (base: string, reference: string): string => {
+      const had = idOf.get(reference);
+      if (had) return had;
+      // The plain id for the first reference to want it, which is every
+      // reference on a board that has no such pair - so a package without one
+      // is the file it always was. A second one counts up.
+      let id = base;
+      for (let n = 2; images.has(id); n++) id = `${base}-${n}`;
+      idOf.set(reference, id);
+      return id;
+    };
     const sounds = new Map<string, DeviceSoundEntry>();
     const buttons: DeviceButton[] = [];
 
@@ -732,14 +761,20 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
     const putImage = (reference: string): string | undefined => {
       if (!reference) return undefined;
       const source = input.sources.get(reference);
+      // The id by reference, the member by content: the same bytes behind two
+      // references are one file in images/ and two entries pointing at it.
+      // An unresolved one is claimed the same way, because unresolvedId()
+      // folds characters together - `metacom:Haus` and `metacom-Haus` are
+      // one id after it and two references before.
       const entry: DeviceImageEntry = source
         ? {
-            id: `img-${source.key}`,
+            id: claim(`img-${source.key}`, reference),
             path: `images/${source.key}.${EXTENSIONS[source.contentType] ?? "bin"}`,
             content_type: source.contentType,
             symbol: splitReference(reference),
           }
-        : { id: `img-${unresolvedId(reference)}`, symbol: splitReference(reference) };
+        : { id: claim(`img-${unresolvedId(reference)}`, reference),
+            symbol: splitReference(reference) };
       images.set(entry.id, entry);
       if (source && entry.path) files.set(entry.path, source.bytes);
       return entry.id;
@@ -791,7 +826,7 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
       // A target past the end is a set that is not there. devicePlan() already
       // turns that into `speak`, so nothing reaches here - and if the two ever
       // disagree, a button naming a board the package does not hold is the one
-      // shape readDevicePackage() refuses outright.
+      // shape the loader's reader refuses outright.
       if (to === undefined) return;
       button.load_board = {
         id: to,
@@ -829,13 +864,19 @@ export function buildDevicePackage(input: DeviceInput): DevicePackage {
     // it has always sat in buttons[]; the grid is what says where it is drawn.
     const switchKey: DeviceButton = {
       id: `${id}-set`,
-      // Its own word, or the name the firmware prints on that panel where it
-      // has none. devicePlan() is where the fallback is applied, so this is
-      // one field rather than a second copy of the rule.
+      // Its own word, or the page's name where it has none. devicePlan() is
+      // where the fallback is applied, so this is one field rather than a
+      // second copy of the rule. The talker draws no label at all - the panel
+      // shows the key's picture - so this is for whatever reads the file.
       label: set.key.text,
     };
-    const setPicture = putImage(set.symbol);
+    const setPicture = putImage(set.key.symbol);
     if (setPicture) switchKey.image_id = setPicture;
+    // Crossed out like any of the four, and written the same way: only when
+    // true. It was not written at all until 2026-10-01 although devicePlan()
+    // carried it, so a page key the editor drew as "nicht ja" reached the
+    // talker as "ja" - device/fixtures/package/set-key-crossed-out now asks.
+    if (set.key.negated) switchKey.ext_vorlaut_negated = true;
     // What it says, if it says anything. The text is the key's own rather than
     // the page's name, which is what it falls back to - see PAGE_KEY.
     if (set.key.does !== "go" && set.key.text) {
@@ -929,240 +970,4 @@ export async function devicePackageBytes(
       .map(([name, data]) => ({ name, data, deflate: false })),
   ];
   return await zipBytes(members);
-}
-
-/* -------------------------------------------------------------- reading --- */
-
-/** A device export read back: the plan it carries, and the bytes behind it.
- *
- * The inverse of buildDevicePackage(), and the half that makes the claim at
- * the head of this file true. Without it the export is a write-only artefact
- * and "reconstruct a device build without the editor's IndexedDB" is a slogan.
- */
-export interface ReadDevicePackage {
-  plan: DevicePlan;
-  /** Sources by reference, as they were written. */
-  sources: Map<string, DeviceSource>;
-  /** WAVs by the sentence they say. */
-  sounds: Map<string, DeviceSound>;
-}
-
-/**
- * A device export, back as the plan and the media it holds.
- *
- * Takes the package already unzipped, so that this file needs no zip reader:
- * the writing half is zip.ts's and the reading half belongs to whoever opened
- * the archive. obf.ts has the one importer this repository ships, and a second
- * one here would be a second opinion about central directories.
- *
- * Refuses rather than guesses. A board this cannot read is a device that
- * parses and is wrong, which docs/device-interface.md §6 is a whole section
- * about: a key that says the wrong sentence is worse than one that says
- * nothing, because it is said to somebody who believes it.
- */
-export function readDevicePackage(pkg: DevicePackage): ReadDevicePackage {
-  const order = Object.keys(pkg.manifest?.paths?.boards ?? {});
-  if (!order.length) throw new Error("This package names no boards.");
-
-  const byBoardId = new Map(pkg.boards.map((board) => [board.id, board]));
-  // The ring is the order, and the order is the ring: set N's key loads set
-  // N+1 and the last comes back round to the first. Following it rather than
-  // trusting the manifest's key order, because a manifest is an index that any
-  // tool may rewrite and the ring is what the device actually cycles.
-  const rootId = stemOf(String(pkg.manifest.root ?? ""));
-  const walked: DeviceBoard[] = [];
-  const seen = new Set<string>();
-  // Every board a key can reach, breadth first from the root, because a set is
-  // no longer reached only by the set key: since adr/0020 any of the four
-  // speech keys may carry a `load_board` too. Following one edge per board -
-  // which is what this did while the set key was the only key that led
-  // anywhere - now stops at whichever button happens to be first, and reports
-  // a Sammlung with unreachable sets in it.
-  const queue: string[] = [rootId];
-  while (queue.length) {
-    const at = queue.shift()!;
-    if (seen.has(at)) continue;
-    const board = byBoardId.get(at);
-    if (!board) throw new Error(`This package names a board it does not hold: ${at}`);
-    seen.add(at);
-    walked.push(board);
-    for (const button of board.buttons ?? []) {
-      const next = button.load_board?.id;
-      if (next && !seen.has(next)) queue.push(next);
-    }
-  }
-  if (walked.length !== byBoardId.size) {
-    throw new Error(
-      "The ring in this package does not reach every board in it, so the " +
-      "order the device would cycle them in is not the order they are filed " +
-      `under - ${walked.length} reached of ${byBoardId.size}.`);
-  }
-
-  const sources = new Map<string, DeviceSource>();
-  const sounds = new Map<string, DeviceSound>();
-  const root = walked[0]!;
-  const sets: DeviceSet[] = [];
-  /** Where each board sits in the order above, so a `load_board` becomes the
-   *  set index the file holds. */
-  const indexOf = new Map(walked.map((board, index) => [board.id, index]));
-
-  /** Which button is the set key: the one in the last row's first cell.
-   *
-   * By where it sits and no longer by its being the only button that leads
-   * anywhere - a speech key may lead somewhere now, and a set key may lead
-   * nowhere. The grid is what the device reads it from, so it is what this
-   * reads it from too. */
-  const setKeyOf = (board: DeviceBoard): DeviceButton | undefined => {
-    const rows = board.grid?.order ?? [];
-    const named = rows.length ? rows[rows.length - 1]?.[0] : null;
-    if (!named) return undefined;
-    const found = board.buttons?.find((one) => one.id === named);
-    if (!found) {
-      throw new Error(
-        `${board.id} puts a button in the set key's cell that the board does ` +
-        `not hold: ${named}. Every other button would then be a speech key, ` +
-        "and the device would show five words and no set.");
-    }
-    return found;
-  };
-
-  /** What a button does, out of what it carries. */
-  const actOfButton = (button: DeviceButton | undefined)
-      : { does: DeviceDoes; target: number } => {
-    const next = button?.load_board?.id;
-    if (!next) return { does: "speak", target: 0 };
-    const target = indexOf.get(next);
-    if (target === undefined) return { does: "speak", target: 0 };
-    return {
-      does: button?.ext_lautstark_speak_on_navigate === true ? "speak-and-go" : "go",
-      target,
-    };
-  };
-
-  for (const board of walked) {
-    const images = new Map(board.images?.map((one) => [one.id, one]) ?? []);
-    const soundEntries = new Map(board.sounds?.map((one) => [one.id, one]) ?? []);
-
-    /** The reference behind a button's picture, and the bytes filed with it. */
-    const referenceOf = (button: DeviceButton | undefined): string => {
-      if (!button?.image_id) return "";
-      const entry = images.get(button.image_id);
-      if (!entry) {
-        throw new Error(
-          `${button.id} names a picture the board does not list: ${button.image_id}`);
-      }
-      const reference = joinReference(
-        String(entry.symbol?.set ?? OWN_SET), String(entry.symbol?.filename ?? ""));
-      if (!reference) {
-        throw new Error(
-          `${button.id} carries a picture with no reference behind it. A ` +
-          "device export writes images[].symbol beside the bytes so that the " +
-          "file still reads as a Sammlung - see the head of device_package.ts.");
-      }
-      if (!entry.path) {
-        // A gap the export recorded: this reference resolved to nothing when
-        // the file was written, and the build drew its grey cross for the same
-        // key. The reference comes back so the Sammlung is whole; no source
-        // goes in, so the compiler draws the same cross. See putImage().
-        return reference;
-      }
-      const bytes = pkg.files.get(entry.path);
-      if (!bytes) {
-        // Not the same thing as the branch above, and telling them apart is
-        // the point. An entry that declares a path and has no member behind it
-        // is either a truncated archive or a talker document from obf.ts,
-        // which carries references and no pixels on purpose. Compiling one
-        // would draw the grey cross on every single key - a talker that parses
-        // and is wrong, which docs/device-interface.md §6 is a section about.
-        throw new Error(
-          `${entry.path} is named by this package and is not in it. A device ` +
-          "export carries the source picture as a member; a talker document " +
-          "carries the reference alone and cannot be compiled.");
-      }
-      sources.set(reference, {
-        key: stemOf(entry.path),
-        bytes,
-        contentType: String(entry.content_type ?? "application/octet-stream"),
-      });
-      return reference;
-    };
-
-    const setKey = setKeyOf(board);
-    const slots: DeviceSlot[] = [];
-    for (const button of board.buttons ?? []) {
-      if (button === setKey) continue;               // the set key, taken below
-      const text = String(button.vocalization ?? button.label ?? "");
-      const symbol = referenceOf(button);
-      if (button.sound_id) {
-        const entry = soundEntries.get(button.sound_id);
-        if (!entry) {
-          throw new Error(
-            `${button.id} names a recording the board does not list: ${button.sound_id}`);
-        }
-        const bytes = pkg.files.get(entry.path);
-        if (!bytes) {
-          throw new Error(`${entry.path} is named by this package and is not in it.`);
-        }
-        const name = entry.path.slice(entry.path.lastIndexOf("/") + 1);
-        if (!AUDIO_NAME.test(name)) {
-          throw new Error(
-            `${name} is not a name layout.bin can carry, so this package ` +
-            "cannot be compiled without renaming what the device would hold.");
-        }
-        const heard = wavFormat(bytes);
-        if (!isDeviceWav(heard)) {
-          // Both halves, and the second one is the half that is useful. Saying
-          // only what the device wants leaves whoever is reading it to open
-          // the file in something that can tell them what it is; saying what
-          // arrived is usually the whole diagnosis, because the answer is
-          // nearly always one number.
-          throw new Error(
-            `${name} is not the WAV the device plays. It wants ` +
-            `${DEVICE_SAMPLE_RATE} Hz, ${DEVICE_CHANNELS} channel, ` +
-            `${DEVICE_BITS_PER_SAMPLE}-bit, and this is ` +
-            (heard
-              ? `${heard.sampleRate} Hz, ${heard.channels} channel, `
-                + `${heard.bitsPerSample}-bit`
-              : "not a RIFF/WAVE file at all - an app package's Ogg Opus is "
-                + "the usual thing to find here") +
-            ". adr/0008 is why it must not be converted into one.");
-        }
-        sounds.set(text, { name, bytes });
-      }
-      slots.push({
-        text,
-        symbol,
-        negated: button.ext_vorlaut_negated === true,
-        ...actOfButton(button),
-        // Asked of the shape the slot came back as, rather than carried in the
-        // file. The predicate is the authority and a stored answer could
-        // disagree with it - which is the divergence this whole file is the
-        // meeting point of.
-        empty: slotIsEmpty({ text, symbol }),
-      });
-    }
-
-    sets.push({
-      name: String(board.name ?? ""),
-      symbol: referenceOf(setKey),
-      key: {
-        text: String(setKey?.vocalization ?? setKey?.label ?? ""),
-        symbol: referenceOf(setKey),
-        negated: setKey?.ext_vorlaut_negated === true,
-        ...actOfButton(setKey),
-      },
-      slots,
-    });
-  }
-
-  return {
-    plan: {
-      language: String(root.locale ?? ""),
-      voice: String(root.ext_vorlaut_voice ?? ""),
-      sleepTimeoutSeconds: root.ext_vorlaut_sleep_timeout_seconds as number,
-      sets,
-    },
-    sources,
-    sounds,
-  };
 }

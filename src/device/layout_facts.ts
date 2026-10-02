@@ -1,4 +1,4 @@
-// The seven things the editor has to know about a talker, copied.
+// The nine things the editor has to know about a talker, copied.
 //
 // Every one of them is a fact about `layout.bin`, and `layout.bin` is a format
 // this repository does not implement: the writer is `loader/src/layout_format.ts`
@@ -55,6 +55,19 @@ export const KEYS_PER_SET = SLOTS_PER_SET + 1;
  *
  * Authority: `device/fixtures/names.expected.json`, field `hash_bytes`. */
 export const HASH_BYTES = 16;
+
+/** How many sets a talker has room for, and so how many pages a Sammlung may
+ *  hold - every page goes onto the device.
+ *
+ * It was LIMITS.maxSets in core/boot_data.ts until 2026-10-01: a device number
+ * outside this directory, typed across from the talker's repository and held
+ * against nothing but itself, with a comment there saying so. The editor
+ * reads it as LIMITS.maxSets still; that is now this number.
+ *
+ * Authority: `device/fixtures/layout/sets-at-max.expected.json` - `read.sets`,
+ * the most sets a file is accepted with - and `sets-past-max`, one more,
+ * refused. The pair states the number; neither does alone. */
+export const MAX_SETS = 64;
 
 /** The index the device labels its own menu by.
  *

@@ -121,6 +121,17 @@ const asRecord = (value: unknown): (Record<string, unknown> & { text: string }) 
   isRecord(value) && typeof value["text"] === "string"
     ? (value as Record<string, unknown> & { text: string }) : null;
 
+/** A registry row with an `updatedAt` to move, or null. */
+const asRegistered = (value: unknown): Record<string, unknown> | null =>
+  isRecord(value) ? value : null;
+
+/** One millisecond after a record's own `updatedAt`: different, so a folder
+ *  mirror sees it changed, and still in the order it was. Exported for
+ *  store.ts's pullFromFolder(), which brings a folder's records forward the
+ *  same way. */
+export const later = (record: Record<string, unknown>): number =>
+  (typeof record["updatedAt"] === "number" ? record["updatedAt"] : 0) + 1;
+
 const asLayout = (value: unknown): StoredLayout | null =>
   isRecord(value) && typeof value["text"] === "string"
     && typeof value["version"] === "string"
@@ -268,11 +279,22 @@ export const STEPS: readonly Step[] = [
      * is left exactly as it is - put() is called only where something moved,
      * so a Sammlung with nothing to bring forward keeps its `updatedAt` and
      * its stamp untouched and reads back byte for byte.
+     *
+     * **A record that did move gets `updatedAt` one later**, and its registry
+     * row with it. It kept the old one until 2026-10-01, and a connected
+     * folder undid the whole step: pushKind() writes only records whose
+     * `updatedAt` differs from the folder's, so the new text never went out,
+     * and pullFromFolder() at the next start put the folder's four-slot copy
+     * back over it. One millisecond rather than Date.now(), because the
+     * registry's `updatedAt` is the sidebar's order and stamping every
+     * Sammlung with one clock reading would shuffle it - see backup.ts. Not
+     * the stamp: `version` stays, for the reason the paragraph above gives.
      */
     to: 6,
     expects: ["collections", "layouts"],
     async run(_db, tx) {
       const layouts = tx.objectStore("layouts");
+      const collections = tx.objectStore("collections");
       /* getAll() rather than a cursor, and it is the shape of the data that
        * decides: the cap is LIMITS.maxSets pages in one of at most a few dozen
        * Sammlungen, which is a few megabytes at the outside, and a cursor
@@ -283,7 +305,9 @@ export const STEPS: readonly Step[] = [
         if (!record) continue;
         const next = bringTextForward(record.text);
         if (next === null) continue;
-        await layouts.put({ ...held, text: next });
+        await layouts.put({ ...held, text: next, updatedAt: later(record) });
+        const row = asRegistered(await collections.get(String(record["id"])));
+        if (row) await collections.put({ ...row, updatedAt: later(row) });
       }
     },
   },

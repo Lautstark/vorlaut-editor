@@ -152,6 +152,30 @@ describe("a version 3 database opened by version 6", () => {
     expect(list.current).toBe(KITCHEN);
   });
 
+  /* updatedAt one later on every record the step rewrote, and on its row in
+     the registry. The folder mirror writes only records whose updatedAt
+     differs from the folder's, so a step that kept it never sent its new text
+     out - and the next pull put the old one back (folder_upgrade.test.ts).
+     One later rather than now, so the order above survives. */
+  it("moves updatedAt by one on what it rewrote, so a folder mirror sees it", async () => {
+    await store.readCollections();
+    const raw = (name: string, id: string): Promise<any> =>
+      new Promise((done, fail) => {
+        const asked = indexedDB.open(DB_NAME);
+        asked.onerror = () => fail(asked.error);
+        asked.onsuccess = () => {
+          const db = asked.result;
+          const got = db.transaction(name).objectStore(name).get(id);
+          got.onsuccess = () => { db.close(); done(got.result); };
+        };
+      });
+    expect((await raw("collections", KITCHEN)).updatedAt).toBe(1_001);
+    expect((await raw("collections", BEDROOM)).updatedAt).toBe(2_001);
+    // A version 3 layout carried no updatedAt at all, which the mirror reads
+    // as 0; one later than that is still one the folder has not seen.
+    expect((await raw("layouts", KITCHEN)).updatedAt).toBe(1);
+  });
+
   it("keeps what is on them, and the stamp over it", async () => {
     const open = await store.readLayout();
     expect(diy(open.layout).sets[0]?.name).toBe("Morning");

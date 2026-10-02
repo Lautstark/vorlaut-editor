@@ -150,3 +150,26 @@ describe("a version with no step for it", () => {
     expect(plan(4, 4)).toEqual([]);
   });
 });
+
+describe("the rescue file", () => {
+  /* JSON writes an ArrayBuffer as {}. A speech record keeps its recording
+     inside the record, so spelling out only a value that *is* a buffer handed
+     a person a file with every sound missing from it. */
+  it("spells out bytes wherever they sit in a record", () => {
+    const sound = new Uint8Array([1, 2, 3]).buffer;
+    const dump = {
+      version: 6,
+      stores: {
+        speech: { keys: ["hallo"], values: [{ text: "hallo", audio: sound, parts: [new Uint8Array([4, 5])] }] },
+        files: { keys: ["a.png"], values: [new Uint8Array([9]).buffer] },
+      },
+    };
+    const file = JSON.parse(JSON.stringify(asFile(dump, "a notice"))) as {
+      stores: Record<string, { value: any }[]>;
+    };
+    expect(file.stores.speech[0].value).toEqual({
+      text: "hallo", audio: { base64: "AQID" }, parts: [{ base64: "BAU=" }],
+    });
+    expect(file.stores.files[0].value).toEqual({ base64: "CQ==" });
+  });
+});

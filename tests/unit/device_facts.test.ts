@@ -6,8 +6,9 @@ import { check } from "./harness.js";
 import * as facts from "../../src/device/layout_facts.js";
 import {
   SLOTS_PER_SET, KEYS_PER_SET, HASH_BYTES, LANGUAGE_CODES, DEFAULT_LANGUAGE,
-  SLEEP_MIN, SLEEP_MAX, SLEEP_DEFAULT,
+  SLEEP_MIN, SLEEP_MAX, SLEEP_DEFAULT, MAX_SETS,
 } from "../../src/device/layout_facts.js";
+import { LIMITS } from "../../src/core/boot_data.js";
 import { normalizeLayout } from "../../src/data/obf.js";
 import {
   DEVICE_SAMPLE_RATE, DEVICE_CHANNELS, DEVICE_BITS_PER_SAMPLE,
@@ -129,6 +130,24 @@ const accepted = ofKind("layout")
 }
 
 // --- sixteen bytes of hash ---------------------------------------------------
+
+/* MAX_SETS, from the pair that states it: the most sets a file is accepted
+ * with, and one more refused. Either alone says nothing - a fixture of 64 sets
+ * that parses is true of a reader with room for 65 - so both are asked. And
+ * LIMITS.maxSets is asked to be this number, because that is the name the
+ * page reads it by and a second copy of it is how this went unchecked. */
+{
+  const atMax = expectations.get("sets-at-max");
+  const pastMax = expectations.get("sets-past-max");
+  check("MAX_SETS is the count sets-at-max is accepted with",
+        atMax?.read?.result === "ok" && atMax.read.sets === MAX_SETS,
+        `${MAX_SETS} against ${atMax?.read?.sets}`);
+  check("and sets-past-max, one more, is refused",
+        pastMax?.read?.result === "LAYOUT_BAD_LENGTH",
+        String(pastMax?.read?.result));
+  check("and the page's LIMITS.maxSets is MAX_SETS",
+        LIMITS.maxSets === MAX_SETS, `${LIMITS.maxSets}`);
+}
 
 {
   const want = expectations.get("names");
@@ -264,6 +283,7 @@ for (const { listed: one, want } of ofKind("audio")) {
     ["SLOTS_PER_SET", "device/fixtures/layout/* - the stride they are laid out on"],
     ["KEYS_PER_SET", "device/fixtures/layout/* - the key each entry carries beside its slots"],
     ["HASH_BYTES", "device/fixtures/names.expected.json - hash_bytes"],
+    ["MAX_SETS", "device/fixtures/layout/sets-at-max.expected.json - read.sets"],
     ["LANGUAGE_CODES", "device/fixtures/language.expected.json - the table"],
     ["DEFAULT_LANGUAGE", "device/fixtures/language.expected.json - default_code"],
     ["SLEEP_MIN", "device/fixtures/sleep.expected.json - min"],

@@ -64,6 +64,18 @@ the three export doors, which is what all three already did. It is not a role:
 that key speaks, leads onward or stays put exactly like the other four, and
 every door finds it by the cell rather than by what it does.
 
+*Note, 2026-10-01: **the premise of this paragraph was wrong, and the rule
+survives it in a narrower form.** The firmware does not print `name` on that
+panel or anywhere on a key: `drawCurrentSet()` in vorlaut-diy-talker's
+`vorlaut.ino` draws the key's picture tile and nothing else, and a page key
+with no picture is the grey cross there. What the seat really decides is the
+key's **word**: a key there with no word of its own says the page's name. So
+the editor draws the name on that cell only where the key says it — a key that
+only leads onward shows its picture and its target, as the talker does — and
+`devicePlan()` uses the same fallback the editor's `setName()` does, "Seite N"
+for an unnamed page, where it used to say nothing. The tablet and `.obf` doors
+still write the name as that button's label, because a tablet draws labels.*
+
 `name` stays on the page rather than becoming that key's text. The device's own
 menu reads it ([ADR 0021][adr21]) and a `goto` names a page with it — and a
 copy in a key would come loose the moment somebody renamed the page.
@@ -167,9 +179,10 @@ which made that the one cell on the board that did not open what was on it.
 
 ## When somebody proposes tidying this up
 
-**"The fifth key still has that caption rule — fold it away."** It is what the
-firmware prints on that panel, so the editor either draws it or draws a board
-that is not the one on the table. What was folded away is the *role*; a caption
+**"The fifth key still has that caption rule — fold it away."** It is the word
+that key says when it has none of its own (see the note of 2026-10-01: it is
+said, not printed), so the editor either draws it where it is said or draws a
+board that does not say what the talker says. What was folded away is the *role*; a caption
 is a fact about a seat, and it is stated once per door.
 
 **"Let the strip be reordered again, just for looks."** The order is the walk

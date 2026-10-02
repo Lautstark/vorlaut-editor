@@ -67,7 +67,8 @@ import type { CollectionList, CollectionRef, HeldLayout, Layout, SaveResult, Set
   from "../core/types.js";
 import { touched } from "./changed.js";
 import { adopt, adopted, isStore, pushKind, readKind } from "./folder.js";
-import { migrate, MISSING_STEP, type OldDB, type OldTx } from "./migrations.js";
+import { later, migrate, MISSING_STEP, type OldDB, type OldTx } from "./migrations.js";
+import { bringTextForward } from "./upgrade.js";
 import { type Dump } from "./rescue.js";
 
 /** The folder of files, as the callers name them.
@@ -363,13 +364,40 @@ export async function wipeEverything(): Promise<void> {
   touched();
 }
 
+/** The keys a layout holds something on, either kind.
+ *
+ * It read `layout.buttons`, which no layout has - a talker's keys are
+ * `sets[].slots` and a tablet's are `pages[].buttons` - so the wipe question
+ * said "0 Tasten" over every household's boards. A key counts where it holds a
+ * word or a picture, because that is what is lost; the five panels a new page
+ * starts with are not somebody's work. */
+function keysIn(layout: unknown): number {
+  const listed = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  const held = (key: unknown): boolean => {
+    if (!key || typeof key !== "object") return false;
+    const one = key as { text?: unknown; label?: unknown; symbol?: unknown; image?: unknown };
+    return [one.text, one.label, one.symbol, one.image]
+      .some((field) => typeof field === "string" && field.trim() !== "");
+  };
+  if (!layout || typeof layout !== "object") return 0;
+  const { sets, pages } = layout as { sets?: unknown; pages?: unknown };
+  let count = 0;
+  for (const set of listed(sets)) {
+    for (const slot of listed((set as { slots?: unknown })?.slots)) if (held(slot)) count++;
+  }
+  for (const page of listed(pages)) {
+    for (const button of listed((page as { buttons?: unknown })?.buttons)) if (held(button)) count++;
+  }
+  return count;
+}
+
 /** How much has to go, so the asking can count it. */
 export async function boardTotals(): Promise<{ sammlungen: number; tasten: number }> {
   const db = await open();
   const [collections, layouts] = await Promise.all([db.getAll(COLLECTIONS), db.getAll(LAYOUTS)]);
   let tasten = 0;
   for (const one of layouts) {
-    try { tasten += (JSON.parse(String(one.text)) as { buttons?: unknown[] }).buttons?.length ?? 0; }
+    try { tasten += keysIn(JSON.parse(String(one.text))); }
     catch { /* A layout this build cannot read still counts as a Sammlung. */ }
   }
   return { sammlungen: collections.length, tasten };
@@ -395,7 +423,16 @@ async function mirror(): Promise<void> {
 
    The marks are not touched: which board is open here is this machine's answer,
    and a board that went away leaves `current` pointing at nothing, which the
-   reader already has to handle. */
+   reader already has to handle.
+
+   **And what comes in is brought forward, as a step would have.** The folder
+   is written by whatever version last saved to it, and the database upgrade
+   (migrations.ts) only ever sees the browser's copy - which this then replaced
+   wholesale, so a v5 layout read out of a folder landed in a v6 database with
+   four slots and the set's picture still on `BoardSet.symbol`, and
+   normalizeLayout() padded the fifth key in at the end instead of at
+   PAGE_KEY. Each record that moves gets `updatedAt` one later, like the step's,
+   so the next mirror writes the new text back and the folder catches up. */
 export async function pullFromFolder(): Promise<boolean> {
   if (!isStore() || !(await adopted())) return false;
   const db = await open();
@@ -406,8 +443,17 @@ export async function pullFromFolder(): Promise<boolean> {
   const tx = db.transaction([COLLECTIONS, LAYOUTS], "readwrite");
   await tx.objectStore(COLLECTIONS).clear();
   await tx.objectStore(LAYOUTS).clear();
-  for (const one of collections) await tx.objectStore(COLLECTIONS).put(one);
-  for (const one of layouts) await tx.objectStore(LAYOUTS).put(one);
+  const moved = new Set<string>();
+  for (const one of layouts) {
+    const next = typeof one.text === "string" ? bringTextForward(one.text) : null;
+    if (next !== null) moved.add(one.id);
+    await tx.objectStore(LAYOUTS).put(next === null ? one
+      : { ...one, text: next, updatedAt: later(one as unknown as Record<string, unknown>) });
+  }
+  for (const one of collections) {
+    await tx.objectStore(COLLECTIONS).put(moved.has(one.id)
+      ? { ...one, updatedAt: later(one) } : one);
+  }
   await tx.done;
   touched();
   return true;
@@ -896,10 +942,16 @@ export async function replaceCollections(incoming: IncomingCollection[],
   const written: {
     id: string; name: string; text: string; updatedAt: number; version: string;
   }[] = [];
-  for (const one of incoming) {
+  /* A board the file gives no time for arrives as touched now - and one
+   * millisecond before the board ahead of it in the file, because the list
+   * is the sidebar's order (newest first) and every board stamped with one
+   * clock reading tied, so the sidebar fell back to ordering by UUID: a
+   * restore shuffled the list somebody had arranged by using it. */
+  const now = Date.now();
+  for (const [at, one] of incoming.entries()) {
     const text = serialise(one.layout);
     written.push({ id: one.id || mintId(), name: one.name, text,
-                   updatedAt: one.updatedAt ?? Date.now(),
+                   updatedAt: one.updatedAt ?? now - at,
                    version: await versionOf(text) });
   }
   const list: CollectionList = {
@@ -920,6 +972,9 @@ export async function replaceCollections(incoming: IncomingCollection[],
   await layouts.clear();
   for (const one of written) {
     await collections.put({ id: one.id, name: one.name, updatedAt: one.updatedAt });
+    // The layout's own updatedAt stays "now": it is what the folder mirror
+    // compares, and a restored text has to go out even where the registry
+    // row kept the time it had.
     await layouts.put({ id: one.id, text: one.text, version: one.version, updatedAt: Date.now() });
   }
   await tx.objectStore(MARKS).put(list.current, CURRENT);

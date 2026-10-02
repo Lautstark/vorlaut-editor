@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildDevicePackage, devicePlan } from "../../src/data/device_package.js";
 import { PAGE_KEY } from "../../src/core/types.js";
+import { t } from "../../src/core/boot.js";
 import { KEYS_PER_SET } from "../../src/device/layout_facts.js";
 import type { DiyLayout } from "../../src/core/types.js";
 
@@ -174,6 +175,19 @@ describe("the key on the page-key panel", () => {
     const layout = chained(2);
     expect(layout.sets[0]!.slots[PAGE_KEY]!.text).toBe("");
     expect(devicePlan(layout, "").sets[0]!.key.text).toBe("Seite 1");
+  });
+
+  /* And on a page nobody named, what the editor calls it. The board, ▶ and
+     the key sheet all say setName() - "Seite 1" - and this said set.name
+     alone, which is "": the editor played a word the talker kept silent. */
+  it("says what the editor calls an unnamed page, rather than nothing", () => {
+    const layout = sammlung(2);
+    layout.sets[1]!.name = "";
+    layout.sets[1]!.slots[PAGE_KEY] = { text: "", symbol: "" };
+    const plan = devicePlan(layout, "");
+    expect(plan.sets[1]!.key.text).toBe(t("ui.set_n", { n: 2 }));
+    const key = setKeyOf(built(layout).boards[1]!);
+    expect(key.vocalization).toBe(t("ui.set_n", { n: 2 }));
   });
 
   it("leads onward like any other key when it is pointed somewhere", () => {

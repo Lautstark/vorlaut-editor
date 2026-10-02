@@ -4,10 +4,12 @@
    *
    * All five, and there is no second component for a fifth: what a key shows and
    * what it does are the same questions on every panel. The one thing the seat
-   * still decides is the caption - a key on the page-key panel with no word of
-   * its own shows the page's name, because that is what the firmware prints
-   * there and this cell is meant to look like what is on the table. PAGE_KEY in
-   * core/types.ts is the seat, and both export doors write the same fallback.
+   * still decides is the fallback word - a key on the page-key panel with no
+   * word of its own says the page's name, and the cell draws it only where the
+   * key says it: the talker shows a key's picture and no caption, so a name
+   * drawn on a key that only leads onward was a board that is not the one on
+   * the table. PAGE_KEY in core/types.ts is the seat, and devicePlan() gives
+   * the same fallback.
    *
    * There was a fifth here in another shape - a set key, drawn from `BoardSet`'s
    * own name, symbol and key, opening a different sheet, and doing one thing
@@ -23,8 +25,8 @@
     import { pageAt } from "./pages.js";
   import { editKey } from "./keySheet.svelte.js";
   import {
-    at, board, dragged, endDrag, goToSet, hover, hovering, keyAt, printsName,
-    render, seatOf, set, setName, startDrag, swapSlots, unhover,
+    at, board, dragged, endDrag, goToSet, hover, hovering, keyAt, render,
+    saysName, seatOf, set, setName, startDrag, swapSlots, unhover,
   } from "./standing.svelte.js";
 
   let { index }: { index: number } = $props();
@@ -36,10 +38,12 @@
      to a slot; the sheet does, through set() at the moment it is opened. */
   const slot = $derived({ ...set().slots[index]! });
   const own = $derived((slot.text || "").trim());
-  // What the panel shows, and what ▶ would play: the key's own word, or the
-  // page's name where the page-key panel has none.
-  const said = $derived(own || (printsName(index) ? setName(set(), at()) : ""));
   const act = $derived(actOf(slot));
+  // What ▶ would play, and so what the cell draws: the key's own word, or the
+  // page's name where the page-key panel has none AND the key speaks. A key
+  // there that only leads onward says nothing, and the talker draws no name.
+  const said = $derived(own
+    || (saysName(index) && says(act) ? setName(set(), at()) : ""));
 
   /* Where this key leads, if it leads anywhere: the page it names, found once
      because both the line over the picture and the corner below it need it, and
@@ -60,15 +64,12 @@
    * word of its own is drawn carrying the page's name. Said once where it
    * happens, or the name reads as a word somebody typed and never did.
    *
-   * **Printed and said are two things, and the line says which.** Everywhere
-   * else on this board a word on a cell is a word the key speaks - there are no
-   * captions - and on this one seat it is what the display shows. The two
-   * coincide on a key that speaks and come apart on a key that only leads
-   * onward: that key prints the name and says nothing, and the board drew the
-   * name with nothing to say so. Not the drawing that was wrong - all three
-   * export doors write that label unconditionally and the spoken half only where
-   * `says(act)` - but the line above it, which offered the name as though it
-   * were a word.
+   * **Said, and only said.** Everywhere on this board a word on a cell is a
+   * word the key speaks - there are no captions, on the talker either. This
+   * seat used to draw the name on a key that only leads onward too, under a
+   * line saying it was *shown*, on the belief that the firmware prints it
+   * there; drawCurrentSet() draws the key's picture and nothing else. So the
+   * name is drawn where it is said, and nowhere else.
    *
    * **The caption wins the line where both apply**, which is one seat with no
    * word on it. It explains something already drawn on the cell and has no other
@@ -79,8 +80,8 @@
    * aria-hidden on the target, because the corner carries that same page name as
    * its accessible name. One fact read out twice is what somebody listening
    * rather than looking hears as two keys. */
-  const caption = $derived(printsName(index) && !own
-    ? t(says(act) ? "ui.diy_page_name_says" : "ui.diy_page_name_shows") : "");
+  const caption = $derived(saysName(index) && !own && says(act)
+    ? t("ui.diy_page_name_says") : "");
   const eyebrow = $derived(goesTo ? t("ui.diy_leads_to", { name: goesTo }) : "");
 
   const open = (): void => { void editKey(index); };
@@ -123,7 +124,7 @@
      it - only a prevented dragover marks an element as a drop target. -->
 <div
   class="cell"
-  class:cell--namepanel={printsName(index)}
+  class:cell--namepanel={saysName(index)}
   class:cell--empty={!said && !slot.symbol}
   class:dragover={hovering(index)}
   draggable="true"

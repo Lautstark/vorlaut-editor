@@ -1256,3 +1256,46 @@ describe("the checker against the conformance fixtures", () => {
     });
   }
 });
+
+/* A `goto` whose page has been deleted since. The writer makes it an ordinary
+ * appending button - no load_board - and so a tablet speaks its word; but the
+ * recording list asked the stored act, which said "goto", so nothing was
+ * baked for it. And an empty one was written as a live button that does
+ * nothing, because the empty-button rule asked the stored act too. */
+describe("a goto whose page is gone", () => {
+  const dangling = (): AppLayout => {
+    const held = tablet();
+    held.pages = held.pages.filter((one) => one.id !== "p-food");
+    held.pages[0]!.buttons.push(key({ id: "k7", row: 1, col: 2, label: "",
+                                       act: { kind: "goto", page: "gone" } }));
+    held.pages[0]!.buttons = held.pages[0]!.buttons.filter((one) => one.id !== "k6");
+    return held;
+  };
+
+  it("is recorded, because it speaks", () => {
+    expect(spokenTexts(dangling())).toContain("Essen");
+    const pkg = buildAppPackage(tabletInput({ layout: dangling() }));
+    expect(checkPackage(pkg)).toEqual([]);
+    const essen = pkg.boards[0]!.buttons.find((one) => one.label === "Essen")!;
+    expect(essen.load_board).toBeUndefined();
+    expect(essen.sound_id).toBeTruthy();
+  });
+
+  it("and an empty one is not written at all", () => {
+    const pkg = buildAppPackage(tabletInput({ layout: dangling() }));
+    const labels = pkg.boards[0]!.buttons.map((one) => one.label);
+    expect(labels).not.toContain("");
+  });
+});
+
+/* checkPackage() took the members it checks paths.boards against from
+ * paths.boards itself, so a manifest naming a member no board is written to
+ * could never fail. The members are what packageBytes() writes. */
+it("checkPackage notices a board the manifest puts where none is written", () => {
+  const pkg = buildAppPackage(tabletInput());
+  const [id] = Object.keys(pkg.manifest.paths.boards);
+  pkg.manifest.paths.boards[id!] = "boards/elsewhere.obf";
+  pkg.manifest.root = "boards/elsewhere.obf";
+  expect(checkPackage(pkg).some((one) => one.startsWith("[board-unresolved]")))
+    .toBe(true);
+});

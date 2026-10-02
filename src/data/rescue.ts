@@ -44,6 +44,25 @@ const toBase64 = (bytes: ArrayBuffer): string => {
   return btoa(binary);
 };
 
+/** A value with every buffer in it spelled out as base64, however deep.
+ *
+ * Only the top level was, until 2026-10-01, and JSON.stringify writes an
+ * ArrayBuffer as `{}` - so a speech record, whose recording sits inside it
+ * rather than being it, reached the rescue file without its sound. A view onto
+ * a buffer (a Uint8Array, a DataView) is spelled as the bytes it shows. */
+function spelled(value: unknown): unknown {
+  if (value instanceof ArrayBuffer) return { base64: toBase64(value) };
+  if (ArrayBuffer.isView(value)) {
+    const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    return { base64: toBase64(bytes.slice().buffer) };
+  }
+  if (Array.isArray(value)) return value.map(spelled);
+  if (value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, spelled(inner)]));
+  }
+  return value;
+}
+
 /** Every record, with the bytes spelled out, ready for JSON.stringify.
  *
  * The notice is passed in for the reason data/backup.ts's is: this module has
@@ -55,7 +74,7 @@ export function asFile(dump: Dump, notice: string): unknown {
       const value = held.values[at];
       return {
         key: typeof key === "string" || typeof key === "number" ? key : String(key),
-        value: value instanceof ArrayBuffer ? { base64: toBase64(value) } : value,
+        value: spelled(value),
       };
     });
   }

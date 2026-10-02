@@ -21,6 +21,8 @@
 // is the reason a missing translation still fails rather than showing a blank
 // button to whoever reads the language nobody checked.
 
+import { MAX_SETS } from "../device/layout_facts.js";
+
 export const LANGUAGES = ["de", "en"];
 export const DEFAULT_LANGUAGE = "en";
 /* One number, because there is one rule: every set a Sammlung holds goes onto
@@ -28,25 +30,12 @@ export const DEFAULT_LANGUAGE = "en";
  * the same question. It used to be two - author up to 25, mark 5 to ship -
  * which was a second selection mechanism from before Sammlungen existed.
  *
- * **Sixty-four, and the number is the device's.** MAX_SETS in
- * `firmware/vorlaut/layout_format.h` went from 5 to 64 in
- * Lautstark/vorlaut-diy-talker's 0ac0465, and the editor follows rather than
- * picking a cap of its own: a Sammlung the editor accepts and the device
- * refuses is a file somebody finds out about at the cable. The generosity is
- * deliberate there and worth repeating here, because it is the reason the
- * number is not 20 - a talker already standing in a house has no radio, so
- * MAX_SETS can never be raised for it again. What the room actually costs was
- * measured rather than estimated: globals from 33% to 41%, and the limit that
- * binds first is the file partition, not this.
- *
- * **Nothing checks that the two copies agree.** The device facts the editor
- * duplicates are held to `device/fixtures/` by
- * tests/unit/device_facts.test.ts; this one is not among them, and the pinned
- * fixtures under third_party/ are still device interface 1.1.0, which is the
- * layout version whose MAX_SETS was 5. So this line is a number typed out of
- * one repository into the other, and the divergence it comes from is the
- * thing worth fixing rather than the number. */
-export const LIMITS = {"maxSets": 64};
+ * **The number is the device's, and it lives with the device's numbers.** It
+ * was typed here as 64 with a comment saying nothing checked it against the
+ * talker; since 2026-10-01 it is MAX_SETS in src/device/layout_facts.ts, held
+ * to device/fixtures/layout/sets-at-max by tests/unit/device_facts.test.ts.
+ * This table keeps the name the page reads it by. */
+export const LIMITS = { maxSets: MAX_SETS };
 
 /* The Modified Fitzgerald Key: which colour a word class is drawn in.
  *
@@ -424,7 +413,6 @@ export const TEXTS = {
     "ui.diy_does_word_note": "Sagt sich. Die Seite bleibt stehen.",
     "ui.diy_leads_to": "weiter zu {name}",
     "ui.diy_page_name_says": "sagt den Seitennamen",
-    "ui.diy_page_name_shows": "zeigt den Seitennamen",
     "ui.diy_page_unreachable": "Von der ersten Seite aus f\u00fchrt nichts hierher.",
     "ui.diy_set_spoken_note": "Leer hei\u00dft: die Taste sagt den Namen der Seite. Das Ger\u00e4t zeigt keine Aufschrift - auf der Taste ist nur das Bild.",
     "ui.diy_key_add": "Taste anlegen",
@@ -884,7 +872,6 @@ export const TEXTS = {
     "ui.diy_does_word_note": "Says itself. The page stays where it is.",
     "ui.diy_leads_to": "on to {name}",
     "ui.diy_page_name_says": "says the page's name",
-    "ui.diy_page_name_shows": "shows the page's name",
     "ui.diy_page_unreachable": "Nothing leads here from the first page.",
     "ui.diy_set_spoken_note": "Empty means the key says the name of the page. The device draws no caption - the key is only the picture.",
     "ui.diy_key_add": "Set up the key",
