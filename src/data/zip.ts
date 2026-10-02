@@ -108,6 +108,9 @@ async function deflateRaw(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<Ar
   return out;
 }
 
+const tooBig = (count: number, bytes: number): RangeError => new RangeError(
+  `zipBytes: ${count} members, ${bytes} bytes - past what a zip without Zip64 can say`);
+
 /**
  * The archive, in the order the members were given.
  *
@@ -116,6 +119,14 @@ async function deflateRaw(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<Ar
  * on a package reads it in the order the format describes it.
  */
 export async function zipBytes(members: readonly ZipMember[]): Promise<Uint8Array<ArrayBuffer>> {
+  // Classic zip counts members in sixteen bits and offsets in thirty-two, and a
+  // DataView setter wraps a number that does not fit rather than refusing it:
+  // an archive past either limit would be written, and be a different archive
+  // than the one asked for, with nothing said. This writer has no Zip64, so it
+  // says so instead. The count is known before anything is compressed, so it is
+  // asked first; the size only once every member has been framed, below. A
+  // package that size is not one a tablet would open anyway.
+  if (members.length > 0xffff) throw tooBig(members.length, 0);
   const encoder = new TextEncoder();
   const pieces: Uint8Array<ArrayBuffer>[] = [];
   const central: Uint8Array<ArrayBuffer>[] = [];
@@ -165,15 +176,7 @@ export async function zipBytes(members: readonly ZipMember[]): Promise<Uint8Arra
   }
 
   const directorySize = central.reduce((total, one) => total + one.length, 0);
-  // Classic zip counts members in sixteen bits and offsets in thirty-two, and a
-  // DataView setter wraps a number that does not fit rather than refusing it:
-  // an archive past either limit would be written, and be a different archive
-  // than the one asked for, with nothing said. This writer has no Zip64, so it
-  // says so instead. A package that size is not one a tablet would open anyway.
-  if (members.length > 0xffff || offset > 0xffffffff || directorySize > 0xffffffff) {
-    throw new RangeError(
-      `zipBytes: ${members.length} members, ${offset} bytes - past what a zip without Zip64 can say`);
-  }
+  if (offset > 0xffffffff || directorySize > 0xffffffff) throw tooBig(members.length, offset);
   const end = new Uint8Array(22);
   const tail = new DataView(end.buffer);
   tail.setUint32(0, END, true);
