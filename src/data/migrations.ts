@@ -311,6 +311,23 @@ export const STEPS: readonly Step[] = [
       }
     },
   },
+  {
+    /* 6 -> 7: the spoken cache leaves for a database of its own.
+     *
+     * One deleteObjectStore, the shape of the step to 4 and for the reason that
+     * one gives: dropping `speech` from the schema alone would leave every
+     * browser that has been here holding up to 96 MB nothing reads and nothing
+     * frees. The recordings now live in stimmquelle's cacheStore()
+     * (`vorlaut-stimme`, see data/store.ts), and the ones in here are not
+     * carried across - each is a sentence spoken again once, which is what a
+     * cache miss already is. No layout is read on the way past, and a missing
+     * `speech` is not a wrong shape: it is a cache, and absent is empty. */
+    to: 7,
+    expects: ["collections", "layouts"],
+    async run(db) {
+      if (db.objectStoreNames.contains("speech")) db.deleteObjectStore("speech");
+    },
+  },
 ];
 
 /** The steps between where this database is and where it has to be.

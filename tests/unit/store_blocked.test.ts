@@ -98,15 +98,17 @@ describe("a database another connection is holding at an older version", () => {
    * to stay above it: it was 4 while DB_VERSION was 3, and stayed 4 across the
    * bump to 4, at which point the open no longer needed an upgrade and
    * `blocked` was false for the wrong reason. adr/0016 took DB_VERSION to 5,
-   * and this goes to 6 - one the store does not hold, which is what makes the
-   * other connection have to let go at all. */
+   * and this went to 6 - and then stayed 6 across the bump to 6, the same
+   * mistake again. DB_VERSION is 7 since the speech cache left; this is 8, one
+   * the store does not hold, which is what makes the other connection have to
+   * let go at all. */
   it("lets go when a newer version needs the database", async () => {
     // Make sure this tab really is holding a connection to let go of.
     await store.readCollections();
 
     let blocked = false;
     const next = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 6);
+      const request = indexedDB.open(DB_NAME, 8);
       request.onblocked = () => { blocked = true; };
       request.onupgradeneeded = () => { /* the shape does not matter here */ };
       request.onerror = () => reject(request.error);
@@ -114,7 +116,7 @@ describe("a database another connection is holding at an older version", () => {
     });
 
     expect(blocked).toBe(false);
-    expect(next.version).toBe(6);
+    expect(next.version).toBe(8);
     next.close();
   });
 });

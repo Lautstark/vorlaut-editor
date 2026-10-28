@@ -1,4 +1,4 @@
-/* A version-5 database with a connected folder, opened by code at version 6.
+/* A version-5 database with a connected folder, opened by code at version 7.
  *
  * The step to 6 brings every page up to five keys - and on a machine whose
  * Sammlungen live in a folder it used to be undone at once. main.ts calls

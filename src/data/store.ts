@@ -69,6 +69,7 @@ import { touched } from "./changed.js";
 import { adopt, adopted, isStore, pushKind, readKind } from "./folder.js";
 import { later, migrate, MISSING_STEP, type OldDB, type OldTx } from "./migrations.js";
 import { bringTextForward } from "./upgrade.js";
+import { cacheStore, type CacheStore } from "@lautstark/stimmquelle/browser";
 import { type Dump } from "./rescue.js";
 
 /** The folder of files, as the callers name them.
@@ -145,8 +146,12 @@ const DB_NAME = "vorlaut";
  * which is the case adr/0023 is the permission for. What it costs is the stamp
  * below standing stale over new bytes until the next ordinary save; the shape
  * itself is data/upgrade.ts's, a pure function with no database in it.
+ *
+ * 7 takes `speech` away again, and it is 4's shape: one deleteObjectStore. The
+ * cache moved to a database of its own, stimmquelle's cacheStore() - see the
+ * end of this file. Its recordings do not cross; they are spoken again.
  */
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 /** One Sammlung's layout, as it is stored: the bytes and the stamp over them.
  *  The id is in the record rather than only in the key, because the store has
@@ -177,21 +182,6 @@ interface StoredLayout {
  *  can move which board is open - and writeSettings() replaces the record. */
 type MarkName = "current" | "built";
 
-/** One spoken sentence as the cache keeps it.
- *
- *  `size` is `bytes.byteLength` written down, and that duplication is the
- *  point: IndexedDB deserialises a whole value to hand any part of it over, so
- *  a walk that read the length off the buffer would pull every WAV in the
- *  store through memory to add up some numbers. In the `usage` index key it is
- *  reachable through openKeyCursor(), which reads no values at all. */
-interface Spoken {
-  /** The finished WAV, exactly the bytes stimmquelle handed back. */
-  bytes: ArrayBuffer;
-  size: number;
-  /** When this was last handed out, which is the L in LRU. */
-  usedAt: number;
-}
-
 interface VorlautDB extends DBSchema {
   /** One record per Sammlung: what it is called and when it was last written.
    *  Not what is on it - that is `layouts`, and the split is what makes drawing
@@ -212,24 +202,6 @@ interface VorlautDB extends DBSchema {
   marks: { key: MarkName; value: string | null };
   /** The pictures somebody picked or uploaded, by name. */
   symbols: { key: string; value: ArrayBuffer };
-  /** One spoken sentence, under the fingerprint of everything that decided how
-   *  it sounds - CONTRACT.md §3, computed by stimmquelle's keyFor() and never
-   *  assembled here. adr/0016.
-   *
-   *  The one store in this database that is neither content nor preference but
-   *  *derived*: every record in it can be made again by speaking the sentence
-   *  again, which is what makes it evictable and what keeps it out of the
-   *  Sicherung. It is the second store of that kind this database has had, and
-   *  the first one's absence is worth reading before adding a third - see the
-   *  note at the folder of files below. */
-  speech: {
-    key: string;
-    value: Spoken;
-    /** Least-recently-used, and the size beside it so the eviction walk can
-     *  add up what it would free without deserialising the audio. See
-     *  evictable(). */
-    indexes: { usage: [number, number] };
-  };
 }
 
 const COLLECTIONS = "collections";
@@ -237,8 +209,6 @@ const LAYOUTS = "layouts";
 const MARKS = "marks";
 const SETTINGS = "settings";
 const BY_UPDATED = "updatedAt";
-const SPEECH = "speech";
-const BY_USE = "usage";
 
 const CURRENT: MarkName = "current";
 
@@ -322,7 +292,6 @@ function createSchema(db: IDBPDatabase<VorlautDB>): void {
   db.createObjectStore(SETTINGS);
   db.createObjectStore(MARKS);
   db.createObjectStore("symbols");
-  db.createObjectStore(SPEECH).createIndex(BY_USE, ["usedAt", "size"]);
 }
 
 /* Where a folder is the store, every change has to reach it. A change here is
@@ -350,16 +319,19 @@ function createSchema(db: IDBPDatabase<VorlautDB>): void {
  */
 export async function wipeEverything(): Promise<void> {
   const db = await open();
-  const tx = db.transaction([COLLECTIONS, LAYOUTS, MARKS, SETTINGS, "symbols", SPEECH], "readwrite");
+  const tx = db.transaction([COLLECTIONS, LAYOUTS, MARKS, SETTINGS, "symbols"], "readwrite");
   await Promise.all([
     tx.objectStore(COLLECTIONS).clear(),
     tx.objectStore(LAYOUTS).clear(),
     tx.objectStore(MARKS).clear(),
     tx.objectStore(SETTINGS).clear(),
     tx.objectStore("symbols").clear(),
-    tx.objectStore(SPEECH).clear(),
   ]);
   await tx.done;
+  // A database of its own (see the cache at the end of this file), so not in
+  // the transaction above - and nothing in it could be put back by a failure
+  // there anyway.
+  await spoken.clear();
   await mirror();
   touched();
 }
@@ -1150,9 +1122,21 @@ export async function empty(which: StoreName): Promise<void> {
 // adr/0016. stimmquelle memoises its own output through remember(), and takes
 // a `{ get, put }` from whoever wants it memoised: the package owns the name -
 // CONTRACT.md §3, which both consumers implemented by hand and both got wrong
-// - and the consumer owns the storage, because a library owned by a sentence
-// and a cache shared between them are different lifetimes for the same bytes.
-// This is vorlaut's half.
+// - and the consumer chooses the storage, because a library owned by a
+// sentence and a cache shared between them are different lifetimes for the
+// same bytes. This is vorlaut's choice: the cache kind.
+//
+// **Not in this database any more.** It was the `speech` store here, from
+// version 5 to version 6, written by hand: LRU by a `usage` index, a budget, a
+// read counted as a use. stimmquelle's cacheStore() (v2.13.0) is that store,
+// built to the same semantics and shared with bildhaft, so version 7 drops
+// ours and the recordings live in a database of their own, `vorlaut-stimme`.
+// What was in the old store is lost once and spoken again; nothing in it was
+// anything but a wait already paid.
+//
+// It is constructed here rather than in backend/local.ts, which is the only
+// thing that speaks into it, because wipeEverything() below has to clear it
+// and this file may not import the backend.
 //
 // **Nothing here announces.** The note at the folder of files above says why
 // the `data` store did not: a build made its contents again out of the layout
@@ -1162,11 +1146,11 @@ export async function empty(which: StoreName): Promise<void> {
 // thing, and the argument holds unchanged - a recording is made again by
 // speaking the sentence again, so it is neither content nor a change to any.
 //
-// It is also why nothing in here is in a backup, and why the eviction below is
-// allowed to be as blunt as it is. The worst an empty cache costs anybody is
-// the wait they would have paid anyway.
+// It is also why nothing in it is in a backup, and why the eviction is allowed
+// to be as blunt as it is. The worst an empty cache costs anybody is the wait
+// they would have paid anyway.
 
-/** How much audio this database will hold before it starts forgetting some.
+/** How much audio the cache will hold before it starts forgetting some.
  *
  * A number rather than a count of recordings, because what is scarce is bytes
  * and utterances are not one length. What it has to be big enough for is one
@@ -1184,114 +1168,15 @@ export async function empty(which: StoreName): Promise<void> {
  * It is not a quota and must not be read as one. The browser's own limit is
  * far above this on Chrome and Firefox and around a gigabyte on Safari, and
  * this number is deliberately a fraction of the smallest of them: the content
- * in the other five stores is what must never be crowded out, and a cache that
+ * in this database is what must never be crowded out, and a cache that
  * fills the origin to make room for itself has taken something irreplaceable
  * to keep something that can be made again in eight seconds. */
 export const SPEECH_BUDGET = 96 * 1024 * 1024;
 
-/** Which recordings to forget, oldest use first, to get back under `budget`.
+/** Where a finished recording goes, so that the next ask for it is a read.
  *
- * Pure, and separated from the walk that feeds it for the reason
- * `tiles.renderPixels()` was separated from the canvas: the arithmetic is the
- * part with a decision in it, and it is worth being able to ask about at four
- * bytes rather than at ninety-six megabytes.
- *
- * `usage` arrives in least-recently-used order. `keep` is the record that was
- * just written, and it is never dropped - a recording evicted by its own
- * arrival is a cache that pays for a synthesis and throws it away, and it is
- * what a store holding one over-budget recording would otherwise do on every
- * write for ever. The consequence is that the budget is a target rather than a
- * ceiling: one recording longer than all of it leaves the store over, until
- * the next write makes it evictable like anything else.
- */
-export function evictable(usage: readonly { key: string; size: number }[],
-                          budget: number, keep: string): string[] {
-  let total = usage.reduce((sum, one) => sum + one.size, 0);
-  const going: string[] = [];
-  for (const one of usage) {
-    if (total <= budget) break;
-    if (one.key === keep) continue;
-    going.push(one.key);
-    total -= one.size;
-  }
-  return going;
-}
-
-/** The next `usedAt`, and never one that has been handed out before.
- *
- * Wall clock, pushed forward by a millisecond where it would repeat. Date.now()
- * alone is a millisecond apart at best and a cache-warm export writes several
- * recordings inside one of them, which leaves the eviction order among them to
- * be settled by the index's tiebreak - the primary key, which is a hash, which
- * is to say at random. Least-recently-used has to mean it or the budget starts
- * forgetting the wrong end of the Sammlung somebody is in the middle of. */
-let handedOut = 0;
-const stamp = (): number => (handedOut = Math.max(Date.now(), handedOut + 1));
-
-/** A recording by its §3 name, or nothing.
- *
- * Stamps what it hands back, which is what makes the eviction least-recently-
- * *used* rather than least-recently-written. That costs a write on every hit,
- * and it buys the property the budget is chosen for: the Sammlung somebody is
- * working on stays, whichever one it is and however old it is.
- *
- * A failure is a miss. Every path out of here is one the caller answers by
- * speaking the sentence again, so there is nothing to report and nobody who
- * could act on it - and a cache that can refuse a read is a cache that can
- * stop a person playing a key. */
-export async function readSpeech(key: string): Promise<Uint8Array | undefined> {
-  try {
-    const db = await open();
-    const tx = db.transaction(SPEECH, "readwrite");
-    const held = await tx.store.get(key);
-    if (held) await tx.store.put({ ...held, usedAt: stamp() }, key);
-    await tx.done;
-    return held ? new Uint8Array(held.bytes) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Keep a recording under its §3 name, and forget whatever that puts over the
- *  budget.
- *
- * `budget` is a parameter for the reason `plan()`'s `steps` is one: the
- * behaviour worth testing is what happens at the edge of it, and a test that
- * had to write ninety-six megabytes to reach that edge would be a test nobody
- * runs. Nothing passes it in production.
- *
- * **A failure here is swallowed, and stimmquelle asks for that decision by
- * name.** Its remember() does not catch a failing put, on the grounds that
- * only the consumer knows whether the bytes can be made again. Here they can:
- * a full disk, a browser refusing to grow the origin, a private window with no
- * storage at all - each of them means this page speaks the sentence again next
- * time, and none of them is worth a sentence on the screen or an export that
- * stops. */
-export async function writeSpeech(key: string, wav: Uint8Array,
-                                  budget = SPEECH_BUDGET): Promise<void> {
-  try {
-    const db = await open();
-    const tx = db.transaction(SPEECH, "readwrite");
-    // slice() rather than the view as it stands: speak() answers with a view,
-    // and a view that does not cover its whole buffer would carry whatever
-    // else is in that buffer into the database. Same rule as ownBytes().
-    const bytes = wav.slice();
-    await tx.store.put(
-      { bytes: bytes.buffer as ArrayBuffer, size: bytes.byteLength, usedAt: stamp() },
-      key);
-
-    /* Keys only. openKeyCursor() hands over the index key and the primary key
-     * and never deserialises a value, which is the whole reason `size` is in
-     * the index key rather than only in the record: this walk touches every
-     * recording in the store and must not pull one of them into memory. */
-    const usage: { key: string; size: number }[] = [];
-    for (let at = await tx.store.index(BY_USE).openKeyCursor(); at;
-         at = await at.continue()) {
-      usage.push({ key: at.primaryKey, size: at.key[1] });
-    }
-    for (const going of evictable(usage, budget, key)) await tx.store.delete(going);
-    await tx.done;
-  } catch {
-    // Deliberately nothing. See above.
-  }
-}
+ * A failure anywhere in it is a miss, and cacheStore() makes that decision
+ * itself: a full disk, a refused origin, a private window with no storage at
+ * all - each means this page speaks the sentence again next time, and none of
+ * them is worth a sentence on the screen or an export that stops. */
+export const spoken: CacheStore = cacheStore("vorlaut-stimme", { budget: SPEECH_BUDGET });

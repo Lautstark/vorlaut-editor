@@ -1,4 +1,4 @@
-/* A database at version 3, opened by code at version 5.
+/* A database at version 3, opened by code at version 7.
  *
  * This is the test adr/0015 exists to make possible, and it is written the one
  * way that proves anything: a database is built here the way version 3 built
@@ -16,7 +16,8 @@
  *
  * The two steps this exercises are one statement each - `deleteObjectStore`
  * for the `data` 3 to 4 dropped, `createObjectStore` for the `speech` 4 to 5
- * added - so most of what is asserted below is that nothing else was touched. That is the point rather than a weakness of the
+ * added and `deleteObjectStore` for the same `speech` 6 to 7 dropped again
+ * - so most of what is asserted below is that nothing else was touched. That is the point rather than a weakness of the
  * test: the first version of this migration read every record out, dropped
  * every store and wrote it all back, and each of these assertions was a way
  * for that to go wrong. A migration that never opens a layout cannot lose one,
@@ -145,7 +146,7 @@ beforeAll(async () => {
   store.onMigrated((what) => { announced.push(what); });
 });
 
-describe("a version 3 database opened by version 6", () => {
+describe("a version 3 database opened by version 7", () => {
   it("keeps every Sammlung, in the order the sidebar draws", async () => {
     const list = await store.readCollections();
     expect(list.collections.map((one) => one.name)).toEqual(["Bedroom", "Kitchen"]);
@@ -243,18 +244,18 @@ describe("a version 3 database opened by version 6", () => {
      async () => {
        await store.readCollections();
        const seen = await inspect();
-       expect(seen.version).toBe(6);
+       expect(seen.version).toBe(7);
        // `data` is gone with the build that wrote it (adr/0011), and nothing
-       // from version 3's shape survives except its contents. `speech` is what
-       // the step to 5 added: a cache of what a synthesis cost, which adr/0016
-       // argues is a different thing from the store that just left.
+       // from version 3's shape survives except its contents. `speech`, which
+       // the step to 5 added, is gone too: the step to 7 moved the cache to a
+       // database of its own, stimmquelle's cacheStore().
        expect(seen.stores)
-         .toEqual(["collections", "layouts", "marks", "settings", "speech", "symbols"]);
+         .toEqual(["collections", "layouts", "marks", "settings", "symbols"]);
      });
 
   it("says so, rather than moving somebody's boards in silence", async () => {
     await store.readCollections();
     expect(announced).toHaveLength(1);
-    expect(announced[0]).toEqual({ from: 3, to: 6, boards: 2 });
+    expect(announced[0]).toEqual({ from: 3, to: 7, boards: 2 });
   });
 });
