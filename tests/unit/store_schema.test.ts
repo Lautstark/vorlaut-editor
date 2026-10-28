@@ -152,7 +152,7 @@ describe("opening a database left behind by version 2", () => {
 
   it("says so", async () => {
     await store.readCollections();
-    expect(announced).toEqual([{ from: 2, to: 6, boards: 1 }]);
+    expect(announced).toEqual([{ from: 2, to: 7, boards: 1 }]);
   });
 
   /* And it is an ordinary database afterwards: a second Sammlung is made the

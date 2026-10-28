@@ -5,6 +5,14 @@
 [`src/data/store.ts`](../src/data/store.ts),
 [`src/data/migrations.ts`](../src/data/migrations.ts)
 
+> **Amended 2026-10-28.** The store this decided on is no longer written here.
+> stimmquelle v2.13.0 ships `cacheStore()`, built to this ADR's semantics (LRU,
+> a read counted as a use, the recording just written never dropped), and the
+> editor uses it as the database `vorlaut-stimme` with the same 96 MB budget.
+> Database version 7 drops the `speech` store; what was in it is spoken again.
+> The decision itself - the package owns the name, the consumer chooses the
+> storage - stands.
+
 ## Context
 
 This page speaks the same sentence over and over, and pays for it every time.

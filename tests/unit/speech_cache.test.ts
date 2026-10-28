@@ -1,63 +1,71 @@
-/* The store adr/0016 added, and the policy that keeps it from growing without
- * end.
+/* The cache adr/0016 added, as it stands since version 7: stimmquelle's
+ * cacheStore(), in a database of its own, with this repository's budget.
  *
- * Two halves, tested two ways on purpose. `evictable()` is the decision - what
- * to forget, in what order, and what may never be forgotten - and it is pure,
- * so it is asked at four bytes rather than at ninety-six megabytes. The store
- * around it is IndexedDB, and the only way to know a record was really written
- * and really deleted is to write one and read it back, which is what the second
- * half does through a budget small enough to reach.
+ * The policy itself - least recently used, a read counted as a use, the
+ * recording just written never dropped - is stimmquelle's now, and tested
+ * there. What is vorlaut's, and so what this file holds, is the three things
+ * the switch could have lost: a recording outlives the page that wrote it, the
+ * budget this file passes is the one that evicts, and "delete everything"
+ * reaches a database that is no longer the one it empties.
  *
- * That budget is a parameter of writeSpeech() for exactly this, the way
- * `plan()` takes its steps: the behaviour worth testing is what happens at the
- * edge, and a test that had to write the real budget to reach the edge is a
- * test nobody runs. Nothing in src/ passes it.
+ * The budget is asserted in two halves for the reason the old writeSpeech()
+ * took it as a parameter: the behaviour worth testing is what happens at the
+ * edge, and a test that wrote ninety-six megabytes to reach it is a test
+ * nobody runs. So one half says which budget data/store.ts hands the package,
+ * and the other drives the same database at a budget small enough to reach.
  *
  * What is deliberately not asserted here is the audio. Nothing in this file
  * knows what a WAV is - the cache holds bytes under a name stimmquelle
- * computes, and CONTRACT.md §3 is checked where it is implemented, which is not
- * here.
+ * computes, and CONTRACT.md §3 is checked where it is implemented.
  */
 
-import { describe, expect, it } from "vitest";
-import { SPEECH_BUDGET, evictable, readSpeech, writeSpeech } from "../../src/data/store.js";
+import { describe, expect, it, vi } from "vitest";
+import { cacheStore } from "@lautstark/stimmquelle/browser";
+
+/** What data/store.ts asked the package for, recorded on the way through to
+ *  the real cacheStore() - so the store under test is the real one. */
+const asked = vi.hoisted(() => [] as { name: string; budget?: number }[]);
+vi.mock("@lautstark/stimmquelle/browser", async (original) => {
+  const real = await original<typeof import("@lautstark/stimmquelle/browser")>();
+  return {
+    ...real,
+    cacheStore: (name: string, options: { budget?: number } = {}) => {
+      asked.push({ name, ...options });
+      return real.cacheStore(name, options);
+    },
+  };
+});
+
+const { SPEECH_BUDGET, spoken, wipeEverything } = await import("../../src/data/store.js");
 
 /** A recording of `size` bytes, filled with `fill` so two of them can be told
  *  apart on the way back out. */
 const wav = (size: number, fill: number) => new Uint8Array(size).fill(fill);
 
-describe("what to forget", () => {
-  const use = (...sizes: number[]) =>
-    sizes.map((size, at) => ({ key: `k${at}`, size }));
+describe("the speech cache", () => {
+  it("hands back exactly what was kept, under the name it was kept under",
+     async () => {
+       await spoken.put("a".repeat(64), wav(8, 7));
+       expect(await spoken.get("a".repeat(64))).toEqual(wav(8, 7));
+       expect(await spoken.get("b".repeat(64))).toBeUndefined();
+     });
 
-  it("forgets nothing while the budget is not spent", () => {
-    expect(evictable(use(10, 10, 10), 100, "k2")).toEqual([]);
+  /* A reload is a fresh module graph over the same origin's IndexedDB. The
+   * module-level `spoken` of the new graph opens the database afresh, which is
+   * what a page coming back does. */
+  it("keeps a recording across a reload", async () => {
+    await spoken.put("kept", wav(16, 3));
+    vi.resetModules();
+    const again = await import("../../src/data/store.js");
+    expect(again.spoken).not.toBe(spoken);
+    expect(await again.spoken.get("kept")).toEqual(wav(16, 3));
   });
 
-  /* The one that is the whole point: the order is the order it is handed, and
-   * that order is least-recently-used. A cache that dropped the largest, or the
-   * oldest-written, would be a cache that forgets the Sammlung somebody is in
-   * the middle of because they opened it first. */
-  it("forgets least-recently-used first, and stops as soon as it is under", () => {
-    expect(evictable(use(40, 40, 40), 100, "k2")).toEqual(["k0"]);
-    expect(evictable(use(40, 40, 40, 40), 100, "k3")).toEqual(["k0", "k1"]);
-  });
-
-  /* A recording evicted by its own arrival is a synthesis paid for and thrown
-   * away, and it is what a store holding one over-budget recording would do on
-   * every write for ever. So the budget is a target: this leaves the store over
-   * it rather than empty, and the next write makes the survivor evictable like
-   * anything else. */
-  it("never forgets the recording that was just written", () => {
-    expect(evictable(use(300), 100, "k0")).toEqual([]);
-    expect(evictable(use(50, 300), 100, "k1")).toEqual(["k0"]);
-  });
-
-  /* `keep` is skipped rather than counted as freed, which is the arithmetic
-   * that would go wrong silently: subtracting a size for a record still in the
-   * store leaves the walk believing it is under budget when it is not. */
-  it("keeps walking past the one it may not forget", () => {
-    expect(evictable(use(40, 10, 40, 40), 60, "k1")).toEqual(["k0", "k2"]);
+  /* Its own database, and not a store in `vorlaut`: the step to 7 dropped
+   * that one, and a cache in the content's database is one a version bump
+   * of the content has to think about. */
+  it("lives in vorlaut-stimme, with the budget this repository chose", () => {
+    expect(asked[0]).toEqual({ name: "vorlaut-stimme", budget: SPEECH_BUDGET });
   });
 
   it("is a real number of bytes, sized for one Sammlung's export and then some",
@@ -67,52 +75,28 @@ describe("what to forget", () => {
        // magnitude: a budget below one Sammlung is a budget that thrashes.
        expect(SPEECH_BUDGET).toBeGreaterThan(3 * 400 * 1.5 * 24000 * 2);
      });
-});
 
-describe("the store it is a policy for", () => {
-  it("hands back exactly what was kept, under the name it was kept under",
-     async () => {
-       await writeSpeech("a".repeat(64), wav(8, 7));
-       const held = await readSpeech("a".repeat(64));
-       expect(held).toEqual(wav(8, 7));
-     });
+  /* The same database at a budget it can reach. Reading `four` moves it
+   * behind `five`, so the write over the budget takes `five` - which is what
+   * keeps the Sammlung somebody is working on. */
+  it("forgets least-recently-used down to its budget", async () => {
+    const small = cacheStore("vorlaut-stimme", { budget: 100 });
+    await small.clear();
+    await small.put("four", wav(40, 4));
+    await small.put("five", wav(40, 5));
+    expect(await small.get("four")).toEqual(wav(40, 4));
 
-  /* A name nothing has been written under is a miss rather than a throw: every
-   * caller answers a miss by speaking the sentence, and there is nothing here
-   * for anybody to act on. */
-  it("answers nothing for a name it does not hold", async () => {
-    expect(await readSpeech("b".repeat(64))).toBeUndefined();
+    await small.put("six", wav(40, 6));
+    expect(await small.get("five")).toBeUndefined();
+    expect(await small.get("four")).toEqual(wav(40, 4));
+    expect(await small.get("six")).toEqual(wav(40, 6));
   });
 
-  it("forgets down to the budget, and keeps what arrived last", async () => {
-    for (const [at, name] of ["one", "two", "three"].entries()) {
-      await writeSpeech(name, wav(40, at), 100);
-    }
-    expect(await readSpeech("one")).toBeUndefined();
-    expect(await readSpeech("two")).toEqual(wav(40, 1));
-    expect(await readSpeech("three")).toEqual(wav(40, 2));
-  });
-
-  /* Least-recently-*used*, and this is the assertion that says so rather than
-   * least-recently-written. Reading `four` moves it behind `five`, so the next
-   * write over the budget takes `five` and leaves the one somebody asked for.
-   * Without the stamp on the read this passes for `four` and fails here. */
-  it("counts a read as a use", async () => {
-    await writeSpeech("four", wav(40, 4), 100);
-    await writeSpeech("five", wav(40, 5), 100);
-    expect(await readSpeech("four")).toEqual(wav(40, 4));
-
-    await writeSpeech("six", wav(40, 6), 100);
-    expect(await readSpeech("five")).toBeUndefined();
-    expect(await readSpeech("four")).toEqual(wav(40, 4));
-    expect(await readSpeech("six")).toEqual(wav(40, 6));
-  });
-
-  /* The view speak() hands back may be a window onto a longer buffer, and a
-   * store that wrote the buffer would hand the rest of it back as audio. */
-  it("keeps the recording rather than the buffer it was a view onto", async () => {
-    const whole = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
-    await writeSpeech("seven", whole.subarray(2, 5));
-    expect(await readSpeech("seven")).toEqual(new Uint8Array([3, 4, 5]));
+  /* The shared tablet handed to the next child: what was said on it goes
+   * with the boards, although it is no longer in their database. */
+  it("is emptied by deleting everything", async () => {
+    await spoken.put("said", wav(8, 1));
+    await wipeEverything();
+    expect(await spoken.get("said")).toBeUndefined();
   });
 });

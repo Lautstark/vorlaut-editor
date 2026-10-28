@@ -69,10 +69,11 @@ const VORLAUT = { rate: DEVICE_SAMPLE_RATE, fadeSec: 0.012, padSec: 0.06 };
 /* Where a finished recording goes, so that the next ask for it is a read.
  *
  * adr/0016. The name is stimmquelle's - keyFor() is CONTRACT.md §3 and this
- * file no longer assembles it - and the storage is ours, because the two
- * consumers of that package want different lifetimes for the same bytes and a
- * package that owned it would have to make one of them wrong. What remember()
- * needs is a `{ get, put }`, and data/store.ts is what one is.
+ * file no longer assembles it - and so is the storage, cacheStore(), in its own
+ * database with the budget in data/store.ts. That is a choice of ours rather
+ * than the package's: mitreden keeps its recordings as a library owned by a
+ * sentence, and a package that decided for both would make one of them wrong.
+ * data/store.ts holds the store because its wipeEverything() has to clear it.
  *
  * Two properties of this that are not obvious from the two lines:
  *
@@ -88,7 +89,7 @@ const VORLAUT = { rate: DEVICE_SAMPLE_RATE, fadeSec: 0.012, padSec: 0.06 };
  *     different name, correctly. adr/0016 weighs caching one master and
  *     deriving both instead, and says why that is a worse trade here.
  */
-const kept: SpokenStore = { get: store.readSpeech, put: store.writeSpeech };
+const kept: SpokenStore = store.spoken;
 
 // The package does not drive piper by itself; the consumer says where the
 // pieces are. Driving it directly - rather than through vits-web's predict() -

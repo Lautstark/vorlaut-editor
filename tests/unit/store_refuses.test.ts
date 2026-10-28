@@ -125,9 +125,9 @@ describe("a database that is not the shape its version claims", () => {
     const list = await store.readCollections();
     expect(list.collections).toHaveLength(0);
     const seen = await inspect();
-    expect(seen.version).toBe(6);
+    expect(seen.version).toBe(7);
     expect(seen.stores)
-      .toEqual(["collections", "layouts", "marks", "settings", "speech", "symbols"]);
+      .toEqual(["collections", "layouts", "marks", "settings", "symbols"]);
   });
 });
 

@@ -10,12 +10,13 @@ import type { Adoption } from "@lautstark/sicherung/ablage";
  * wholesale on start, written to on every edit, and served read-only while the
  * folder is out of reach. See sicherung's adr/0001.
  *
- * Two kinds go and four stay, and the line between them is the same one every
+ * Two kinds go and three stay, and the line between them is the same one every
  * Lautstark product draws. `settings` is this device's setup. `marks` is which
  * board is open here and which was last built to a talker here — both about this
- * machine, and both wrong on another. `symbols` and `speech` are caches: pictures
- * fetched again in a moment and sentences a voice makes again for nothing, so
- * paying sync for them would be paying for something free.
+ * machine, and both wrong on another. `symbols` is a cache: pictures fetched
+ * again in a moment, so paying sync for them would be paying for something
+ * free. The spoken sentences are the same kind and stay for the same reason,
+ * in a database of their own (data/store.ts, at the end).
  */
 
 export const KINDS = ["sammlungen", "layouts"] as const;
