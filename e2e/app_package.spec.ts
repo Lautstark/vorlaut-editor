@@ -9,7 +9,7 @@ import {
   KEY_CELL, PAGE_KEY, cells, choose, chooseNamed, key, keySheet, nameSet, press, put,
 } from "./diy.js";
 import {
-  exportForTalker, openPanel, openSettings, openVoices, pickExport,
+  exportForTalker, openAzureForm, openSettings, openVoices, pickExport,
 } from "./sheets.js";
 
 /* The app package, made by the real page and read back off disk.
@@ -154,7 +154,7 @@ async function fill(page: Page): Promise<void> {
   // Two sheets, because they are two scopes: the key stocks the list for every
   // Sammlung on this machine, and the tick binds exactly this one.
   await openSettings(page);
-  await openPanel(page, "#azurePanel");
+  await openAzureForm(page);
   await page.locator("#azureKey").fill("0000fakekeyfakekeyfakekey0000");
   await page.locator("#azureRegion").fill("westeurope");
   await page.locator("#azureSave").click();

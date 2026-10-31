@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { KEY_CELL, PAGE_KEY, cells, nameSet, put } from "./diy.js";
-import { exportForTalker, openPanel, openSettings, openVoices } from "./sheets.js";
+import { exportForTalker, openAzureForm, openSettings, openVoices } from "./sheets.js";
 
 /* Pressing ▶ twice on one key, and Microsoft only being asked once.
  *
@@ -81,7 +81,7 @@ async function fill(page: Page): Promise<void> {
   // Two sheets, because they are two scopes: the key stocks the list for every
   // Sammlung on this machine, and the tick binds exactly this one.
   await openSettings(page);
-  await openPanel(page, "#azurePanel");
+  await openAzureForm(page);
   await page.locator("#azureKey").fill("0000fakekeyfakekeyfakekey0000");
   await page.locator("#azureRegion").fill("westeurope");
   await page.locator("#azureSave").click();

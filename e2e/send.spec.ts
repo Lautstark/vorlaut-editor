@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import { label, nameSet, put, sheet } from "./diy.js";
-import { openPanel, openSettings, openVoices, pickExport } from "./sheets.js";
+import { openAzureForm, openSettings, openVoices, pickExport } from "./sheets.js";
 
 /* Sending a finished package to a tablet on the same wifi, driven through the
  * real page.
@@ -86,7 +86,7 @@ async function ready(page: Page): Promise<void> {
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
 
   await openSettings(page);
-  await openPanel(page, "#azurePanel");
+  await openAzureForm(page);
   await page.locator("#azureKey").fill("0000fakekeyfakekeyfakekey0000");
   await page.locator("#azureRegion").fill("westeurope");
   await page.locator("#azureSave").click();

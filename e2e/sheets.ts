@@ -8,8 +8,9 @@ import { label } from "./diy.js";
  * fourteen specs:
  *
  *   Einstellungen        at the foot of the sidebar - this browser, this
- *                        installation. The page's language, the scheme, which
- *                        voices this machine has, the symbol sources, Daten.
+ *                        installation. The page's language and scheme, the
+ *                        symbols, which voices this machine has and the Azure
+ *                        connection, Daten.
  *   the Sammlung's own   behind the ⋯ beside its name - the voice it speaks
  *                        in, and on a talker the language its device shows
  *                        its own menu in.
@@ -148,6 +149,25 @@ export async function openPanel(page: Page, id: string): Promise<void> {
   const panel = page.locator(id);
   if ((await panel.getAttribute("open")) === null) await panel.locator("> summary").click();
 }
+
+/** The Azure form in Einstellungen, unfolded.
+ *
+ * Azure is a connection under the voices this machine has
+ * (@lautstark/stimmquelle/svelte/AzureConnection): a box saying whether it is
+ * connected and one button - connect, change or check, by state - which
+ * unfolds the key-and-region form. Whichever of the three it says, it is the
+ * one button in the box, so this presses it by place rather than by word. */
+export async function openAzureForm(page: Page): Promise<void> {
+  await openPanel(page, "#voicesHerePanel");
+  if (!(await page.locator("#azureKey").isVisible())) {
+    await page.locator("#azureBox .acts button").click();
+  }
+  await expect(page.locator("#azureKey")).toBeVisible();
+}
+
+/** The connection's state box: `data-state` is `ready`, `failed`, `loading`
+ *  or `off`. */
+export const azureConnection = (page: Page): Locator => page.locator("#azureBox .where");
 
 /** The voice list, which is in the Sammlung's sheet: what this one speaks in.
  *  What this machine *has* is a different panel on the other sheet. */

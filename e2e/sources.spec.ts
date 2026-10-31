@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { cells, credits, hits, key, keySheet, press, query, search, searchNote }
   from "./diy.js";
-import { exportForTalker, openCollectionSettings } from "./sheets.js";
+import { exportForTalker, openCollectionSettings, openPanel } from "./sheets.js";
+import { WORDS as SYMBOLE } from "@lautstark/bildquelle/symbole-panel";
 
 /* Which collection the sheet offers, across a reload.
  *
@@ -132,11 +133,22 @@ async function connectFolder(page: Page) {
   }), { root: ROOT, files: FILES });
 }
 
+/** One of the two answers in „Symbole“ (bildquelle's SymbolePanel), by the
+ *  value its radio carries. The METACOM card is only drawn as an answer once
+ *  its folder reads. */
+const answer = (page: Page, source: "arasaac" | "metacom") =>
+  page.locator(`#symbolsBox input[type=radio][value="${source}"]`);
+
+/** What the panel says once a folder has been read in, in either language. */
+const SET_UP = new RegExp(`^(${Object.values(SYMBOLE)
+  .map((words) => words.nowMetacom(FILES.length).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|")})$`);
+
 /** Chooses METACOM through the sheet, the way somebody would. */
 async function useMetacom(page: Page) {
   await page.locator("#settingsLink").click();
   await openPanel(page, "#symbolsPanel");
-  await page.locator("#metacomUse").click();
+  await answer(page, "metacom").check();
   await page.locator("#voiceClose").click();
 }
 
@@ -165,13 +177,11 @@ async function supplyFiles(page: Page) {
       carrier.items.add(file);
     }
     /* The panel's own directory input, addressed by what it is rather than by
-       an id: the block is @lautstark/bildquelle's markup now and gives its
-       controls no ids. `[webkitdirectory]` is what separates it from the ZIP
-       input beside it, which is the same element with an accept list. The
-       visual spec reaches into @lautstark/sicherung's two boxes the same way,
-       and for the same reason. */
+       an id: the block is @lautstark/bildquelle's markup and gives its
+       controls no ids. The visual spec reaches into @lautstark/sicherung's
+       boxes the same way, and for the same reason. */
     const input = document.querySelector(
-      "#metacomBox input[type=file][webkitdirectory]") as HTMLInputElement;
+      "#symbolsBox input[type=file][webkitdirectory]") as HTMLInputElement;
     input.files = carrier.files;
     /* `bubbles`, and it is not decoration. A real `change` bubbles - the
        specification says so - and the plain `new Event("change")` here did not,
@@ -182,20 +192,11 @@ async function supplyFiles(page: Page) {
        not been indexed. The faithful event is the one a browser sends. */
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, { root: ROOT, files: FILES });
-  // Connected, said by the control that can only do anything when there is
-  // something to forget. Not "use this": whether that one is offered depends on
-  // which collection is active, which is the thing under test.
-  //
-  // Enabled rather than visible, because the shared panel disables an act it
-  // cannot run instead of removing it - so the button is on screen from the
-  // first paint and being there says nothing. bildquelle's own note gives the
-  // reason: a row that changes width under the pointer as a folder arrives
-  // loses whatever the keyboard was on.
-  await expect(forgetButton(page)).toBeEnabled();
+  // Connected, said by METACOM being drawn as an answer at all: the panel
+  // offers it only once its folder reads. Whether it is the answer in force
+  // is the thing under test, so that is asserted by the callers.
+  await expect(answer(page, "metacom")).toBeEnabled();
 }
-
-/** The panel's destructive act. See supplyFiles() for why it has no id. */
-const forgetButton = (page: Page) => page.locator("#metacomBox button.destructive");
 
 
 
@@ -263,14 +264,12 @@ test("a folder arriving after the page did brings its collection back", async ({
 
   await supplyFiles(page);
   // No second press. Going and finding a licensed collection is somebody
-  // saying which one they want searched, and it used to take two steps for
-  // that one intention - the folder, and then "Diese Quelle verwenden".
+  // saying which one they want searched - „Einrichten“ promised as much.
   // Switching source changes what every search from here on answers with, so
   // it is said out loud rather than left to be noticed.
-  await expect(page.locator("#status")).toHaveText(label("ui.metacom_now_active"));
-  // And the button that did it is gone, because it names the move that has
-  // just been made.
-  await expect(page.locator("#metacomUse")).toBeHidden();
+  await expect(page.locator("#status")).toHaveText(SET_UP);
+  // And METACOM is now the answer the panel shows.
+  await expect(answer(page, "metacom")).toBeChecked();
   await page.locator("#voiceClose").click();
   await expectSource(page, label("ui.search_metacom"));
   // And METACOM is owed its own line rather than ARASAAC's.
@@ -299,14 +298,6 @@ test("a folder arriving after the page did brings its collection back", async ({
   expect(asked).toBe(false);
 });
 
-/** Unfolds one panel. The sheet's panels are one exclusive group now - opening
- *  one closes the rest - so anything acting inside a panel has to open that
- *  panel first rather than assuming an earlier one stayed put. */
-async function openPanel(page: Page, id: string) {
-  const panel = page.locator(id);
-  if ((await panel.getAttribute("open")) === null) await panel.locator("> summary").click();
-}
-
 test("a folder restored at boot does not decide which source is active", async ({ page }) => {
   /* The other side of adopting, and the one that would be a silent
    * regression: somebody with a METACOM folder set up who is deliberately
@@ -322,15 +313,16 @@ test("a folder restored at boot does not decide which source is active", async (
   await page.reload();
   await expect(cells(page)).toHaveCount(6);
 
-  // The folder is here - there is something to forget - and ARASAAC is still
-  // what a search asks.
+  // The folder is here - METACOM is drawn as an answer - and ARASAAC is
+  // still what a search asks.
   await page.locator("#settingsLink").click();
   await openPanel(page, "#symbolsPanel");
-  await expect(forgetButton(page)).toBeEnabled();
-  // Offered rather than taken: the control that would switch is on screen and
-  // has not been pressed.
-  await expect(page.locator("#metacomUse")).toBeVisible();
-  await expect(page.locator("#status")).not.toHaveText(label("ui.metacom_now_active"));
+  // Offered rather than taken: the card that would switch is on screen and
+  // has not been chosen.
+  await expect(answer(page, "metacom")).toBeEnabled();
+  await expect(answer(page, "metacom")).not.toBeChecked();
+  await expect(answer(page, "arasaac")).toBeChecked();
+  await expect(page.locator("#status")).not.toHaveText(SET_UP);
   await page.locator("#voiceClose").click();
   await expectSource(page, label("ui.search_arasaac"));
 });

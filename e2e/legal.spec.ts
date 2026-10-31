@@ -100,11 +100,14 @@ test("the ARASAAC licence notice is on the page, standing", async ({ page }) => 
    * had lost both arasaac.org and the Regierung von Aragón. So what is checked
    * is that the parts the licence names are present. */
   await page.locator("#settingsLink").click();
-  const panel = page.locator("#arasaacPanel");
+  const panel = page.locator("#symbolsPanel");
   if ((await panel.getAttribute("open")) === null) {
     await panel.locator("> summary").click();
   }
-  const credit = panel.locator("#arasaacCredit");
+  /* Under the two answers in „Symbole“, for as long as ARASAAC is the one in
+     force - which it is on a fresh visit. SymbolePanel draws it without an
+     id, as the paragraph after the cards. */
+  const credit = panel.locator("#symbolsBox > p");
   await expect(credit).toBeVisible();
   await expect(credit).toContainText("ARASAAC");
   await expect(credit).toContainText("arasaac.org");

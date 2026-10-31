@@ -167,60 +167,61 @@ test("the data panel, unfolded", async ({ page }) => {
   await expect(page.locator("#voices")).toHaveScreenshot("data-panel-menu.png", { mask: dataLines(page) });
 });
 
-/* The symbol folder's panel, which nothing here could see until now.
+/* „Symbole“, unfolded: @lautstark/bildquelle/svelte/SymbolePanel.
  *
  * The sheet shot above arrives with every panel but the first folded away, so
- * the only part of this one it holds is the single word in its summary. The
- * body - the licence paragraph, the state line and its dot, and the four acts -
- * was drawn by seventy lines of this repository's own code and photographed by
- * nothing at all.
+ * the only part of this one it holds is the line in its summary. The body -
+ * the two answers, the METACOM card that is not set up yet with its one
+ * button, and the ARASAAC credit under them - is the package's markup drawn
+ * from @lautstark/design's rules, two packages that version separately, and
+ * prose cannot check that they still agree.
  *
- * That gap is why this test exists rather than being tidiness. The block is
- * @lautstark/bildquelle/metacom-panel's markup now and is styled from outside,
- * which puts it in exactly the position the middle test above describes for
- * @lautstark/sicherung's two boxes: the markup and the stylesheet are in two
- * packages that version separately, and prose cannot check that they still
- * agree. @lautstark/design's own note beside `.metacom-panel` says the same in
- * as many words - the rules were added with no product emitting the class yet,
- * and the migration is where their drawing has to be checked.
+ * No folder is connected, which is the only state a test can arrive in
+ * without a handle to plant: sources.spec.ts is where that is seeded and
+ * where what the panel then SAYS is asserted. What this holds is how it is
+ * drawn.
  *
- * No folder is connected, which is not a limitation but the only state a test
- * can arrive in without a handle to plant: bildquelle stores one in its own
- * database, and sources.spec.ts is where that is seeded and where what the
- * panel then SAYS is asserted. What this holds is how it is drawn.
- *
- * No mask. Every line in this state is fixed text - the licence paragraph, the
- * "no folder chosen yet" state, the four labels - and the count that would vary
- * is not on screen because there is nothing indexed to count. */
-test("the symbol folder panel, unfolded", async ({ page }) => {
+ * No mask. Every line in this state is fixed text. */
+test("the symbols panel, unfolded", async ({ page }) => {
   await openBoard(page);
   await openSettings(page);
   await openPanel(page, "#symbolsPanel");
   const panel = page.locator("#symbolsPanel");
   /* The shared block drawn before the picture is taken, for the data panel's
-     reason: it is not in the markup - wireSymbolFolder() builds it and appends
-     it into an empty div - so a shot of the panel alone would be satisfied by
-     that div staying empty, which is what a broken import leaves behind and
-     exactly the picture that would then be recorded as correct. */
-  await expect(panel.locator("#metacomBox .metacom-panel")).toBeVisible();
-  // The act this repository did not have until this change, and the reason
-  // half of it is here: a picture that did not include it could be recorded
-  // over a panel that had quietly lost it again.
-  await expect(panel.locator("#metacomBox .acts button")).toHaveCount(4);
+     reason: a shot of a panel whose component failed to mount would be
+     recorded as correct. ARASAAC is the one answer that can be chosen, and
+     METACOM offers its one button. */
+  await expect(panel.locator("#symbolsBox .answers")).toBeVisible();
+  await expect(panel.locator("#symbolsBox input[type=radio]")).toHaveCount(1);
+  await expect(panel.locator("#symbolsBox .answer.off .acts button")).toHaveCount(1);
   await expect(panel).toHaveScreenshot("symbols-panel.png");
 });
 
+/* The Azure connection under the voices this machine has:
+ * @lautstark/stimmquelle/svelte/AzureConnection, as a fresh profile has it -
+ * not connected, one button. Only the box, because the panel around it holds
+ * the voice count and the offer to fetch the offline voices, which depend on
+ * the machine. No mask: every word in the box is fixed text. */
+test("the Azure connection, not connected", async ({ page }) => {
+  await openBoard(page);
+  await openSettings(page);
+  await openPanel(page, "#voicesHerePanel");
+  const box = page.locator("#azureBox");
+  await expect(box.locator(".where")).toHaveAttribute("data-state", "off");
+  await expect(box.locator(".acts button")).toHaveCount(1);
+  await expect(box).toHaveScreenshot("azure-connection.png");
+});
+
 /* The list a voice is chosen from, which nothing here could see either - and
- * for a plainer reason than the symbol folder's: it is not on this sheet at
+ * for a plainer reason than the symbols panel's: it is not on this sheet at
  * all. Every shot above is Einstellungen, and the picker is behind the open
  * Sammlung's dots, one sheet over. Einstellungen holds only a count of what
  * this machine can speak with.
  *
  * The whole block is @lautstark/stimmquelle/voice-picker's markup drawn from
  * @lautstark/design's rules now, which is the position the middle test above
- * describes for the two Sicherung boxes and the one the symbol folder is in.
- * It is the sharper case of the two, though. Nobody had drawn `.metacom-panel`
- * before it shipped; every one of these class names was drawn by three
+ * describes for the two Sicherung boxes and the one the symbols panel is in.
+ * It is the sharper case of the two, though: every one of these class names was drawn by three
  * products at once, each with its own numbers, and this repository's copy of
  * them has just been deleted from ui.css. So what this picture holds is
  * exactly the claim that deletion makes: the shared rules land on the same

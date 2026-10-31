@@ -53,8 +53,9 @@ test("choosing a language moves the page and the mark with it", async ({ page })
 
   await group.locator("button", { hasText: other }).click();
 
-  // The heading follows, as it always did.
-  await expect(page.locator("#languageState")).toHaveText(other);
+  // The heading follows, as it always did. It names the scheme after the
+  // language, so only its start is the language's.
+  await expect(page.locator("#languageState")).toHaveText(new RegExp(`^${other} \u00b7 `));
   // And so does the mark. This is the assertion the old trigger failed: the
   // control has to be redrawn by us, which is the whole cost of not being a
   // <select> that displayed its own selected option.
@@ -76,5 +77,5 @@ test("the settings heading is the one label the language control never takes", a
   // the buttons, which is where the accessible name of a segmented set belongs.
   await expect(page.locator("#langPick")).toHaveAttribute("aria-label", "Sprache / Language");
   // Whereas the panel around it is translated like everything else.
-  await expect(page.locator("#languagePanel > summary > .section")).toHaveText(either("ui.language"));
+  await expect(page.locator("#languagePanel > summary > .section")).toHaveText(either("ui.look"));
 });

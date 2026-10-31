@@ -152,7 +152,9 @@ test("the choice survives a reload, over what the browser asks for",
     // carried by the markup and so are not covered by applyTexts().
     await openSettings(page);
     await expect(inForce(page)).toHaveText(OWN_NAME[CHOSEN]);
-    await expect(page.locator("#languageState")).toHaveText(OWN_NAME[CHOSEN]);
+    // The language first, then the scheme behind a middle dot.
+    await expect(page.locator("#languageState"))
+      .toHaveText(new RegExp(`^${OWN_NAME[CHOSEN]} \u00b7 `));
   });
 
 test("this browser is what carries it, not the Sammlung", async ({ page }) => {

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
-import { openPanel, openSettings, openVoices } from "./sheets.js";
+import { azureConnection, openAzureForm, openSettings, openVoices } from "./sheets.js";
 
 /* The Azure key flow, with Microsoft's server played by a route.
  *
@@ -19,20 +19,19 @@ import { openPanel, openSettings, openVoices } from "./sheets.js";
  * there is; the list itself is behind the open Sammlung's ⋯, because choosing
  * binds exactly one. So "the save keeps its sheet open" is still the claim
  * here - the sheet it keeps open is the one holding the panel that says
- * whether the key works and how many voices arrived - and what the rows became
- * is asked next door.
+ * whether the key works - and what the rows became is asked next door.
+ *
+ * Azure is a connection under the voices this machine has: a box that says
+ * whether it is connected, and one button that unfolds the key-and-region
+ * form. A save that Azure answers closes the form and the box says
+ * "verbunden"; a save it does not answer keeps the form open and says why on
+ * the form's own line, #azureProbe.
  */
 
 const table = (key: string) =>
   LANGUAGES.map((l) => (TEXTS as Record<string, Record<string, string>>)[l][key]);
 
-/** "{count} voices available" in whichever language, count made flexible. */
-const AZURE_OK = new RegExp(`^(${table("ui.azure_ok")
-  .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("\\{count\\}", "\\d+"))
-  .join("|")})$`);
 const AZURE_UNREACHABLE = new RegExp(`^(${table("ui.azure_unreachable")
-  .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`);
-const AZURE_NONE = new RegExp(`^(${table("ui.azure_key_none")
   .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`);
 /* A regex, not a glob: the region rides in the SUBDOMAIN
  * (westeurope.tts.speech...), and a glob's "**\/" wants a slash exactly where
@@ -45,7 +44,7 @@ async function typeKeyAndSave(page: Page, region: string) {
   await page.goto("./");
   await expect(page.locator("#device .cell")).toHaveCount(6);
   await openSettings(page);
-  await openPanel(page, "#azurePanel");
+  await openAzureForm(page);
   await page.locator("#azureKey").fill("0000fakekeyfakekeyfakekey0000");
   await page.locator("#azureRegion").fill(region);
   await page.locator("#azureSave").click();
@@ -69,9 +68,9 @@ test("a working key answers with its voices, sheet still open", async ({ page })
   await typeKeyAndSave(page, "westeurope");
 
   // The sheet did NOT close: this save changed where voices come from, and
-  // the refreshed list plus the panel's answer belong on this screen.
+  // the connection's answer belongs on this screen.
   await expect(page.locator("#voices")).toBeVisible();
-  await expect(page.locator("#azureState")).toHaveText(AZURE_OK);
+  await expect(azureConnection(page)).toHaveAttribute("data-state", "ready");
   await openVoicePanel(page);
   await expect(page.locator("#voiceBox .voices__row", { hasText: "Katja" }))
     .toBeVisible();
@@ -89,7 +88,9 @@ test("a region that is not one gets said on the panel, not swallowed", async ({ 
   await typeKeyAndSave(page, "wsteurope");
 
   await expect(page.locator("#voices")).toBeVisible();
-  await expect(page.locator("#azureState")).toHaveText(AZURE_UNREACHABLE);
+  // Nothing was stored: the form stays open and says why on its own line.
+  await expect(page.locator("#azureProbe")).toHaveText(AZURE_UNREACHABLE);
+  await expect(azureConnection(page)).toHaveAttribute("data-state", "off");
   // The piper voices survive a broken Azure - that part of the old behaviour
   // was right and stays. The list is inside a folded panel now, so it has to
   // be unfolded before anything in it can be asserted visible.
@@ -115,13 +116,13 @@ test("a stored key can be removed, and the azure rows leave with it", async ({ p
   // "leave the key alone". The sheet stays open: the rows this removal costs
   // leave in front of the person who asked.
   await openSettings(page);
-  await openPanel(page, "#azurePanel");
+  await openAzureForm(page);
   await page.locator("#azureForget").click();
   // Einstellungen stays open, and everything the removal is answerable for on
   // this sheet is asserted before leaving it.
   await expect(page.locator("#voices")).toBeVisible();
-  await expect(page.locator("#azureState")).toHaveText(AZURE_NONE);
-  // Gone from the button too: nothing left to remove.
+  await expect(azureConnection(page)).toHaveAttribute("data-state", "off");
+  // The form folded away with it: nothing left to remove.
   await expect(page.locator("#azureForget")).toBeHidden();
 
   // And the rows it cost are gone from the list next door.
@@ -136,7 +137,7 @@ test("a stored key can be removed, and the azure rows leave with it", async ({ p
   await page.reload();
   await expect(page.locator("#device .cell")).toHaveCount(6);
   await openSettings(page);
-  await expect(page.locator("#azureState")).toHaveText(AZURE_NONE);
+  await expect(azureConnection(page)).toHaveAttribute("data-state", "off");
 });
 
 
@@ -162,9 +163,9 @@ test("a chosen Azure voice keeps its name after the key stops working", async ({
   // would throw away a deliberate decision - so it has to keep being shown,
   // and what it is shown as is the whole of this test.
   await openSettings(page);
-  await openPanel(page, "#azurePanel");
+  await openAzureForm(page);
   await page.locator("#azureForget").click();
-  await expect(page.locator("#azureState")).toHaveText(AZURE_NONE);
+  await expect(azureConnection(page)).toHaveAttribute("data-state", "off");
   // The list is on the Sammlung's own sheet, which is where the row that has
   // to keep its name is drawn.
   await openVoicePanel(page);

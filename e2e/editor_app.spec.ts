@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
 import { checkPackage } from "../src/data/app_package.js";
 import { readPackage } from "./obz.js";
-import { openCollectionSettings, openPanel, openSettings, openVoices, savePackage }
+import { openAzureForm, openCollectionSettings, openPanel, openSettings, openVoices, savePackage }
   from "./sheets.js";
 
 /* A tablet Sammlung, built through the page and exported.
@@ -451,7 +451,7 @@ async function build(page: Page): Promise<void> {
   // Two sheets, because they are two scopes: the key stocks the list for every
   // Sammlung on this machine, and the tick binds exactly this one.
   await openSettings(page);
-  await openPanel(page, "#azurePanel");
+  await openAzureForm(page);
   await page.locator("#azureKey").fill("0000fakekeyfakekeyfakekey0000");
   await page.locator("#azureRegion").fill("westeurope");
   await page.locator("#azureSave").click();

@@ -82,16 +82,16 @@ test("what is typed survives a reload", async ({ page }) => {
 });
 
 /* Every panel folded on every open, which is what the code says and what it
-   did for only three of the eight. Erscheinungsbild is the case that was
-   broken: not named in the fold, so it stayed open across a close and a
-   reopen - a settings sheet that came up remembering where somebody had been
-   last time, under a comment promising it would not. */
+   once did for only three of eight. A panel not named in the fold stayed open
+   across a close and a reopen - a settings sheet that came up remembering
+   where somebody had been last time, under a comment promising it would not.
+   „Deine Daten“ stands in for the panels that are folded on arrival. */
 test("the settings sheet comes up folded, whichever panel was left open",
   async ({ page }) => {
     await page.goto("./");
     await page.locator("#settingsLink").click();
 
-    const theme = page.locator("#themePanel");
+    const theme = page.locator("#dataPanel");
     await expect(theme).not.toHaveAttribute("open", "");
     await theme.locator("> summary").click();
     await expect(theme).toHaveAttribute("open", "");

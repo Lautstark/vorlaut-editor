@@ -26,9 +26,17 @@ const label = (page: import("@playwright/test").Page, key: string) =>
 const either = (key: string) =>
   new RegExp(`^(${LANGUAGES.map((l) => table[l][key]).join("|")})$`);
 
+/** The scheme as the folded heading of „Sprache & Aussehen“ names it: after
+ *  the language, behind a middle dot. */
+const inHeading = (key: string) =>
+  new RegExp(` \u00b7 (${LANGUAGES.map((l) => table[l][key]).join("|")})$`);
+
+/** The scheme is the second row of „Sprache & Aussehen“, the panel the sheet
+ *  opens with. Asked for rather than assumed open, as openPanel() does. */
 async function openTheme(page: import("@playwright/test").Page): Promise<void> {
   await page.click("#settingsLink");
-  await page.locator("#themePanel summary").click();
+  const panel = page.locator("#languagePanel");
+  if ((await panel.getAttribute("open")) === null) await panel.locator("> summary").click();
   await expect(page.locator("#themePick button")).toHaveCount(3);
 }
 
@@ -38,7 +46,7 @@ test.beforeEach(async ({ page }) => {
 
 test("opens following the device, and says so in the heading", async ({ page }) => {
   await openTheme(page);
-  await expect(page.locator("#themeState")).toHaveText(either("ui.theme_system"));
+  await expect(page.locator("#languageState")).toHaveText(inHeading("ui.theme_system"));
   // The absence of the attribute is what "follows the OS" is: a page that wrote
   // data-theme here would have picked one, and picked it in the dark.
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
@@ -53,7 +61,7 @@ test("a chosen scheme is in force, named in the heading, and survives a reload",
       .filter({ hasText: either("ui.theme_dark") }).click();
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator("#themeState")).toHaveText(either("ui.theme_dark"));
+    await expect(page.locator("#languageState")).toHaveText(inHeading("ui.theme_dark"));
 
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -102,11 +110,11 @@ test("going back to the device setting removes the choice rather than storing on
 
 test("opening a panel closes the one open before it", async ({ page }) => {
   await page.click("#settingsLink");
-  // Language starts open, so a second panel is enough to show the group at work.
+  // „Sprache & Aussehen“ starts open, so a second panel is enough to show the group at work.
   await expect(page.locator("#languagePanel")).toHaveJSProperty("open", true);
 
-  await page.locator("#themePanel summary").click();
-  await expect(page.locator("#themePanel")).toHaveJSProperty("open", true);
+  await page.locator("#symbolsPanel summary").click();
+  await expect(page.locator("#symbolsPanel")).toHaveJSProperty("open", true);
   // The browser does this, not us: the panels share a name, which makes them
   // one group with radio semantics. Asserting the effect rather than the
   // attribute, so a scripted accordion would keep this green.
