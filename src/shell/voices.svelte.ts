@@ -52,8 +52,7 @@ import type { Component } from "svelte";
  *  tests/unit/settings_panels.test.ts can hold it against the markup, which is
  *  the drift that made this list necessary. */
 export const PANELS = [
-  "languagePanel", "themePanel", "voicesHerePanel", "azurePanel",
-  "arasaacPanel", "symbolsPanel", "boardPanel", "dataPanel",
+  "languagePanel", "symbolsPanel", "voicesHerePanel", "boardPanel", "dataPanel",
 ] as const;
 
 /** The one panel the sheet loads with open - SettingsSheet.svelte marks it so.

@@ -7,7 +7,7 @@ import { OPENS_WITH, PANELS } from "../../src/shell/voices.svelte.js";
  * The settings sheet folds every panel when it opens, and this is the list it
  * folds.
  *
- * It exists because the code named three of the eight by hand - voicesHere,
+ * It exists because the code once named three of eight panels by hand - voicesHere,
  * azure and symbols - under a comment saying every panel is folded on every
  * open. For the other five that was simply false: opening Erscheinungsbild and
  * closing the sheet left it open on the next visit. Nothing failed, nothing
@@ -42,7 +42,7 @@ describe("the settings sheet's panel list", () => {
   });
 
   it("is not empty, so a broken regex cannot pass this quietly", () => {
-    expect(inMarkup.length).toBeGreaterThan(5);
+    expect(inMarkup.length).toBeGreaterThan(3);
   });
 
   it("names each panel once", () => {
