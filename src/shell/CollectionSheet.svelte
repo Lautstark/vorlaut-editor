@@ -265,6 +265,9 @@
          as `#voiceBox .voice-picker`, and a list that IS the box has nothing
          for that descendant to find.
 
+         `folded`: with a voice chosen, only that voice and „Andere Stimme …",
+         the way the settings sheets of all four programmes show it.
+
          The `{#if}` is what a fresh mount is for - see voiceListShown(). It is
          not a `{#key}` on the sheet's epoch, which §6.2 would refuse here
          anyway: a key around a member of a `name`d accordion replaces the
@@ -273,7 +276,7 @@
       {#if voiceListShown()}
         <VoicePicker voices={pickableVoices} current={tickedVoice}
           pick={(id) => void chooseVoice(id)} hear={hearVoice}
-          notes={voiceNotes} chosenName={chosenVoiceName} lang={reading} />
+          notes={voiceNotes} chosenName={chosenVoiceName} lang={reading} folded />
       {/if}
     </div>
     <!-- Not the module's "no voice matches that": this is a machine with

@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import { label, nameSet, put, sheet } from "./diy.js";
-import { openAzureForm, openSettings, openVoices, pickExport } from "./sheets.js";
+import { openAzureForm, openSettings, openVoices, pickExport, CHOSEN_VOICE } from "./sheets.js";
 
 /* Sending a finished package to a tablet on the same wifi, driven through the
  * real page.
@@ -94,7 +94,7 @@ async function ready(page: Page): Promise<void> {
   await openVoices(page);
   await page.locator("#voiceBox .voices__row", { hasText: "Katja" })
     .locator("button.voice").click();
-  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator(CHOSEN_VOICE)).toHaveCount(1);
   await page.locator("#collectionSheetClose").click();
   await expect(page.locator("#collectionSheet")).toBeHidden();
 }

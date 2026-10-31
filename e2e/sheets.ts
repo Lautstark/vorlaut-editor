@@ -170,11 +170,30 @@ export async function openAzureForm(page: Page): Promise<void> {
 export const azureConnection = (page: Page): Locator => page.locator("#azureBox .where");
 
 /** The voice list, which is in the Sammlung's sheet: what this one speaks in.
- *  What this machine *has* is a different panel on the other sheet. */
+ *  What this machine *has* is a different panel on the other sheet.
+ *
+ *  Unfolded: with a voice chosen the list is put away behind „Andere Stimme …"
+ *  (stimmquelle's `folded`), and every caller is here to look at the rows. */
 export async function openVoices(page: Page): Promise<Locator> {
   const sheet = await openCollectionSettings(page);
   await openPanel(page, "#voicePanel");
+  await unfoldVoices(page);
   return sheet;
+}
+
+/** The chosen voice, folded or not: a ticked row in the open list, or the
+ *  one row the folded list shows. */
+export const CHOSEN_VOICE =
+  '#voiceBox :is(.voice[aria-checked="true"], .voice[aria-current="true"])';
+
+/** Press „Andere Stimme …" where the list is folded. A row clicked folds it
+ *  again, so a spec that clicks one and then wants another calls this. */
+export async function unfoldVoices(page: Page): Promise<void> {
+  const box = page.locator("#voiceBox");
+  if (await box.isHidden()) return;
+  await expect(box.locator(".voice-picker")).toBeVisible();
+  const other = box.getByRole("button", { name: /^(Andere Stimme|Another voice) …$/ });
+  if (await other.count()) await other.click();
 }
 
 /**

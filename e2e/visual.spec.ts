@@ -252,6 +252,13 @@ test("the voice picker, unfolded", async ({ page }) => {
   await expect(panel.locator('.voice[tabindex="0"]')).toHaveCount(1);
   await expect(panel.locator(".voice-picker__filters .chip").first()).toBeVisible();
   await expect(panel).toHaveScreenshot("voice-picker.png");
+
+  /* And folded, which is how the panel opens once a voice is chosen: the one
+     voice with its ▶, and „Andere Stimme …" under it. `.voice[aria-current]`
+     is a rule components.css gained for this, and nothing else draws it. */
+  await panel.getByRole("button", { name: /^(Zuklappen|Fold away)$/ }).click();
+  await expect(panel.locator('.voice[aria-current="true"]')).toHaveCount(1);
+  await expect(panel).toHaveScreenshot("voice-picker-folded.png");
 });
 
 /* The two surfaces outside the sheets, which nothing here could see either.

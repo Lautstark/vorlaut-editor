@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { KEY_CELL, PAGE_KEY, cells, nameSet, put } from "./diy.js";
-import { exportForTalker, openAzureForm, openSettings, openVoices } from "./sheets.js";
+import { exportForTalker, openAzureForm, openSettings, openVoices, CHOSEN_VOICE } from "./sheets.js";
 
 /* Pressing ▶ twice on one key, and Microsoft only being asked once.
  *
@@ -89,7 +89,7 @@ async function fill(page: Page): Promise<void> {
   await openVoices(page);
   await page.locator("#voiceBox .voices__row", { hasText: "Katja" })
     .locator("button.voice").click();
-  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator(CHOSEN_VOICE)).toHaveCount(1);
   await page.locator("#collectionSheetClose").click();
   await expect(page.locator("#collectionSheet")).toBeHidden();
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { CHOSEN_VOICE } from "./sheets.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -458,7 +459,7 @@ async function build(page: Page): Promise<void> {
 
   await openVoices(page);
   await page.locator("#voiceBox .voices__row", { hasText: "Katja" }).locator("button.voice").click();
-  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator(CHOSEN_VOICE)).toHaveCount(1);
   await page.locator("#collectionSheetClose").click();
   await expect(page.locator("#collectionSheet")).toBeHidden();
 }

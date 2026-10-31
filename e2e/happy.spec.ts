@@ -6,7 +6,7 @@ import {
   nameSet, openBoard, pageMore, press, within, put, search, searchNote, setCard,
   word,
 } from "./diy.js";
-import { exportForTalker, openSettings, openVoices } from "./sheets.js";
+import { exportForTalker, openSettings, openVoices, unfoldVoices, CHOSEN_VOICE } from "./sheets.js";
 
 /* The whole editing loop, end to end, in one browser.
  *
@@ -538,7 +538,7 @@ test("a voice can be chosen and is still ticked on reopening", async ({ page }) 
 
   const picked = (await rows.first().locator(".voice__name").textContent())!;
   await rows.first().locator("button.voice").click();
-  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator(CHOSEN_VOICE)).toHaveCount(1);
   // No Save: choosing wrote it. The board's own status line is the proof,
   // and it is what every other edit on this page already says.
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
@@ -549,7 +549,7 @@ test("a voice can be chosen and is still ticked on reopening", async ({ page }) 
   // The regression this pins: listVoices() once dropped `chosen`, and the
   // sheet opened with nothing marked every time.
   await openVoices(page);
-  const on = page.locator('#voiceBox .voice[aria-checked="true"]');
+  const on = page.locator(CHOSEN_VOICE);
   await expect(on).toHaveCount(1);
   await expect(on.locator(".voice__name")).toHaveText(picked);
   await page.locator("#collectionSheetClose").click();
@@ -581,6 +581,8 @@ test("the voice that rushes a single word says so, on its row alone", async ({ p
    * a row is the catalogue's alone and the count below means what it says. */
   await kerstin.locator("button.voice").click();
   await expect(page.locator("#status")).toHaveText(SAVED, { timeout: 10_000 });
+  // The click was a choice, so the list folded; the notes are on the rows.
+  await unfoldVoices(page);
 
   /* The words are @lautstark/stimmquelle/voice-picker's now - it carries the
    * sentence in both languages, and this repository's own copy of it went with
@@ -656,7 +658,7 @@ test("the voice list is one tab stop, is named, and the arrows keep their place"
     const second = await standing();
     expect(second).not.toBe(first);
     expect(second.startsWith("!")).toBe(false);
-    await expect(page.locator('#voiceBox .voice[aria-checked="true"]'))
+    await expect(page.locator(CHOSEN_VOICE))
       .toHaveAttribute("data-id", second);
 
     /* And again, after this repository has redrawn the whole list underneath
@@ -666,7 +668,7 @@ test("the voice list is one tab stop, is named, and the arrows keep their place"
     const third = await standing();
     expect(third).not.toBe(second);
     expect(third.startsWith("!")).toBe(false);
-    await expect(page.locator('#voiceBox .voice[aria-checked="true"]'))
+    await expect(page.locator(CHOSEN_VOICE))
       .toHaveAttribute("data-id", third);
 
     // Still one way in after three repaints, on the row the keyboard is on.
@@ -731,7 +733,7 @@ test("a Sammlung nobody has told anything opens on a voice, and says nobody chos
     await openVoices(page);
     await expect(page.locator("#voiceBox .voices__row").first()).toBeVisible();
 
-    const on = page.locator('#voiceBox .voice[aria-checked="true"]');
+    const on = page.locator(CHOSEN_VOICE);
     await expect(on).toHaveCount(1);
     // Under the facts rather than among them. The facts line is four words
     // that compare two voices; this is a clause about how this one came to be

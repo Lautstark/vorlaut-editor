@@ -9,8 +9,7 @@ import {
   KEY_CELL, PAGE_KEY, cells, choose, chooseNamed, key, keySheet, nameSet, press, put,
 } from "./diy.js";
 import {
-  exportForTalker, openAzureForm, openSettings, openVoices, pickExport,
-} from "./sheets.js";
+  exportForTalker, openAzureForm, openSettings, openVoices, pickExport, CHOSEN_VOICE } from "./sheets.js";
 
 /* The app package, made by the real page and read back off disk.
  *
@@ -161,7 +160,7 @@ async function fill(page: Page): Promise<void> {
 
   await openVoices(page);
   await page.locator("#voiceBox .voices__row", { hasText: "Katja" }).locator("button.voice").click();
-  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator(CHOSEN_VOICE)).toHaveCount(1);
   // Out of the sheet: the ⋯ this test is heading for is behind it, and a modal
   // <dialog> makes everything under it inert rather than merely covered.
   await page.locator("#collectionSheetClose").click();

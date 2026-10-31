@@ -6,7 +6,7 @@ import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
    if the page stops repainting it, which is the half it was written for. */
 import { WORDS } from "@lautstark/sicherung/daten-panel";
 import { hits, key, keySheet, openBoard, put, search } from "./diy.js";
-import { openCollectionSettings, openPanel, openSettings, openVoices } from "./sheets.js";
+import { openCollectionSettings, openPanel, openSettings, openVoices, CHOSEN_VOICE } from "./sheets.js";
 
 /* Two languages, and the whole point of these is that they are two.
  *
@@ -221,7 +221,7 @@ test("the Sammlung's language picks its voice, and the page's does not",
     /** What the marked row says it speaks, in the words the page is wearing. */
     const speaking = async () => {
       await openVoices(page);
-      const facts = page.locator('#voiceBox .voice[aria-checked="true"] .voice__facts');
+      const facts = page.locator(`${CHOSEN_VOICE} .voice__facts`);
       await expect(facts).toHaveCount(1);
       return (await facts.textContent())!;
     };
@@ -268,7 +268,7 @@ test("a voice somebody chose does not move when the Sammlung's language does",
     const rows = page.locator("#voiceBox .voices__row");
     const picked = (await rows.last().locator(".voice__name").textContent())!;
     await rows.last().locator("button.voice").click();
-    await expect(page.locator('#voiceBox .voice[aria-checked="true"] .voice__name'))
+    await expect(page.locator(`${CHOSEN_VOICE} .voice__name`))
       .toHaveText(picked);
 
     // The language is a panel away rather than a sheet away: both of these are
@@ -279,12 +279,12 @@ test("a voice somebody chose does not move when the Sammlung's language does",
     await expect.poll(() => inTheLayout(page)).toBe(CHOSEN);
 
     await openVoices(page);
-    await expect(page.locator('#voiceBox .voice[aria-checked="true"] .voice__name'))
+    await expect(page.locator(`${CHOSEN_VOICE} .voice__name`))
       .toHaveText(picked);
     // And it is a choice rather than a guess, so it wears no note saying
     // otherwise. The note is a line of its own under the facts now, which is
     // where the picker's notes() hook puts what a product has to add.
-    await expect(page.locator('#voiceBox .voice[aria-checked="true"]'))
+    await expect(page.locator(CHOSEN_VOICE))
       .not.toContainText(table[ASKED]["ui.voice_auto_note"]!);
   });
 

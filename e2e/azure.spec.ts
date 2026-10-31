@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
-import { azureConnection, openAzureForm, openSettings, openVoices } from "./sheets.js";
+import { azureConnection, openAzureForm, openSettings, openVoices, CHOSEN_VOICE } from "./sheets.js";
 
 /* The Azure key flow, with Microsoft's server played by a route.
  *
@@ -79,7 +79,7 @@ test("a working key answers with its voices, sheet still open", async ({ page })
   // and no dialog closing underneath the person who picked.
   await page.locator("#voiceBox .voices__row", { hasText: "Katja" })
     .locator("button.voice").click();
-  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator(CHOSEN_VOICE)).toHaveCount(1);
   await expect(page.locator("#collectionSheet")).toBeVisible();
 });
 
@@ -157,7 +157,7 @@ test("a chosen Azure voice keeps its name after the key stops working", async ({
   const katja = page.locator("#voiceBox .voices__row", { hasText: "Katja" });
   await expect(katja).toBeVisible();
   await katja.locator("button.voice").click();
-  await expect(page.locator('#voiceBox .voice[aria-checked="true"]')).toHaveCount(1);
+  await expect(page.locator(CHOSEN_VOICE)).toHaveCount(1);
 
   // And now the key goes. The voice stays chosen on purpose - dropping it
   // would throw away a deliberate decision - so it has to keep being shown,
