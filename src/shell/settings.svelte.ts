@@ -32,7 +32,7 @@ import * as symbols from "../data/symbols.js";
 import { exportEverything, importBackup, isBackup, TOO_NEW } from "../data/backup.js";
 import { boardTotals, wipeEverything } from "../data/store.js";
 import { adopt, adopted, refusal } from "./adopt.js";
-import { ablage, folderName, isStore, wipeReaches } from "../data/folder.js";
+import { ablage, folderName, wipeReaches } from "../data/folder.js";
 import { adoptFolder } from "../data/store.js";
 import type { Ablage } from "@lautstark/sicherung/ablage";
 import type { Sicherung } from "@lautstark/sicherung";
@@ -153,16 +153,6 @@ export const dataFolderChanged = (): void => { location.reload(); };
  *  `$state.raw` because it is replaced whole and never mutated. */
 let standing = $state.raw<Sicherung | null>(null);
 export const standingBackup = (): Sicherung | null => standing;
-
-/** Only where there is no store folder: with one, the copies already go beside
- *  the work, and a second picker would be the same offer under a name that
- *  reads almost the same. And only where the browser has a picker at all -
- *  the component draws nothing in an unsupported browser, so without this the
- *  box would be an empty div spending `.folderbox`'s margin. Asked once, the
- *  way `!!backupPanel(...)` answered it once: an unsupported browser has no
- *  other status to be in. */
-let keepOffered = $state(false);
-export const keepShown = (): boolean => keepOffered;
 
 /* The rendering chooser. METACOM ships the same symbols several times over -
  * with and without a frame, with and without the word printed on the picture -
@@ -563,12 +553,10 @@ export async function takeBoardFile(): Promise<void> {
  * This one is about this browser's whole state, in a shape only vorlaut reads,
  * and the two would blur into "export" if they shared a panel. */
 export function wireData(backup: Sicherung): void {
+  /* The dated copies go into the store's folder when there is one - the
+     panel hands it over when a folder is chosen, app.ts at start - so there
+     is no second folder to offer and nothing to decide here. */
   standing = backup;
-  /* Two answers rather than a panel, which is what building the blocks here
-     cost and no longer does. The store panel is drawn whatever it says; the
-     standing copy is offered only where it has something to offer, and that
-     is this page's question rather than the component's - see keepShown(). */
-  keepOffered = !isStore() && backup.status.kind !== "unsupported";
 }
 
 /* Delete everything, which this editor was the only one in the family without.

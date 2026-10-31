@@ -45,7 +45,7 @@
     adoptDataFolder, afterMetacom, askAzure, azureState$,
     boardState, chooseRendering, chooseTheme, dataFolderChanged, dataState,
     dataStore, exportData, importData, installed, keyPlaceholder,
-    metacomOffered, metacomPathField, metacomWord, keepShown, noteMetacomPress,
+    metacomOffered, metacomPathField, metacomWord, noteMetacomPress,
     pickBoardFile, preferredRendering, renderingLabel, renderings, sayData,
     sayMetacom, setMetacomPath, standingBackup,
     symbolsSummary, takeMetacomHeadline, THEME_KEY, themeLabel, themeNow, useSource,
@@ -470,7 +470,7 @@
     <div id="whereBox">
       <DatenPanel store={dataStore()} adopt={adoptDataFolder}
         changed={dataFolderChanged} say={sayData} lang={reading}
-        backup={keepShown() ? backup : null}
+        {backup}
         headline={(text) => { dataHead = text; }}
         file={{ download: () => void exportData(), read: (file) => void importData(file), note: t("ui.data_file_note") }}
         wipe={() => void wipeAll()} />
