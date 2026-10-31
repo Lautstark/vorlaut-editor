@@ -460,6 +460,10 @@ export async function saveSettings(
       || (wanted.azureRegion !== undefined
           && wanted.azureRegion !== (settings.azureRegion || ""));
     settings = await writeSettings(wanted);
+    // The same as a read does, and for the reason inTurn() gives: a read that
+    // was queued before this write has already put its own answer into the
+    // provider, and this write is the newer one.
+    symbols.setActiveSource(settings.activeProvider || "arasaac");
     renderSettings();
     return { azureChanged };
   });
