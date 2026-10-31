@@ -460,7 +460,7 @@
        every Lautstark programme. One box says where the work is and whether
        that is safe, at most one button sits under it, and the ⋯ in its corner
        holds the rest - another folder, the backup file out and in, the dated
-       second copy while the work is in the browser, and „Alles löschen“, which
+       second copy while the work is in the browser, and deleting everything, which
        was a panel of its own until 2026-10-31 and still asks first.
        The board panel above it is a different act and stays: an .obz is a
        board in a format other programs read, this is the whole of what is in

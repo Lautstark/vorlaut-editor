@@ -158,7 +158,7 @@ test("the data panel, unfolded", async ({ page }) => {
   await expect(panel.locator("#whereBox .acts button")).toHaveCount(1);
   await expect(panel).toHaveScreenshot("data-panel.png", { mask: dataLines(page) });
 
-  /* And its ⋯ open, which holds everything else — „Alles löschen" last and
+  /* And its ⋯ open, which holds everything else - deleting everything last and
      red, the one row in the product drawn as destructive. The sheet, because
      the menu hangs out of the panel's box. */
   await panel.getByRole("button", { name: /^(Mehr|More)$/ }).click();
