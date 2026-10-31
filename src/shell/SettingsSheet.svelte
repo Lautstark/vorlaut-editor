@@ -66,14 +66,14 @@
   import Sheet from "@lautstark/design/svelte/Sheet";
   import ThemePicker from "@lautstark/design/svelte/ThemePicker";
   import Vanilla from "@lautstark/design/svelte/Vanilla";
-  import AblagePanel from "@lautstark/sicherung/svelte/AblagePanel";
-  import BackupPanel from "@lautstark/sicherung/svelte/BackupPanel";
+  import DatenPanel from "@lautstark/sicherung/svelte/DatenPanel";
   import MetacomPanel from "@lautstark/bildquelle/svelte/MetacomPanel";
   import AzurePanel from "@lautstark/stimmquelle/svelte/AzurePanel";
   import type { AzureAccess, AzureAnswer, AzureWords }
     from "@lautstark/stimmquelle/svelte/AzurePanel";
 
-  let dataFile: HTMLInputElement;
+  /* What „Deine Daten“ says in its heading: where the work is. */
+  let dataHead = $state("");
 
   /* What the three shared panels are told the page is in.
    *
@@ -456,58 +456,26 @@
     <p class="note" id="boardState">{boardState()}</p>
   </Panel>
 
-  <!-- Daten, which bildhaft and mitreden both already have and vorlaut did
-       not. The board panel above it is a different act and stays: an .obz is
-       a board in a format other programs read, this is the whole of what is
-       in this browser, in a shape only vorlaut reads.
-       No state line, for the panel above's reason. -->
+  <!-- „Deine Daten“, @lautstark/sicherung/svelte/DatenPanel: the same panel in
+       every Lautstark programme. One box says where the work is and whether
+       that is safe, at most one button sits under it, and the ⋯ in its corner
+       holds the rest - another folder, the backup file out and in, the dated
+       second copy while the work is in the browser, and „Alles löschen“, which
+       was a panel of its own until 2026-10-31 and still asks first.
+       The board panel above it is a different act and stays: an .obz is a
+       board in a format other programs read, this is the whole of what is in
+       this browser, in a shape only vorlaut reads. -->
   <Panel bind:open={shown.dataPanel} id="dataPanel"
-         section={t("ui.data_section")} class="setting">
-    <!-- The store: one panel for every Lautstark programme, drawn by
-         @lautstark/sicherung/svelte/AblagePanel so the words and the order are
-         the same wherever somebody meets them. Everything below is what vorlaut
-         offers besides the store.
-
-         Below it and not in its `below` snippet, which is what that option is
-         for: the folder question is answered first, and what this repository
-         offers besides the store is a separate offer under a subheading of its
-         own. `#whereBox` stays for the METACOM box's reason - the suite and the
-         baseline both address this as `#whereBox .where-panel`. -->
+         section={t("ui.data_section")} state={dataHead} class="setting">
     <div id="whereBox">
-      <AblagePanel store={dataStore()} adopt={adoptDataFolder}
-        changed={dataFolderChanged} say={sayData} lang={reading} />
+      <DatenPanel store={dataStore()} adopt={adoptDataFolder}
+        changed={dataFolderChanged} say={sayData} lang={reading}
+        backup={keepShown() ? backup : null}
+        headline={(text) => { dataHead = text; }}
+        file={{ download: () => void exportData(), read: (file) => void importData(file), note: t("ui.data_file_note") }}
+        wipe={() => void wipeAll()} />
     </div>
-    <hr class="hair" />
-    <p class="subhead" id="keepHead">{t("ui.keep_head")}</p>
-
-    <p class="lead" id="dataNote">{t("ui.data_note")}</p>
-
-    <!-- The folder first, because it is the one that keeps working after
-         somebody stops thinking about it. Hidden outright where the browser
-         has no picker - Safari, Firefox, anything on Android - and then the
-         two buttons below are the whole offer, unchanged. -->
-    <div id="folderBox" class="folderbox" hidden={!keepShown()}>
-      {#if backup}<BackupPanel {backup} say={sayData} lang={reading} />{/if}
-    </div>
-
-    <div class="row">
-      <button id="dataExport" class="btn" type="button" onclick={() => void exportData()}>{t("ui.data_export")}</button>
-      <button id="dataImport" class="btn" type="button" onclick={() => dataFile.click()}>{t("ui.data_import")}</button>
-      <input bind:this={dataFile} type="file" id="dataFile" accept="application/json,.json" hidden
-        onchange={() => { const file = dataFile.files?.[0]; dataFile.value = ""; if (file) void importData(file); }} />
-    </div>
+    <!-- What the last export, import or deletion did. -->
     <p class="note" id="dataState">{dataState()}</p>
-  </Panel>
-
-  <!-- Deletion is not filed under the word for keeping things: its own panel,
-       last in the column, so the list of headings says what is in this sheet
-       without anybody opening one of them.
-       No state line, for the two panels above's reason. -->
-  <Panel bind:open={shown.dangerPanel} id="dangerPanel"
-         section={t("ui.danger_section")} class="setting">
-    <p class="lead" id="dangerNote">{t("ui.danger_note")}</p>
-    <div class="row">
-      <button id="dangerWipe" class="btn destructive" type="button" onclick={() => void wipeAll()}>{t("ui.danger_wipe")}</button>
-    </div>
   </Panel>
 </Sheet>

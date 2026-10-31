@@ -408,7 +408,7 @@ test("the export entry leads with the talker, and takes no for an answer",
        the count as well as the name, because a fold that quietly grew a second
        card back would still pass a check that only looked for this one. */
     expect(await fold.getAttribute("open")).toBeNull();
-    await fold.locator("summary").click();
+    await fold.locator("> summary").click();
     await expect(fold.locator("button.choice strong")).toHaveText([
       label("ui.collection_export_for_app"),
     ]);

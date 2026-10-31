@@ -4,7 +4,7 @@ import { LANGUAGES, TEXTS } from "../src/core/boot_data.js";
    from there rather than from TEXTS. Asserted against the same function the
    panel paints with, so this test moves if the sentence does — and still fails
    if the page stops repainting it, which is the half it was written for. */
-import { sentenceFor } from "@lautstark/sicherung/backup-panel";
+import { WORDS } from "@lautstark/sicherung/daten-panel";
 import { hits, key, keySheet, openBoard, put, search } from "./diy.js";
 import { openCollectionSettings, openPanel, openSettings, openVoices } from "./sheets.js";
 
@@ -310,36 +310,28 @@ test("opening a Sammlung does not re-language the editor", async ({ page }) => {
 
 /* The Daten panel, which is where a captured LANG showed itself.
  *
- * Its sentence is built by Intl.RelativeTimeFormat, and the formatter used to
- * be made once at import out of whatever LANG said then. boot.ts asks that
- * nothing capture that binding into a local, and this is what happens when
- * something does: the page goes German and the line under the folder goes on
- * saying "3 minutes ago". The panel is also redrawn only when the backup's
- * status moves, so a switch on a quiet page left it in the old language even
- * once the formatter followed - both halves are needed and this covers both. */
-test("the folder's own line follows a switch, formatter and all", async ({ page }) => {
+ * „Deine Daten" is @lautstark/sicherung's DatenPanel, and it takes the page's
+ * language as a prop. A switch on a quiet page has to reach it anyway: the box
+ * saying where the work is and the one button under it are drawn from the
+ * same table, and both have to move — if the sentence moved and the button did
+ * not, the repaint reached half the block. */
+test("the data panel follows a switch, sentence and button", async ({ page }) => {
   await openSettings(page);
   await openPanel(page, "#dataPanel");
-  /* #folderState and #folderActions are gone: the block is
-     @lautstark/sicherung/backup-panel's markup now, mounted into #folderBox. */
-  const line = page.locator("#folderBox .standing");
+  const line = page.locator("#whereBox .where b");
   await expect(line).toBeVisible();
-  const off = { kind: "off" } as const;
-  // Nothing chosen yet, so this is the "off" sentence - in the language the
+  // Nothing chosen yet, so the work is in this browser - in the language the
   // browser asked for, which is the baseline the switch has to move.
-  await expect(line).toContainText(sentenceFor(off, ASKED as "de" | "en"));
+  await expect(line).toHaveText(WORDS[ASKED as "de" | "en"].browser);
 
-  const button = page.locator("#folderBox .acts button").first();
-  const wasNamed = (await button.textContent())?.trim() ?? "";
+  const button = page.locator("#whereBox .acts button").first();
+  await expect(button).toHaveText(WORDS[ASKED as "de" | "en"].pick);
 
   await openPanel(page, "#languagePanel");
   await option(page, CHOSEN).click();
 
-  await expect(line).toContainText(sentenceFor(off, CHOSEN as "de" | "en"));
-  /* The buttons carry no data-i18n either, and the panel names them out of the
-     same table it draws the sentence from — so if the sentence moved and these
-     did not, the repaint reached half the block. */
-  await expect(button).not.toHaveText(wasNamed);
+  await expect(line).toHaveText(WORDS[CHOSEN as "de" | "en"].browser);
+  await expect(button).toHaveText(WORDS[CHOSEN as "de" | "en"].pick);
 });
 
 /* The half of a language switch that was not switching.

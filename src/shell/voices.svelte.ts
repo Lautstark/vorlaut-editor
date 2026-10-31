@@ -53,7 +53,7 @@ import type { Component } from "svelte";
  *  the drift that made this list necessary. */
 export const PANELS = [
   "languagePanel", "themePanel", "voicesHerePanel", "azurePanel",
-  "arasaacPanel", "symbolsPanel", "boardPanel", "dataPanel", "dangerPanel",
+  "arasaacPanel", "symbolsPanel", "boardPanel", "dataPanel",
 ] as const;
 
 /** The one panel the sheet loads with open - SettingsSheet.svelte marks it so.

@@ -93,7 +93,7 @@ test("the settings sheet comes up folded, whichever panel was left open",
 
     const theme = page.locator("#themePanel");
     await expect(theme).not.toHaveAttribute("open", "");
-    await theme.locator("summary").click();
+    await theme.locator("> summary").click();
     await expect(theme).toHaveAttribute("open", "");
 
     await page.locator("#voiceClose").click();
@@ -103,7 +103,7 @@ test("the settings sheet comes up folded, whichever panel was left open",
     // And the one that was folded correctly before, so this does not pass by
     // having stopped folding anything.
     const symbols = page.locator("#symbolsPanel");
-    await symbols.locator("summary").click();
+    await symbols.locator("> summary").click();
     await page.locator("#voiceClose").click();
     await page.locator("#settingsLink").click();
     await expect(symbols).not.toHaveAttribute("open", "");

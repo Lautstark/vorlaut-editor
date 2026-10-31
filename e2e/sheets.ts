@@ -75,7 +75,7 @@ export async function pickExport(page: Page, which: string): Promise<void> {
   const choice = page.locator("dialog.sheet--choices");
   const fold = choice.locator("details.panel");
   if (await fold.count() && (await fold.getAttribute("open")) === null) {
-    await fold.locator("summary").click();
+    await fold.locator("> summary").click();
   }
   /* By the heading rather than by the card, and the click lands on the heading
    * and bubbles. label() is anchored, and a card's own text is its heading and
@@ -146,7 +146,7 @@ export async function openCollectionSettings(page: Page): Promise<Locator> {
  * for that panel rather than assume an earlier step left it open. */
 export async function openPanel(page: Page, id: string): Promise<void> {
   const panel = page.locator(id);
-  if ((await panel.getAttribute("open")) === null) await panel.locator("summary").click();
+  if ((await panel.getAttribute("open")) === null) await panel.locator("> summary").click();
 }
 
 /** The voice list, which is in the Sammlung's sheet: what this one speaks in.

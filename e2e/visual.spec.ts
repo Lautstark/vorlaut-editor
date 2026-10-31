@@ -19,7 +19,7 @@ import { openPanel, openSettings, openVoices } from "./sheets.js";
  * can. So this file is the before: recorded now, committed, and compared
  * against afterwards.
  *
- * The middle test is the one the move is about. #whereBox and #folderBox are
+ * The middle test is the one the move is about. #whereBox (and #folderBox, before „Deine Daten“) are
  * not this repository's markup at all - they are built by
  * @lautstark/sicherung's two panel builders and styled from outside, which
  * makes them the two boxes most likely to shift when the stylesheet they
@@ -132,7 +132,7 @@ const voiceCount = (page: Page): Locator[] => [page.locator("#voicesHereState")]
  * blind to the one change it exists to catch. */
 const dataLines = (page: Page): Locator[] => [
   page.locator("#whereBox .where b"),
-  page.locator("#folderBox .standing > span:nth-child(2)"),
+  page.locator("#whereBox .standing > span:nth-child(2)"),
   page.locator("#dataState"),
 ];
 
@@ -150,14 +150,21 @@ test("the data panel, unfolded", async ({ page }) => {
   await openSettings(page);
   await openPanel(page, "#dataPanel");
   const panel = page.locator("#dataPanel");
-  /* Both shared boxes drawn before the picture is taken. Neither is in the
-     markup: wireData() builds them at startup and appends them, so an
-     assertion on the panel alone would be satisfied by a panel with two empty
-     divs in it - which is exactly the state a broken import leaves behind, and
-     exactly the picture that would then be recorded as correct. */
-  await expect(panel.locator("#whereBox .where-panel")).toBeVisible();
-  await expect(panel.locator("#folderBox .backup-panel")).toBeVisible();
+  /* „Deine Daten" drawn before the picture is taken: the box, and the one
+     button a first visit gets. A panel with an empty div in it is exactly the
+     state a broken import leaves behind, and exactly the picture that would
+     then be recorded as correct. */
+  await expect(panel.locator("#whereBox .where-panel .where")).toBeVisible();
+  await expect(panel.locator("#whereBox .acts button")).toHaveCount(1);
   await expect(panel).toHaveScreenshot("data-panel.png", { mask: dataLines(page) });
+
+  /* And its ⋯ open, which holds everything else — „Alles löschen" last and
+     red, the one row in the product drawn as destructive. The sheet, because
+     the menu hangs out of the panel's box. */
+  await panel.getByRole("button", { name: /^(Mehr|More)$/ }).click();
+  const rows = panel.getByRole("menuitem");
+  await expect(rows.last()).toHaveClass("danger");
+  await expect(page.locator("#voices")).toHaveScreenshot("data-panel-menu.png", { mask: dataLines(page) });
 });
 
 /* The symbol folder's panel, which nothing here could see until now.
@@ -244,19 +251,6 @@ test("the voice picker, unfolded", async ({ page }) => {
   await expect(panel.locator('.voice[tabindex="0"]')).toHaveCount(1);
   await expect(panel.locator(".voice-picker__filters .chip").first()).toBeVisible();
   await expect(panel).toHaveScreenshot("voice-picker.png");
-});
-
-test("the deletion panel, unfolded", async ({ page }) => {
-  await openBoard(page);
-  await openSettings(page);
-  await openPanel(page, "#dangerPanel");
-  const panel = page.locator("#dangerPanel");
-  // The one button in the product drawn as destructive, so what this picture
-  // is really holding is that it still looks unlike the others.
-  await expect(panel.locator("button.destructive")).toBeVisible();
-  // No mask at all: a heading, a sentence and a button, none of them written
-  // at run time. Masking here on principle would only hide the panel.
-  await expect(panel).toHaveScreenshot("danger-panel.png");
 });
 
 /* The two surfaces outside the sheets, which nothing here could see either.

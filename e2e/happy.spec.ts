@@ -48,7 +48,7 @@ async function openBoardPanel(page: Page) {
   await openSettings(page);
   const panel = page.locator("#boardPanel");
   if ((await panel.getAttribute("open")) === null) {
-    await panel.locator("summary").click();
+    await panel.locator("> summary").click();
   }
 }
 

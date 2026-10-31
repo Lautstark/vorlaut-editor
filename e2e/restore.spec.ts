@@ -32,15 +32,20 @@ async function openData(page: Page) {
   await expect(page.locator("#device .cell")).toHaveCount(6);
   await page.locator("#settingsLink").click();
   const panel = page.locator("#dataPanel");
-  if ((await panel.getAttribute("open")) === null) await panel.locator("summary").click();
+  if ((await panel.getAttribute("open")) === null) await panel.locator("> summary").click();
 }
 
-/** A backup of whatever is in the browser now, as a file on disk. */
+/** A backup of whatever is in the browser now, as a file on disk. Through the
+ *  ⋯ of „Deine Daten", which is where the file lives since 2026-10-31. */
 async function exportBackup(page: Page): Promise<string> {
   const download = page.waitForEvent("download");
-  await page.locator("#dataExport").click();
+  await page.locator("#whereBox").getByRole("button", { name: /^(Mehr|More)$/ }).click();
+  await page.locator("#whereBox").getByRole("menuitem", { name: /^(Sicherung herunterladen|Download a backup)/ }).click();
   return (await (await download).path())!;
 }
+
+/** The panel's own file input, which its „Sicherung einlesen …" row clicks. */
+const backupInput = "#whereBox input[type=file]";
 
 test("the restore asks through a dialog, and counts what it would replace", async ({ page }) => {
   await openData(page);
@@ -50,7 +55,7 @@ test("the restore asks through a dialog, and counts what it would replace", asyn
      and returns false — so the restore would silently not happen and no dialog
      would ever appear. That makes this assertion the one that tells the two
      apart. */
-  await page.setInputFiles("#dataFile", file);
+  await page.setInputFiles(backupInput, file);
 
   // Named, because the settings sheet this was opened from is a <dialog> too.
   const question = page.getByRole("dialog", { name: label("ui.data_replace") });
@@ -70,7 +75,7 @@ test("closing the question restores nothing", async ({ page }) => {
   // what it looked like it would.
   await openData(page);
   const file = await exportBackup(page);
-  await page.setInputFiles("#dataFile", file);
+  await page.setInputFiles(backupInput, file);
 
   // Named, because the settings sheet this was opened from is a <dialog> too.
   const question = page.getByRole("dialog", { name: label("ui.data_replace") });
@@ -85,7 +90,7 @@ test("closing the question restores nothing", async ({ page }) => {
 test("confirming it restores, and says what came back", async ({ page }) => {
   await openData(page);
   const file = await exportBackup(page);
-  await page.setInputFiles("#dataFile", file);
+  await page.setInputFiles(backupInput, file);
 
   // Named, because the settings sheet this was opened from is a <dialog> too.
   const question = page.getByRole("dialog", { name: label("ui.data_replace") });

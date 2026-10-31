@@ -304,7 +304,7 @@ test("a folder arriving after the page did brings its collection back", async ({
  *  panel first rather than assuming an earlier one stayed put. */
 async function openPanel(page: Page, id: string) {
   const panel = page.locator(id);
-  if ((await panel.getAttribute("open")) === null) await panel.locator("summary").click();
+  if ((await panel.getAttribute("open")) === null) await panel.locator("> summary").click();
 }
 
 test("a folder restored at boot does not decide which source is active", async ({ page }) => {

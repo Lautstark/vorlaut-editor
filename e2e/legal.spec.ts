@@ -102,7 +102,7 @@ test("the ARASAAC licence notice is on the page, standing", async ({ page }) => 
   await page.locator("#settingsLink").click();
   const panel = page.locator("#arasaacPanel");
   if ((await panel.getAttribute("open")) === null) {
-    await panel.locator("summary").click();
+    await panel.locator("> summary").click();
   }
   const credit = panel.locator("#arasaacCredit");
   await expect(credit).toBeVisible();
